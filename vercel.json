@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/gate.js",
+      "use": "@vercel/node",
+      "config": { "includeFiles": ["assets/ledger.html"] }
+    }
+  ],
+  "routes": [
+    { "src": "/.*", "dest": "/api/gate.js" }
+  ]
+}
