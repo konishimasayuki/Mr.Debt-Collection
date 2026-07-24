@@ -32,7 +32,8 @@ module.exports = (req, res) => {
   const auth = req.headers['authorization'] || '';
   if (auth !== EXPECTED) {
     res.statusCode = 401;
-    res.setHeader('WWW-Authenticate', 'Basic realm="入金管理台帳", charset="UTF-8"');
+    // realm はHTTPヘッダー値。マルチバイト文字はNodeが弾くのでASCIIにする。
+    res.setHeader('WWW-Authenticate', 'Basic realm="Nyukin Daicho", charset="UTF-8"');
     res.setHeader('Content-Type', 'text/plain; charset=UTF-8');
     res.setHeader('Cache-Control', 'no-store');
     res.end('認証が必要です。');
