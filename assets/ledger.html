@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>入金管理台帳</title>
+<style>
+  :root{
+    --paper:#FBFAF7;
+    --paper-2:#F3F1EB;
+    --ink:#16181A;
+    --ink-2:#5A5F63;
+    --ink-3:#8A8F93;
+    --rule:#D9D5CB;
+    --rule-strong:#A9A399;
+    --indigo:#1F3A5F;
+    --indigo-2:#33547F;
+    --overdue:#8C2F26;
+    --overdue-bg:#F7ECE9;
+    --today:#7A5B12;
+    --today-bg:#F9F2DF;
+    --paid:#2F5D4A;
+    --stamp:#A8443A;
+    --row-h:40px;
+    --sans:"Hiragino Kaku Gothic ProN","Yu Gothic Medium","YuGothic","Noto Sans JP","Meiryo",sans-serif;
+    --mono:ui-monospace,"SFMono-Regular","Menlo","Consolas",monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper-2);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:15px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .sheet{
+    max-width:1180px;
+    margin:0 auto;
+    background:var(--paper);
+    min-height:100vh;
+    border-left:1px solid var(--rule);
+    border-right:1px solid var(--rule);
+  }
+
+  /* ── 帳簿の表紙罫 ───────────────────────── */
+  .head{
+    padding:18px 20px 0;
+    border-top:3px solid var(--indigo);
+  }
+  .head-top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
+  .head-title{
+    font-size:19px;font-weight:700;letter-spacing:.14em;margin:0;
+  }
+  .head-date{font-size:13px;color:var(--ink-2);letter-spacing:.04em;}
+  .head-actions{margin-left:auto;display:flex;gap:8px;}
+
+  .btn{
+    font-family:inherit;font-size:13.5px;
+    padding:7px 13px;
+    background:var(--paper);
+    color:var(--ink);
+    border:1px solid var(--rule-strong);
+    border-radius:2px;
+    cursor:pointer;
+    letter-spacing:.02em;
+  }
+  .btn:hover{background:#fff;border-color:var(--indigo);}
+  .btn:disabled{color:var(--ink-3);border-color:var(--rule);cursor:default;background:var(--paper);}
+  .btn-main{background:var(--indigo);color:#fff;border-color:var(--indigo);}
+  .btn-main:hover{background:var(--indigo-2);border-color:var(--indigo-2);}
+  :focus-visible{outline:2px solid var(--indigo);outline-offset:2px;}
+
+  /* ── 三つの数字 ──────────────────────── */
+  .totals{
+    display:flex;gap:34px;flex-wrap:wrap;
+    margin:14px 0 0;padding:10px 0 14px;
+    border-bottom:1px solid var(--rule);
+  }
+  .total-label{font-size:12px;color:var(--ink-2);letter-spacing:.08em;display:block;}
+  .total-value{
+    font-size:21px;font-weight:600;
+    font-variant-numeric:tabular-nums;letter-spacing:.01em;
+  }
+  .total-value .yen{font-size:13px;font-weight:400;color:var(--ink-2);margin-left:2px;}
+  .total-unpaid .total-value{color:var(--overdue);}
+
+  /* ── 未照合の入金 ────────────────────── */
+  .unmatched{border-bottom:1px solid var(--rule);}
+  .unmatched-bar{
+    width:100%;text-align:left;font-family:inherit;font-size:14px;
+    background:var(--today-bg);border:0;border-left:4px solid var(--today);
+    padding:9px 20px;cursor:pointer;color:var(--ink);
+    display:flex;align-items:center;gap:8px;
+  }
+  .unmatched-bar:hover{background:#F6EDD5;}
+  .unmatched-bar .caret{font-size:11px;color:var(--today);}
+  .unmatched-bar.is-empty{background:var(--paper);border-left-color:var(--rule);color:var(--ink-3);cursor:default;}
+  .unmatched-list{padding:4px 20px 12px;display:none;}
+  .unmatched-list.open{display:block;}
+  .um{
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:9px 0;border-bottom:1px dotted var(--rule);
+  }
+  .um-date{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums;width:44px;}
+  .um-amount{font-variant-numeric:tabular-nums;font-weight:600;width:92px;text-align:right;}
+  .um-payer{font-family:var(--mono);font-size:13px;background:var(--paper-2);padding:2px 7px;border:1px solid var(--rule);}
+  .um-arrow{color:var(--ink-3);}
+  .um-guess{font-size:13.5px;}
+  .um-guess .sub{color:var(--ink-2);font-size:12.5px;}
+  .um-none{font-size:13.5px;color:var(--ink-2);}
+  .um-act{margin-left:auto;display:flex;gap:6px;}
+
+  /* ── 見出し(帳面の仕切り)───────────── */
+  .tabs{display:flex;gap:0;padding:0 20px;border-bottom:1px solid var(--rule-strong);background:var(--paper);}
+  .tab{
+    font-family:inherit;font-size:14px;background:none;border:0;
+    padding:11px 15px 9px;cursor:pointer;color:var(--ink-2);
+    border-bottom:3px solid transparent;margin-bottom:-1px;letter-spacing:.03em;
+  }
+  .tab:hover{color:var(--ink);}
+  .tab.on{color:var(--ink);font-weight:700;border-bottom-color:var(--indigo);}
+  .tab .n{font-variant-numeric:tabular-nums;margin-left:5px;font-size:12.5px;color:var(--ink-2);}
+  .tab.on .n{color:var(--indigo);}
+
+  /* ── 台帳本体 ───────────────────────── */
+  .ledger{padding:0 20px 120px;}
+  .lrow-head,.lrow{
+    display:grid;
+    grid-template-columns:5px 58px minmax(130px,1.3fr) minmax(120px,1.1fr) minmax(150px,1.6fr) 96px 52px 118px;
+    align-items:center;
+    column-gap:12px;
+  }
+  .lrow-head{
+    font-size:12px;color:var(--ink-2);letter-spacing:.08em;
+    padding:8px 0 7px;border-bottom:1px solid var(--rule-strong);
+    position:sticky;top:0;z-index:5;background:var(--paper);
+  }
+  .lrow-head .num{text-align:right;}
+
+  .lrow{
+    position:relative;
+    width:100%;min-height:var(--row-h);
+    padding:0;margin:0;
+    background:none;border:0;border-bottom:1px solid var(--rule);
+    font-family:inherit;font-size:15px;color:var(--ink);
+    text-align:left;cursor:pointer;
+  }
+  .lrow:hover{background:#FFFDF7;}
+  .lrow > *{min-width:0;}
+  .lrow .bar{align-self:stretch;background:transparent;}
+  .lrow.s-overdue .bar{background:var(--overdue);}
+  .lrow.s-today .bar{background:var(--today);}
+  .lrow .due{font-variant-numeric:tabular-nums;font-size:14px;color:var(--ink-2);}
+  .lrow.s-overdue .due{color:var(--overdue);font-weight:600;}
+  .lrow.s-today .due{color:var(--today);font-weight:600;}
+  .lrow .nm{font-weight:600;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lrow .ct{font-size:13.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lrow .dt{font-size:13px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lrow .am{font-variant-numeric:tabular-nums;text-align:right;font-weight:600;
+    display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;}
+  .am-diff{font-size:11px;font-weight:700;letter-spacing:.02em;}
+  .d-short{color:var(--overdue);}
+  .d-over{color:var(--paid);}
+  .d-small{color:var(--ink-3);font-weight:400;}
+  .lrow .mt{font-size:12.5px;color:var(--ink-2);}
+  .lrow .rc{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .lrow.s-overdue .rc{color:var(--overdue);}
+  .lrow.s-hold .rc{color:var(--today);}
+  .lrow.s-kaishu .bar{background:var(--ink-2);}
+  .lrow.s-kaishu .rc{color:var(--overdue);font-weight:600;}
+  .lrow.s-kaishu .nm,.lrow.s-kaishu .am{color:var(--ink-2);}
+
+  /* 見消し線:消し込みは「消える」のではなく「線を引いて残す」 */
+  .lrow .strike{
+    position:absolute;left:0;right:0;top:50%;height:4px;
+    transform:translateY(-50%) scaleX(0);transform-origin:left center;
+    border-top:1px solid var(--indigo);border-bottom:1px solid var(--indigo);
+    pointer-events:none;
+  }
+  .lrow.paid .strike{transform:translateY(-50%) scaleX(1);transition:transform .22s ease-out;}
+  .lrow.paid{background:var(--paper);}
+  .lrow.paid .nm,.lrow.paid .am{color:var(--ink-2);}
+  .lrow.paid .ct,.lrow.paid .dt,.lrow.paid .due{color:var(--ink-3);}
+  .lrow.paid .rc{color:var(--paid);font-weight:600;}
+  .lrow.paid .bar{background:var(--paid);}
+  @media (prefers-reduced-motion:reduce){
+    .lrow.paid .strike{transition:none;}
+  }
+
+  /* ── 行内に開く入金欄 ───────────────── */
+  .panel{display:none;border-bottom:1px solid var(--rule);background:#FFFDF6;padding:14px 0 16px 17px;}
+  .panel.open{display:block;}
+  .panel-grid{
+    display:grid;
+    grid-template-columns:206px 236px minmax(320px,1fr);
+    gap:32px;align-items:start;max-width:1000px;
+  }
+  .panel-grid > .pay{grid-column:3;}
+  @media (max-width:1060px){
+    .panel-grid{grid-template-columns:206px 1fr;gap:24px;}
+    .panel-grid > .pay{grid-column:1 / -1;}
+  }
+  @media (max-width:720px){
+    .panel-grid{grid-template-columns:1fr;gap:16px;}
+    .panel-grid > .pay{grid-column:1;}
+  }
+  .breakdown{font-size:13.5px;}
+  .breakdown h4{margin:0 0 6px;font-size:12px;color:var(--ink-2);letter-spacing:.08em;font-weight:600;}
+  .breakdown{min-width:0;}
+  .breakdown table{border-collapse:collapse;width:100%;}
+  .breakdown td.v{white-space:nowrap;}
+  .breakdown td{padding:2px 0;}
+  .breakdown td.k{padding-right:22px;color:var(--ink-2);white-space:nowrap;}
+  .breakdown td.v{text-align:right;font-variant-numeric:tabular-nums;}
+  .breakdown tr.sum td{border-top:1px solid var(--rule);padding-top:4px;font-weight:600;}
+  .pay{display:flex;flex-direction:column;gap:10px;}
+  .pay-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .pay-label{font-size:12px;color:var(--ink-2);letter-spacing:.08em;width:66px;flex:0 0 66px;}
+  .pay-row{min-height:34px;}
+  .seg{display:flex;border:1px solid var(--rule-strong);border-radius:2px;overflow:hidden;}
+  .pay-row .seg button{min-width:96px;}
+  .seg button{
+    font-family:inherit;font-size:13.5px;padding:6px 14px;background:var(--paper);
+    border:0;border-right:1px solid var(--rule);cursor:pointer;color:var(--ink-2);
+  }
+  .seg button:last-child{border-right:0;}
+  .seg button.on{background:var(--indigo);color:#fff;}
+  .btn-pay{
+    font-family:inherit;font-size:16px;font-weight:700;letter-spacing:.02em;
+    padding:11px 22px;background:var(--indigo);color:#fff;border:1px solid var(--indigo);
+    border-radius:2px;cursor:pointer;font-variant-numeric:tabular-nums;
+  }
+  .btn-pay:hover{background:var(--indigo-2);}
+  .panel-sub{display:flex;gap:8px;}
+  .btn-weak{color:var(--ink-2);border-color:var(--rule);background:transparent;}
+  .btn-weak:hover{color:var(--ink);border-color:var(--rule-strong);}
+  .pay-row.commit{margin-top:6px;}
+  .pay-row.tight{min-height:0;margin-top:-4px;}
+  .pay-row.alt{margin-top:10px;}
+  .plan{margin-left:74px;}
+  .alt-label{font-size:12px;color:var(--ink-3);letter-spacing:.06em;margin-right:2px;}
+  .hint{font-size:12px;color:var(--ink-2);}
+  .linky{font-family:inherit;font-size:12.5px;background:none;border:0;padding:6px 0 0;
+    color:var(--indigo);cursor:pointer;}
+  .linky:hover{text-decoration:underline;}
+  .disclose{font-family:inherit;font-size:13px;background:none;border:0;padding:0;
+    color:var(--ink-2);cursor:pointer;letter-spacing:.02em;}
+  .disclose:hover{color:var(--ink);}
+  .memo{font-size:13px;color:var(--ink-2);max-width:280px;}
+  .memo-input{font-family:inherit;font-size:14px;padding:7px 10px;width:min(340px,72vw);
+    border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .memo-input:focus{border-color:var(--indigo);}
+  .plan{margin-top:4px;border-top:1px solid var(--rule);padding-top:10px;max-width:420px;}
+  .plan-btns{margin-top:8px;}
+  .plan-set{margin-top:8px;}
+  .plan-btns{display:flex;gap:6px;flex-wrap:wrap;}
+  .plan-set{font-size:13.5px;font-weight:600;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .pay .pay-input{font-size:20px;width:170px;padding:6px 10px;}
+  .breakdown td.v.d-short{color:var(--overdue);font-weight:600;}
+  .breakdown td.v.d-over{color:var(--paid);font-weight:600;}
+
+  /* ── 元に戻す帯 ─────────────────────── */
+  .undo{
+    position:fixed;left:0;right:0;bottom:0;
+    background:var(--ink);color:#fff;
+    padding:12px 20px;display:none;align-items:center;gap:16px;
+    font-size:14px;
+  }
+  .undo.show{display:flex;}
+  .undo .txt{font-variant-numeric:tabular-nums;}
+  .undo .btn-undo{
+    margin-left:auto;font-family:inherit;font-size:14px;font-weight:700;
+    background:none;color:#fff;border:1px solid rgba(255,255,255,.55);
+    padding:7px 16px;border-radius:2px;cursor:pointer;
+  }
+  .undo .btn-undo:hover{background:rgba(255,255,255,.12);}
+
+  .empty{padding:44px 0;text-align:center;color:var(--ink-2);font-size:14px;}
+
+  /* ── 本日の作業(ダッシュボード)──────── */
+  [hidden]{display:none !important;}
+  .dash{padding:16px 20px 120px;}
+  .dash-cols{display:grid;grid-template-columns:1.6fr 1fr;gap:38px;align-items:start;}
+  .sec-title{
+    font-size:12px;letter-spacing:.1em;color:var(--ink-2);font-weight:600;
+    border-bottom:1px solid var(--rule-strong);padding-bottom:6px;margin:0 0 2px;
+  }
+  .work{
+    width:100%;display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:16px;
+    padding:15px 4px;border:0;border-bottom:1px solid var(--rule);background:none;
+    font-family:inherit;text-align:left;cursor:pointer;color:var(--ink);
+  }
+  .work:hover{background:#FFFDF7;}
+  .work .cnt{
+    font-size:27px;font-weight:600;font-variant-numeric:tabular-nums;
+    text-align:right;line-height:1.1;letter-spacing:.01em;
+  }
+  .work .lbl{font-size:16px;font-weight:600;letter-spacing:.02em;}
+  .work .sub{display:block;font-size:12.5px;font-weight:400;color:var(--ink-2);margin-top:3px;}
+  .work .go{color:var(--ink-3);font-size:15px;}
+  .work.w-overdue .cnt{color:var(--overdue);}
+  .work.w-today .cnt{color:var(--today);}
+  .work.w-done .cnt{font-size:17px;}
+  .stamp{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:36px;height:36px;border-radius:50%;
+    border:1.5px solid var(--stamp);color:var(--stamp);
+    font-size:15px;font-weight:700;line-height:1;letter-spacing:0;
+    transform:rotate(-9deg);opacity:.82;
+  }
+  .work.w-done .lbl{color:var(--ink-2);font-weight:400;}
+
+  .total-kaishu{font-size:12.5px;color:var(--ink-2);margin:-4px 0 4px;}
+  .total-bonus{font-size:12.5px;color:var(--ink-2);margin:0 0 16px;}
+  .b-exp{color:var(--indigo);font-weight:600;}
+  .dash-rule{font-size:11.5px;color:var(--ink-3);margin:12px 0 0;line-height:1.7;}
+  .aging{margin-bottom:22px;}
+  .age{padding:9px 0 8px;border-bottom:1px dotted var(--rule);}
+  .age-top{display:flex;align-items:baseline;gap:10px;}
+  .age-name{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .age-days{margin-left:auto;font-size:13px;font-weight:600;color:var(--overdue);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .age-note{font-size:12px;color:var(--ink-2);margin-top:2px;}
+  .age-bar{height:2px;background:var(--overdue);opacity:.45;margin-top:6px;}
+
+  .cash{border:1px solid var(--rule-strong);background:#FFFDF6;padding:12px 14px;}
+  .cash h4{margin:0 0 8px;font-size:12px;letter-spacing:.08em;color:var(--ink-2);font-weight:600;}
+  .cash-row{display:flex;gap:10px;font-size:13.5px;padding:3px 0;}
+  .cash-row .amt{margin-left:auto;font-variant-numeric:tabular-nums;}
+  .cash-row .rcpt{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);}
+  .cash-sum{border-top:1px solid var(--rule);margin-top:8px;padding-top:7px;display:flex;font-weight:600;font-size:14px;}
+  .cash-sum .amt{margin-left:auto;font-variant-numeric:tabular-nums;}
+
+  .back{
+    font-family:inherit;font-size:13.5px;background:none;border:0;padding:0;
+    color:var(--indigo);cursor:pointer;letter-spacing:.02em;
+  }
+  .back:hover{text-decoration:underline;}
+
+  /* ── 画面の切り替え ─────────────────── */
+  .viewnav{display:flex;gap:2px;margin-left:2px;}
+  .vn{
+    font-family:inherit;font-size:13.5px;background:none;border:0;
+    padding:4px 11px;cursor:pointer;color:var(--ink-2);border-radius:2px;
+  }
+  .vn:hover{background:var(--paper-2);color:var(--ink);}
+  .vn.on{background:var(--indigo);color:#fff;font-weight:600;}
+
+  /* ── 入金表(契約者 × 月)─────────────── */
+  .pend-g{margin:24px 0 0;}
+  .pend-g:first-child{margin-top:16px;}
+  .pend-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+    border-bottom:1px solid var(--rule-strong);padding-bottom:6px;}
+  .pend-h b{font-size:15.5px;letter-spacing:.03em;}
+  .pend-h .cnt{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums;}
+  .pend-h .sum{margin-left:auto;font-size:13.5px;font-weight:600;
+    font-variant-numeric:tabular-nums;color:var(--ink-2);}
+  .pend-w{font-size:12px;color:var(--ink-3);margin:6px 0 0;line-height:1.7;}
+  .pend-r{display:grid;grid-template-columns:minmax(110px,1.1fr) minmax(90px,1fr) 1.1fr 110px;
+    gap:14px;align-items:center;width:100%;min-height:42px;padding:0;background:none;border:0;
+    border-bottom:1px solid var(--rule);font-family:inherit;font-size:14.5px;color:var(--ink);
+    text-align:left;cursor:pointer;}
+  .pend-r:hover{background:#FFFDF7;}
+  .pend-r[disabled]{cursor:default;}
+  .pend-r > *{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pend-r .nm{font-weight:600;}
+  .pend-r .sub{font-size:13px;color:var(--ink-2);}
+  .pend-r .n{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;}
+  .pend-r.on{background:#FFFDF6;}
+  .pend-p{background:#FFFDF6;border-bottom:1px solid var(--rule);padding:14px 0 16px 16px;}
+  .pend-q{margin:0 0 4px;font-size:15px;font-weight:600;letter-spacing:.02em;}
+  .pend-note{margin:0 0 12px;font-size:12.5px;color:var(--ink-2);line-height:1.7;max-width:560px;}
+  .pend-undecided{color:var(--overdue);}
+  .pend-none{padding:64px 0;text-align:center;color:var(--ink-2);font-size:14px;}
+  @media (max-width:820px){ .pend-r{grid-template-columns:1fr auto;gap:4px 12px;} }
+  .mtx-head{display:flex;align-items:center;gap:16px;padding:14px 20px 10px;flex-wrap:wrap;}
+  .mtx-sum{font-size:13.5px;color:var(--ink-2);}
+  .mtx-sum b{color:var(--overdue);font-variant-numeric:tabular-nums;font-size:15px;}
+  .mtx-sort{margin-left:auto;display:flex;gap:2px;}
+  .mtx-wrap{overflow:auto;max-height:calc(100vh - 230px);padding:0 20px 40px;}
+  .mtx{border-collapse:separate;border-spacing:0;font-size:13px;}
+  .mtx th,.mtx td{padding:0;text-align:center;}
+  .mtx thead th{
+    position:sticky;top:0;z-index:2;background:var(--paper);
+    font-size:11.5px;font-weight:600;color:var(--ink-2);letter-spacing:.03em;
+    padding:8px 0 6px;border-bottom:1px solid var(--rule-strong);white-space:nowrap;
+  }
+  .mtx .nmcol{
+    position:sticky;left:0;z-index:3;background:var(--paper);
+    text-align:left;padding-right:14px;min-width:186px;border-right:1px solid var(--rule);
+  }
+  .mtx thead .nmcol{z-index:4;}
+  .mtx tbody td{border-bottom:1px solid var(--rule);height:34px;}
+  .mtx tbody tr:hover td,.mtx tbody tr:hover .nmcol{background:#FFFDF7;}
+  .mtx tbody tr{cursor:pointer;}
+  .mrow-name{font-weight:600;font-size:14px;display:block;}
+  .mrow-sub{font-size:11.5px;color:var(--ink-3);}
+  .kaishu-tag{color:var(--overdue);}
+  .cell{
+    display:inline-block;width:30px;height:23px;line-height:23px;
+    font-size:11px;border-radius:1px;overflow:hidden;white-space:nowrap;
+  }
+  .c-paid{background:#EDF2EF;color:#7E9A8D;}
+  .c-late{background:var(--today-bg);color:var(--today);font-weight:700;}
+  .c-unpaid{background:var(--overdue-bg);color:var(--overdue);font-weight:700;}
+  .c-due{background:var(--today-bg);color:var(--today);font-weight:700;}
+  .c-part{background:#EAF0F6;color:var(--indigo);font-weight:700;}
+  .c-pending{border:1px dotted var(--rule-strong);width:28px;height:21px;}
+  .c-none{background:repeating-linear-gradient(45deg,transparent,transparent 3px,var(--paper-2) 3px,var(--paper-2) 4px);}
+  .mtx .col-n{
+    font-variant-numeric:tabular-nums;padding-left:16px;text-align:right;white-space:nowrap;
+  }
+  .mtx .n-late{color:var(--overdue);font-weight:700;}
+  .rec-late{color:var(--today);font-weight:700;margin-left:4px;}
+  .rec-unpaid{color:var(--overdue);font-weight:700;margin-left:4px;}
+  .rec-part{color:var(--indigo);font-weight:700;margin-left:4px;}
+  .rec-ok{color:var(--ink-3);}
+  .test-tag{display:inline-block;margin-left:7px;padding:1px 6px;border-radius:2px;
+    font-size:10.5px;font-weight:700;letter-spacing:.06em;vertical-align:2px;
+    color:var(--stamp);border:1px solid var(--stamp);background:#FBF0EE;}
+  .bonus-tag{color:var(--indigo);font-weight:700;}
+  .rec-line{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px;padding-bottom:8px;
+    margin-bottom:6px;border-bottom:1px dotted var(--rule);}
+  .rec-line b{font-variant-numeric:tabular-nums;}
+  .mtx-detail td{background:#FFFDF6;text-align:left;padding:10px 0 12px;}
+  .mtx-detail .in{padding-left:2px;font-size:13px;}
+  .mtx-detail .line{display:flex;gap:14px;padding:2px 0;}
+  .mtx-detail .line .amt{font-variant-numeric:tabular-nums;}
+  .mtx-legend{display:flex;gap:16px;padding:14px 20px 0;font-size:12px;color:var(--ink-2);flex-wrap:wrap;}
+  .mtx-legend span{display:flex;align-items:center;gap:6px;}
+
+  /* ── 銀行明細の照合 ─────────────────── */
+  .modal{
+    position:fixed;inset:0;z-index:30;background:rgba(22,24,26,.45);
+    display:flex;align-items:flex-start;justify-content:center;
+    padding:36px 16px;overflow:auto;
+  }
+  .modal-box{
+    background:var(--paper);border-top:3px solid var(--indigo);
+    width:100%;max-width:540px;padding:20px 24px 22px;
+    box-shadow:0 12px 40px rgba(0,0,0,.22);
+  }
+  .modal-box h3{margin:0 0 14px;font-size:17px;letter-spacing:.06em;}
+  .imp-line{display:flex;padding:6px 0;border-bottom:1px dotted var(--rule);font-size:14px;}
+  .imp-line span{color:var(--ink-2);}
+  .imp-line b{margin-left:auto;font-weight:600;font-variant-numeric:tabular-nums;}
+  .imp-ng{margin:14px 0 4px;border:1px solid var(--overdue);background:var(--overdue-bg);padding:11px 13px;}
+  .imp-ng h4{margin:0 0 6px;font-size:13px;color:var(--overdue);letter-spacing:.04em;}
+  .imp-ng div{font-size:13.5px;padding:2px 0;display:flex;gap:10px;}
+  .imp-ng div span{margin-left:auto;color:var(--ink-2);font-size:12.5px;}
+  .imp-ask{margin:18px 0 6px;font-size:15px;font-weight:600;}
+  .imp-input-row{display:flex;align-items:center;gap:8px;}
+  .imp-input{
+    font-family:inherit;font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;
+    text-align:right;width:230px;padding:8px 12px;
+    border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);
+  }
+  .imp-input:focus{border-color:var(--indigo);outline:2px solid var(--indigo);outline-offset:1px;}
+  .imp-note{font-size:12.5px;color:var(--ink-2);margin:8px 0 0;line-height:1.6;}
+  .imp-actions{display:flex;gap:10px;align-items:center;margin-top:20px;}
+  .imp-verdict{margin:16px 0 0;padding:13px 14px;font-size:15px;font-weight:600;}
+  .imp-ok{border:1px solid var(--paid);background:#EDF3F0;color:var(--paid);}
+  .imp-bad{border:1px solid var(--overdue);background:var(--overdue-bg);color:var(--overdue);}
+  .imp-cause{margin:10px 0 0;font-size:13px;color:var(--ink-2);line-height:1.75;}
+  .imp-cause li{margin-left:1.1em;}
+  .hist-sub{font-size:13px;color:var(--ink-2);margin:0 0 14px;}
+  .tree-g{margin-bottom:15px;}
+  .tree-g h5{margin:0 0 5px;font-size:11.5px;letter-spacing:.08em;color:var(--ink-2);
+    border-bottom:1px solid var(--rule-strong);padding-bottom:4px;font-weight:600;}
+  .tree-i{display:grid;grid-template-columns:82px 1fr auto;gap:10px;align-items:baseline;
+    padding:4px 0 4px 12px;border-left:2px solid var(--rule);font-size:13.5px;}
+  .tree-i .when{color:var(--ink-3);font-size:12px;font-variant-numeric:tabular-nums;}
+  .tree-i .who{color:var(--ink-3);font-size:11.5px;white-space:nowrap;}
+  .tree-memo{display:block;font-size:12.5px;color:var(--ink-2);margin-top:1px;}
+  .kind{display:inline-block;min-width:34px;text-align:center;font-size:11px;font-weight:700;
+    padding:1px 5px;border-radius:2px;margin-right:6px;}
+  .k-plain{background:var(--paper-2);color:var(--ink-2);}
+  .k-ok{background:#EDF3F0;color:var(--paid);}
+  .k-warn{background:var(--today-bg);color:var(--today);}
+  .k-bad{background:var(--overdue-bg);color:var(--overdue);}
+  .k-info{background:#EAF0F6;color:var(--indigo);}
+  .imp-mock{margin-top:18px;padding-top:10px;border-top:1px dotted var(--rule);font-size:11.5px;color:var(--ink-3);}
+
+  @media (max-width:820px){
+    .lrow-head,.lrow{
+      grid-template-columns:5px 48px minmax(84px,1fr) 84px 60px;
+      column-gap:8px;
+    }
+    .lrow-head .col-ct,.lrow-head .col-dt,.lrow-head .col-mt,
+    .lrow .ct,.lrow .dt,.lrow .mt{display:none;}
+    .lrow .nm{font-size:14.5px;}
+    .lrow .rc{font-size:11.5px;}
+    .ledger{padding-left:14px;padding-right:14px;}
+    .head{padding-left:14px;padding-right:14px;}
+    .tabs{padding-left:14px;padding-right:14px;}
+    .dash{padding-left:14px;padding-right:14px;}
+    .dash-cols{grid-template-columns:1fr;gap:26px;}
+    .totals{gap:20px;}
+    .total-value{font-size:18px;}
+  }
+
+  @media print{
+    body{background:#fff;}
+    .sheet{border:0;max-width:none;}
+    .head-actions,.back,.viewnav,#viewMatrix,.tabs,.unmatched,.undo,.panel,#viewDash{display:none !important;}
+    #viewLedger{display:block !important;}
+    .lrow{cursor:default;}
+    .lrow.paid{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="head">
+    <div class="head-top">
+      <h1 class="head-title">入金管理台帳</h1>
+      <span class="head-date" id="headDate"></span>
+      <nav class="viewnav">
+        <button class="vn on" data-view="dash">本日の作業</button>
+        <button class="vn" data-view="pend">懸案</button>
+        <button class="vn" data-view="ledger">台帳</button>
+        <button class="vn" data-view="matrix">入金表</button>
+      </nav>
+      <span class="head-actions">
+        <button class="btn" id="btnImport">銀行明細を取り込む</button>
+        <button class="btn" onclick="window.print()">遅れの一覧を印刷</button>
+        <button class="btn" id="btnUndoTop" disabled>元に戻す</button>
+      </span>
+    </div>
+  </div>
+
+  <section id="viewDash">
+    <div class="dash">
+      <div class="totals">
+        <div><span class="total-label">今月の予定</span><span class="total-value" id="dPlan">0<span class="yen">円</span></span></div>
+        <div><span class="total-label">入金済み</span><span class="total-value" id="dPaid">0<span class="yen">円</span></span></div>
+        <div class="total-unpaid"><span class="total-label">未収</span><span class="total-value" id="dRest">0<span class="yen">円</span></span></div>
+      </div>
+      <p class="total-kaishu"></p>
+      <p class="total-bonus"></p>
+      <div class="dash-cols">
+        <div>
+          <h2 class="sec-title">本日の作業</h2>
+          <div id="workList"></div>
+        <p class="dash-rule" id="dashRule"></p>
+        </div>
+        <div>
+          <h2 class="sec-title">溜まっているもの</h2>
+          <div class="aging" id="agingList"></div>
+          <div class="cash" id="cashBox"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="viewPend" hidden>
+    <div class="ledger" id="pendList"></div>
+  </section>
+
+  <section id="viewLedger" hidden>
+    <div class="totals">
+      <div><span class="total-label">今月の予定</span><span class="total-value" id="tPlan">0<span class="yen">円</span></span></div>
+      <div><span class="total-label">入金済み</span><span class="total-value" id="tPaid">0<span class="yen">円</span></span></div>
+      <div class="total-unpaid"><span class="total-label">未収</span><span class="total-value" id="tRest">0<span class="yen">円</span></span></div>
+    </div>
+
+    <div class="unmatched">
+    <button class="unmatched-bar" id="umBar">
+      <span class="caret" id="umCaret">▶</span>
+      <span id="umText">誰の入金か分からないもの 3件</span>
+    </button>
+    <div class="unmatched-list" id="umList"></div>
+  </div>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <div class="ledger">
+    <div class="lrow-head">
+      <span></span>
+      <span>期日</span>
+      <span>お名前</span>
+      <span class="col-ct">契約</span>
+      <span class="col-dt">何の分か</span>
+      <span class="num">請求額</span>
+      <span class="col-mt">回次</span>
+      <span>記録</span>
+    </div>
+    <div id="rows"></div>
+  </div>
+  </section>
+
+  <section id="viewMatrix" hidden>
+    <div class="mtx-legend">
+      <span><i class="cell c-paid">済</i> 期日までに入金</span>
+      <span><i class="cell c-late">遅</i> 期日より後に入金</span>
+      <span><i class="cell c-unpaid">未</i> 未収のまま</span>
+      <span><i class="cell c-part">差</i> 金額が違った</span>
+      <span><i class="cell c-due">未</i> 期日が来ている</span>
+      <span><i class="cell c-none"></i> 契約前</span>
+      <span><i class="cell c-pending"></i> これから</span>
+    </div>
+    <div class="mtx-head">
+      <div class="mtx-sum" id="mtxSum"></div>
+      <div class="mtx-sort">
+        <button class="vn on" data-sort="late">滞りの多い順</button>
+        <button class="vn" data-sort="name">契約の順</button>
+      </div>
+    </div>
+    <div class="mtx-wrap"><table class="mtx" id="mtxTable"></table></div>
+  </section>
+</div>
+
+<div class="modal" id="histModal" hidden>
+  <div class="modal-box">
+    <h3><span id="histName"></span><button class="btn" data-histclose="1" style="float:right">閉じる</button></h3>
+    <div id="histBody"></div>
+  </div>
+</div>
+
+<div class="modal" id="importModal" hidden>
+  <div class="modal-box">
+    <h3>銀行明細の取り込み</h3>
+    <div id="importBody"></div>
+  </div>
+</div>
+
+<div class="undo" id="undoBar">
+  <span class="txt" id="undoText"></span>
+  <button class="btn-undo" id="btnUndo">元に戻す</button>
+</div>
+
+<script>
+const NOW = new Date();
+const pad = n => String(n).padStart(2, '0');
+const YEAR = NOW.getFullYear();
+const TODAY = `${pad(NOW.getMonth()+1)}-${pad(NOW.getDate())}`;
+document.getElementById('headDate').textContent =
+  `${YEAR}年${NOW.getMonth()+1}月${NOW.getDate()}日(${'日月火水木金土'[NOW.getDay()]})`;
+const THRESHOLD = 1000;    // これ未満の差額は督促の対象にしない
+const NOTICE_REMAIN = 12;  // 残り何回から完済前の精算を案内するか
+const bigDiff = r => Math.abs(r.diff) >= THRESHOLD;
+const testTag = r => r.test ? '<span class="test-tag">テスト</span>' : '';
+const BONUS_RATIO = 10;   // 毎月額の何回分を超えたら重いとみなすか
+const bonusRatio = r => r.bonus > 10 ? r.bonus / r.amount : 0;
+const heavyBonus = r => !r.kaishu && bonusRatio(r) >= BONUS_RATIO;
+const needSettle = r => r.diff !== 0 && r.rest <= NOTICE_REMAIN && !r.plan;
+const PLAN = {last:'最終回にまとめて', split:'残り回数で均等に', separate:'別途いっかつで請求'};
+
+// 信用の地盤：スコアは持たず、起きた事象だけを数える
+function record(r){
+  const h = HIST[r.id] || [];
+  let run = 0, maxRun = 0;
+  h.forEach(c => { if(c==='unpaid'){ run++; maxRun = Math.max(maxRun, run); }
+                   else if(c!=='none' && c!=='pending'){ run = 0; } });
+  const cnt = k => h.filter(c => c===k).length;
+  return {months:h.filter(c => c!=='none' && c!=='pending').length,
+          paid:cnt('paid'), late:cnt('late'), unpaid:cnt('unpaid'), part:cnt('part'), maxRun,
+          broken:PROMISES.filter(pr => pr.id===r.id && pr.day < TODAY).length,
+          bonusPaid:r.bonusPaid || 0};
+}
+
+const DATA = [{"id": 1, "due": "07-27", "name": "木村 祐介", "ct": "ハスラー（2月契約）", "dt": "元本 22,832 / 手数料 7,610", "amount": 30442, "method": "振込", "note": "", "parts": [["元本相当", 22832], ["手数料相当", 7610]], "n": "6/48", "paid0": false, "kaishu": false, "diff": 0, "no": 6, "rest": 42, "si": 0, "debt": 1309006, "bonus": 0, "bonusPaid": 0}, {"id": 2, "due": "07-06", "name": "松本 怜", "ct": "20ヴェルファイア（2月契約）", "dt": "元本 38,250 / 手数料 12,750", "amount": 51000, "method": "振込", "note": "メモに「毎月6日」とあります。", "parts": [["元本相当", 38250], ["手数料相当", 12750]], "n": "5/48", "paid0": true, "kaishu": false, "diff": 0, "no": 5, "rest": 43, "si": 1, "debt": 2244000, "bonus": 0, "bonusPaid": 0}, {"id": 3, "due": "07-27", "name": "村上 愉一郎", "ct": "30プリウス バイオレット（2月契約）", "dt": "元本 21,225 / 手数料 7,075", "amount": 28300, "method": "振込", "note": "", "parts": [["元本相当", 21225], ["手数料相当", 7075]], "n": "5/48", "paid0": false, "kaishu": false, "diff": -300, "no": 5, "rest": 43, "si": 1, "debt": 1245200, "bonus": 0, "bonusPaid": 0}, {"id": 4, "due": "07-27", "name": "梅木光治藤田カナ", "ct": "タントカスタム（2月契約）", "dt": "元本 32,625 / 手数料 10,875", "amount": 43500, "method": "振込", "note": "メモに「7月10日」とあります。", "parts": [["元本相当", 32625], ["手数料相当", 10875]], "n": "5/48", "paid0": false, "kaishu": false, "diff": 0, "no": 5, "rest": 43, "si": 1, "debt": 1914000, "bonus": 0, "bonusPaid": 0}, {"id": 5, "due": "04-27", "name": "後藤 矢雲", "ct": "CX5 白（2月契約）", "dt": "元本 36,000 / 手数料 12,000", "amount": 48000, "method": "振込", "note": "車両を回収済み。残債の扱いが未確定です。", "parts": [["元本相当", 36000], ["手数料相当", 12000]], "n": "2/48", "paid0": false, "kaishu": true, "diff": 0, "no": 2, "rest": 46, "si": 1, "debt": 2256000, "bonus": 0, "bonusPaid": 0}, {"id": 6, "due": "06-27", "name": "松永 絢平", "ct": "CX5 コン（2月契約）", "dt": "元本 34,500 / 手数料 11,500", "amount": 46000, "method": "振込", "note": "メモに「07/25」とあります。", "parts": [["元本相当", 34500], ["手数料相当", 11500]], "n": "4/48", "paid0": false, "kaishu": false, "diff": 0, "no": 4, "rest": 44, "si": 1, "debt": 2070000, "bonus": 0, "bonusPaid": 0}, {"id": 7, "due": "07-27", "name": "山下 浩二", "ct": "ノート（2月契約）", "dt": "元本 23,625 / 手数料 7,875", "amount": 31500, "method": "振込", "note": "", "parts": [["元本相当", 23625], ["手数料相当", 7875]], "n": "5/48", "paid0": false, "kaishu": false, "diff": 0, "no": 5, "rest": 43, "si": 1, "debt": 1386000, "bonus": 0, "bonusPaid": 0}, {"id": 8, "due": "04-27", "name": "清島 亜由", "ct": "NBOX 白（2月契約）", "dt": "元本 26,276 / 手数料 8,759", "amount": 35035, "method": "振込", "note": "車両を回収済み。残債の扱いが未確定です。", "parts": [["元本相当", 26276], ["手数料相当", 8759]], "n": "2/48", "paid0": false, "kaishu": true, "diff": 0, "no": 2, "rest": 46, "si": 1, "debt": 1646645, "bonus": 0, "bonusPaid": 0}, {"id": 9, "due": "07-27", "name": "松尾 巧", "ct": "30プリウス 黒（2月契約）", "dt": "元本 26,000 / 手数料 8,666", "amount": 34666, "method": "振込", "note": "", "parts": [["元本相当", 26000], ["手数料相当", 8666]], "n": "5/48", "paid0": false, "kaishu": false, "diff": 334, "no": 5, "rest": 43, "si": 1, "debt": 1525304, "bonus": 0, "bonusPaid": 0}, {"id": 10, "due": "06-27", "name": "田代 陵升", "ct": "プリウスアルファ 青（3月契約）", "dt": "元本 37,500 / 手数料 12,500", "amount": 50000, "method": "振込", "note": "", "parts": [["元本相当", 37500], ["手数料相当", 12500]], "n": "3/48", "paid0": false, "kaishu": false, "diff": 0, "no": 3, "rest": 45, "si": 2, "debt": 2300000, "bonus": 0, "bonusPaid": 0}, {"id": 11, "due": "07-27", "name": "藤田 浩平", "ct": "プリウスアルファ 白（3月契約）", "dt": "元本 34,875 / 手数料 11,625", "amount": 46500, "method": "振込", "note": "", "parts": [["元本相当", 34875], ["手数料相当", 11625]], "n": "4/48", "paid0": false, "kaishu": false, "diff": 0, "no": 4, "rest": 44, "si": 2, "debt": 2332500, "bonus": 240000, "bonusPaid": 0}, {"id": 12, "due": "05-27", "name": "松本 晴陽", "ct": "アテンザ（3月契約）", "dt": "元本 28,875 / 手数料 9,625", "amount": 38500, "method": "振込", "note": "車両を回収済み。残債の扱いが未確定です。", "parts": [["元本相当", 28875], ["手数料相当", 9625]], "n": "2/48", "paid0": false, "kaishu": true, "diff": 0, "no": 2, "rest": 46, "si": 2, "debt": 1809500, "bonus": 0, "bonusPaid": 0}, {"id": 13, "due": "07-01", "name": "志賀 楓", "ct": "30プリウス（3月契約）", "dt": "元本 36,723 / 手数料 12,241", "amount": 48964, "method": "現金", "note": "メモに「毎月1日」とあります。", "parts": [["元本相当", 36723], ["手数料相当", 12241]], "n": "4/48", "paid0": true, "kaishu": false, "diff": 0, "no": 4, "rest": 44, "si": 2, "debt": 2451380, "bonus": 248000, "bonusPaid": 0}, {"id": 14, "due": "07-27", "name": "吉田 和樹", "ct": "20クラウン（3月契約）", "dt": "元本 29,156 / 手数料 9,719", "amount": 38875, "method": "振込", "note": "", "parts": [["元本相当", 29156], ["手数料相当", 9719]], "n": "4/48", "paid0": false, "kaishu": false, "diff": 0, "no": 4, "rest": 44, "si": 2, "debt": 1749375, "bonus": 0, "bonusPaid": 0}, {"id": 15, "due": "07-27", "name": "添田 英里", "ct": "30プリウス（3月契約）", "dt": "元本 29,614 / 手数料 9,871", "amount": 39485, "method": "振込", "note": "", "parts": [["元本相当", 29614], ["手数料相当", 9871]], "n": "4/48", "paid0": false, "kaishu": false, "diff": 0, "no": 4, "rest": 44, "si": 2, "debt": 1776825, "bonus": 0, "bonusPaid": 0}, {"id": 16, "due": "07-27", "name": "山本 一馬", "ct": "NONE（3月契約）", "dt": "元本 24,000 / 手数料 8,000", "amount": 32000, "method": "現金", "note": "メモに「残金10,000」とあります。", "parts": [["元本相当", 24000], ["手数料相当", 8000]], "n": "4/48", "paid0": false, "kaishu": false, "diff": -10000, "no": 4, "rest": 44, "si": 2, "debt": 1440000, "bonus": 0, "bonusPaid": 0}, {"id": 17, "due": "07-27", "name": "中川 和俊", "ct": "20ヴェルファイア（4月契約）", "dt": "元本 40,875 / 手数料 13,625", "amount": 54500, "method": "振込", "note": "", "parts": [["元本相当", 40875], ["手数料相当", 13625]], "n": "3/48", "paid0": false, "kaishu": false, "diff": 0, "no": 3, "rest": 45, "si": 3, "debt": 2507000, "bonus": 0, "bonusPaid": 0}, {"id": 18, "due": "06-27", "name": "高野 智也", "ct": "CX-5（4月契約）", "dt": "元本 61,350 / 手数料 20,450", "amount": 81800, "method": "振込", "note": "", "parts": [["元本相当", 61350], ["手数料相当", 20450]], "n": "2/48", "paid0": false, "kaishu": false, "diff": 0, "no": 2, "rest": 46, "si": 3, "debt": 3844600, "bonus": 0, "bonusPaid": 0}, {"id": 19, "due": "07-27", "name": "恩地 秀亮", "ct": "エブリイバン（4月契約）", "dt": "元本 21,000 / 手数料 7,000", "amount": 28000, "method": "振込", "note": "", "parts": [["元本相当", 21000], ["手数料相当", 7000]], "n": "3/48", "paid0": false, "kaishu": false, "diff": 0, "no": 3, "rest": 45, "si": 3, "debt": 1288000, "bonus": 0, "bonusPaid": 0}, {"id": 20, "due": "07-27", "name": "田中 駿弥", "ct": "50プリウス（4月契約）", "dt": "元本 43,875 / 手数料 14,625", "amount": 58500, "method": "振込", "note": "", "parts": [["元本相当", 43875], ["手数料相当", 14625]], "n": "3/48", "paid0": false, "kaishu": false, "diff": 0, "no": 3, "rest": 45, "si": 3, "debt": 2691000, "bonus": 0, "bonusPaid": 0}, {"id": 21, "due": "07-27", "name": "緒方 美穂", "ct": "シエンタ（4月契約）", "dt": "元本 53,976 / 手数料 17,992", "amount": 71968, "method": "振込", "note": "", "parts": [["元本相当", 53976], ["手数料相当", 17992]], "n": "3/48", "paid0": false, "kaishu": false, "diff": -1968, "no": 3, "rest": 45, "si": 3, "debt": 3310528, "bonus": 0, "bonusPaid": 0}, {"id": 22, "due": "07-27", "name": "山田 夏鈴", "ct": "80ヴォクシー（4月契約）", "dt": "元本 32,050 / 手数料 10,683", "amount": 42733, "method": "振込", "note": "", "parts": [["元本相当", 32050], ["手数料相当", 10683]], "n": "3/48", "paid0": false, "kaishu": false, "diff": 0, "no": 3, "rest": 45, "si": 3, "debt": 2445718, "bonus": 480000, "bonusPaid": 0}, {"id": 23, "due": "07-27", "name": "野中 彰太", "ct": "トヨタ 86（4月契約）", "dt": "元本 59,066 / 手数料 19,689", "amount": 78755, "method": "振込", "note": "", "parts": [["元本相当", 59066], ["手数料相当", 19689]], "n": "3/48", "paid0": false, "kaishu": false, "diff": 0, "no": 3, "rest": 45, "si": 3, "debt": 3862730, "bonus": 240000, "bonusPaid": 0}, {"id": 24, "due": "07-27", "name": "熊上 英加", "ct": "セレナハイブリッド（5月契約）", "dt": "元本 43,808 / 手数料 14,603", "amount": 58411, "method": "振込", "note": "", "parts": [["元本相当", 43808], ["手数料相当", 14603]], "n": "2/48", "paid0": false, "kaishu": false, "diff": 0, "no": 2, "rest": 46, "si": 4, "debt": 3545317, "bonus": 800000, "bonusPaid": 0}, {"id": 25, "due": "07-27", "name": "園田 将貴", "ct": "プリウスα（5月契約）", "dt": "元本 38,621 / 手数料 12,874", "amount": 51495, "method": "振込", "note": "", "parts": [["元本相当", 38621], ["手数料相当", 12874]], "n": "2/48", "paid0": false, "kaishu": false, "diff": 0, "no": 2, "rest": 46, "si": 4, "debt": 2420265, "bonus": 0, "bonusPaid": 0}, {"id": 26, "due": "07-27", "name": "桐川 陽平", "ct": "CH-R（5月契約）", "dt": "元本 58,500 / 手数料 19,500", "amount": 78000, "method": "振込", "note": "", "parts": [["元本相当", 58500], ["手数料相当", 19500]], "n": "2/48", "paid0": false, "kaishu": false, "diff": 0, "no": 2, "rest": 46, "si": 4, "debt": 4466000, "bonus": 800000, "bonusPaid": 0}, {"id": 27, "due": "06-27", "name": "矢野 樹莉", "ct": "レヴォーグ（5月契約）", "dt": "元本 37,997 / 手数料 12,666", "amount": 50663, "method": "振込", "note": "メモに「7/31」とあります。", "parts": [["元本相当", 37997], ["手数料相当", 12666]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 4, "debt": 3631824, "bonus": 1200000, "bonusPaid": 0}, {"id": 28, "due": "07-27", "name": "西村 涼", "ct": "アクア（シルバー）（5月契約）", "dt": "元本 28,500 / 手数料 9,500", "amount": 38000, "method": "振込", "note": "", "parts": [["元本相当", 28500], ["手数料相当", 9500]], "n": "2/48", "paid0": false, "kaishu": false, "diff": 0, "no": 2, "rest": 46, "si": 4, "debt": 1786000, "bonus": 0, "bonusPaid": 0}, {"id": 29, "due": "07-27", "name": "小田 拓巳", "ct": "30プリウス G（5月契約）", "dt": "元本 31,130 / 手数料 10,376", "amount": 41506, "method": "振込", "note": "", "parts": [["元本相当", 31130], ["手数料相当", 10376]], "n": "2/48", "paid0": false, "kaishu": false, "diff": 0, "no": 2, "rest": 46, "si": 4, "debt": 1950782, "bonus": 0, "bonusPaid": 0}, {"id": 30, "due": "07-27", "name": "斎藤 忠昭", "ct": "プリウス（シルバー）（5月契約）", "dt": "元本 24,958 / 手数料 8,320", "amount": 33278, "method": "振込", "note": "", "parts": [["元本相当", 24958], ["手数料相当", 8320]], "n": "2/48", "paid0": false, "kaishu": false, "diff": 0, "no": 2, "rest": 46, "si": 4, "debt": 1804066, "bonus": 240000, "bonusPaid": 0}, {"id": 31, "due": "07-27", "name": "長峰 冬弥", "ct": "スカイライン（6月契約）", "dt": "元本 35,948 / 手数料 11,982", "amount": 47930, "method": "振込", "note": "", "parts": [["元本相当", 35948], ["手数料相当", 11982]], "n": "2/48", "paid0": false, "kaishu": false, "diff": 0, "no": 2, "rest": 46, "si": 4, "debt": 2412710, "bonus": 160000, "bonusPaid": 0}, {"id": 32, "due": "07-27", "name": "仲山 輝", "ct": "30プリウス（6月契約）", "dt": "元本 25,317 / 手数料 8,439", "amount": 33756, "method": "振込", "note": "", "parts": [["元本相当", 25317], ["手数料相当", 8439]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 1620288, "bonus": 0, "bonusPaid": 0}, {"id": 33, "due": "07-27", "name": "宇佐美 真", "ct": "マークX（6月契約）", "dt": "元本 25,246 / 手数料 8,415", "amount": 33661, "method": "振込", "note": "", "parts": [["元本相当", 25246], ["手数料相当", 8415]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 2815728, "bonus": 1200000, "bonusPaid": 0}, {"id": 34, "due": "07-27", "name": "山田 敏弘", "ct": "NBOXカスタム（6月契約）", "dt": "元本 33,530 / 手数料 11,177", "amount": 44707, "method": "振込", "note": "", "parts": [["元本相当", 33530], ["手数料相当", 11177]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 2145936, "bonus": 0, "bonusPaid": 0}, {"id": 35, "due": "07-27", "name": "齊藤 廣志", "ct": "在庫フリード（6月契約）", "dt": "元本 27,000 / 手数料 9,000", "amount": 36000, "method": "振込", "note": "", "parts": [["元本相当", 27000], ["手数料相当", 9000]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 1728000, "bonus": 0, "bonusPaid": 0}, {"id": 36, "due": "07-27", "name": "田中 慎一郎", "ct": "在庫 プリウスα（6月契約）", "dt": "元本 37,166 / 手数料 12,388", "amount": 49554, "method": "振込", "note": "", "parts": [["元本相当", 37166], ["手数料相当", 12388]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 2378592, "bonus": 0, "bonusPaid": 0}, {"id": 37, "due": "07-27", "name": "植木 優", "ct": "ハスラー（6月契約）", "dt": "元本 27,696 / 手数料 9,232", "amount": 36928, "method": "振込", "note": "", "parts": [["元本相当", 27696], ["手数料相当", 9232]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 1772544, "bonus": 0, "bonusPaid": 0}, {"id": 38, "due": "07-27", "name": "村山 颯", "ct": "ワゴンR（6月契約）", "dt": "元本 29,422 / 手数料 9,807", "amount": 39229, "method": "振込", "note": "", "parts": [["元本相当", 29422], ["手数料相当", 9807]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 1882992, "bonus": 0, "bonusPaid": 0}, {"id": 39, "due": "07-27", "name": "田中 尚実", "ct": "ホンダ ヴェゼル（7月契約）", "dt": "元本 24,400 / 手数料 8,134", "amount": 32534, "method": "振込", "note": "", "parts": [["元本相当", 24400], ["手数料相当", 8134]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 1961632, "bonus": 400000, "bonusPaid": 0}, {"id": 40, "due": "07-27", "name": "泉 国明", "ct": "20ヴェルファイア（7月契約）", "dt": "元本 40,875 / 手数料 13,625", "amount": 54500, "method": "振込", "note": "", "parts": [["元本相当", 40875], ["手数料相当", 13625]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 2616000, "bonus": 0, "bonusPaid": 0}, {"id": 41, "due": "07-27", "name": "三好 茉友楓", "ct": "ヴェゼル ハイブリッド（7月契約）", "dt": "元本 45,750 / 手数料 15,250", "amount": 61000, "method": "振込", "note": "", "parts": [["元本相当", 45750], ["手数料相当", 15250]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 3328000, "bonus": 400000, "bonusPaid": 0}, {"id": 42, "due": "07-27", "name": "中西 悠大", "ct": "SAI（7月契約）", "dt": "元本 37,875 / 手数料 12,625", "amount": 50500, "method": "振込", "note": "", "parts": [["元本相当", 37875], ["手数料相当", 12625]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 2424000, "bonus": 0, "bonusPaid": 0}, {"id": 43, "due": "07-27", "name": "高木 日向", "ct": "200クラウン（7月契約）", "dt": "元本 38,656 / 手数料 12,885", "amount": 51541, "method": "振込", "note": "", "parts": [["元本相当", 38656], ["手数料相当", 12885]], "n": "1/48", "paid0": false, "kaishu": false, "diff": -541, "no": 1, "rest": 47, "si": 5, "debt": 2473968, "bonus": 0, "bonusPaid": 0}, {"id": 44, "due": "07-27", "name": "白川 夏生也", "ct": "70ヴォクシー（7月契約）", "dt": "元本 30,086 / 手数料 10,029", "amount": 40115, "method": "振込", "note": "", "parts": [["元本相当", 30086], ["手数料相当", 10029]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 5, "debt": 1925520, "bonus": 0, "bonusPaid": 0}, {"id": 45, "due": "08-27", "name": "西脇 優也", "ct": "30プリウス（7月契約）", "dt": "元本 29,052 / 手数料 9,684", "amount": 38736, "method": "振込", "note": "", "parts": [["元本相当", 29052], ["手数料相当", 9684]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 6, "debt": 1859328, "bonus": 0, "bonusPaid": 0}, {"id": 46, "due": "08-27", "name": "岡村 友梨香", "ct": "シエンタ（7月契約）", "dt": "元本 57,796 / 手数料 19,265", "amount": 77061, "method": "振込", "note": "", "parts": [["元本相当", 57796], ["手数料相当", 19265]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 6, "debt": 4418928, "bonus": 720000, "bonusPaid": 0}, {"id": 47, "due": "08-27", "name": "納見 真紀", "ct": "ミラココア（7月契約）", "dt": "元本 20,362 / 手数料 6,788", "amount": 27150, "method": "振込", "note": "", "parts": [["元本相当", 20362], ["手数料相当", 6788]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 1850, "no": 1, "rest": 47, "si": 6, "debt": 1303200, "bonus": 0, "bonusPaid": 0}, {"id": 48, "due": "08-27", "name": "山内 晟也", "ct": "CX5（7月契約）", "dt": "元本 32,320 / 手数料 10,774", "amount": 43094, "method": "振込", "note": "", "parts": [["元本相当", 32320], ["手数料相当", 10774]], "n": "1/48", "paid0": false, "kaishu": false, "diff": -94, "no": 1, "rest": 47, "si": 6, "debt": 2068512, "bonus": 0, "bonusPaid": 0}, {"id": 49, "due": "08-27", "name": "森本 梨紗", "ct": "フリード（7月契約）", "dt": "元本 33,654 / 手数料 11,218", "amount": 44872, "method": "振込", "note": "", "parts": [["元本相当", 33654], ["手数料相当", 11218]], "n": "1/48", "paid0": false, "kaishu": false, "diff": -220, "no": 1, "rest": 47, "si": 6, "debt": 2153856, "bonus": 0, "bonusPaid": 0}, {"id": 50, "due": "08-27", "name": "渡邉 渉", "ct": "アルトMT（7月契約）", "dt": "元本 25,011 / 手数料 8,337", "amount": 33348, "method": "振込", "note": "", "parts": [["元本相当", 25011], ["手数料相当", 8337]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 6, "debt": 1840704, "bonus": 240000, "bonusPaid": 0}, {"id": 51, "due": "08-27", "name": "植田 希望", "ct": "アクア白（7月契約）", "dt": "元本 27,750 / 手数料 9,250", "amount": 37000, "method": "振込", "note": "", "parts": [["元本相当", 27750], ["手数料相当", 9250]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 6, "debt": 1776000, "bonus": 0, "bonusPaid": 0}, {"id": 52, "due": "08-27", "name": "吉武 慎治", "ct": "30プリウス（7月契約）", "dt": "元本 35,084 / 手数料 11,695", "amount": 46779, "method": "振込", "note": "", "parts": [["元本相当", 35084], ["手数料相当", 11695]], "n": "1/48", "paid0": false, "kaishu": false, "diff": -779, "no": 1, "rest": 47, "si": 6, "debt": 2245398, "bonus": 6, "bonusPaid": 0}, {"id": 53, "due": "08-27", "name": "五島 友子", "ct": "タントカスタム（7月契約）", "dt": "元本 24,884 / 手数料 8,294", "amount": 33178, "method": "振込", "note": "", "parts": [["元本相当", 24884], ["手数料相当", 8294]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 6, "debt": 1592544, "bonus": 0, "bonusPaid": 0}, {"id": 54, "due": "09-27", "name": "和田 拓志", "ct": "フィットMT（7月契約）", "dt": "元本 28,839 / 手数料 9,613", "amount": 38452, "method": "振込", "note": "", "parts": [["元本相当", 28839], ["手数料相当", 9613]], "n": "1/48", "paid0": false, "kaishu": false, "diff": 0, "no": 1, "rest": 47, "si": 7, "debt": 1845696, "bonus": 0, "bonusPaid": 0}];
+
+const BANK = [{"uid": "u1", "date": "07-24", "amount": 30442, "payer": "ｷﾑﾗ ﾕｳｽｹ", "target": 1, "why": "氏名も金額も一致", "auto": true}, {"uid": "u4", "date": "07-25", "amount": 108755, "payer": "ﾉﾅｶ ｼｮｳﾀ", "target": 23, "why": "請求 78,755円 より 30,000円 多い（ボーナス分と思われます）", "auto": false}, {"uid": "u6", "date": "07-25", "amount": 46000, "payer": "ﾏﾂﾅｶﾞ ｱﾔ", "target": 6, "why": "遅れていた6月分と金額が一致", "auto": true}, {"uid": "u2", "date": "07-24", "amount": 42733, "payer": "ﾔﾏﾀﾞ", "target": 22, "why": "ヤマダが2名。金額で夏鈴さんと判断", "auto": false}, {"uid": "u3", "date": "07-25", "amount": 33278, "payer": "ｻｲﾄｳ", "target": 30, "why": "斎藤さんと齊藤さんが同じカナ。金額で判断", "auto": false}, {"uid": "u5", "date": "07-24", "amount": 58411, "payer": "ｶ)ｻｶｲｼｮｳｼﾞ", "target": null, "why": "", "auto": false}];
+let unmatched = [];
+
+const PROMISES = [{"id": 6, "day": "07-25", "heard": "07-02", "memo": "メモの「07/25」から"}, {"id": 27, "day": "07-31", "heard": "07-08", "memo": "メモの「7/31」から"}, {"id": 4, "day": "07-10", "heard": "06-20", "memo": "メモの「7月10日」から"}];
+
+const CASH = [{"date": "07-25", "name": "志賀 楓", "amount": 48964, "receipt": "No.1051"}, {"date": "07-26", "name": "山本 一馬", "amount": 10000, "receipt": "No.1052"}];
+
+const state = DATA.map(r => ({...r, paid: !!r.paid0, paidWith: r.paid0 ? r.method : null}));
+let imported = false;
+let filter = 'today';
+let openId = null;
+let history = [];
+let undoTimer = null;
+
+const yen = n => n.toLocaleString('ja-JP');
+const statusOf = r => r.kaishu ? 'kaishu'
+  : (r.hold ? 'hold' : (r.due < TODAY ? 'overdue' : (r.due === TODAY ? 'today' : 'up')));
+const asDate = s => new Date(YEAR, (+s.slice(0,2)) - 1, +s.slice(3,5));
+const daysLate = due => Math.round((asDate(TODAY) - asDate(due)) / 86400000);
+
+const FILTERS = [
+  {key:'today',   label:'本日',    test:r => statusOf(r)==='today'},
+  {key:'overdue', label:'遅れ',    test:r => statusOf(r)==='overdue'},
+  {key:'hold',    label:'保留',    test:r => statusOf(r)==='hold'},
+  {key:'up',      label:'これから', test:r => statusOf(r)==='up'},
+  {key:'kaishu',  label:'回収',     test:r => r.kaishu, auto:true},
+  {key:'bonus',   label:'ボーナス依存', test:heavyBonus, auto:true},
+  {key:'diff',    label:'金額ちがい', test:bigDiff},
+  {key:'settle',  label:'完済前',   test:needSettle, hidden:true},
+  {key:'all',     label:'すべて',  test:() => true}
+];
+
+function renderTabs(){
+  document.getElementById('tabs').innerHTML = FILTERS
+    .filter(f => f.key === filter
+             || (!f.hidden && (!f.auto || state.filter(f.test).length)))
+    .map(f => {
+    const n = f.key === 'diff' ? state.filter(f.test).length
+                               : state.filter(r => f.test(r) && !r.paid).length;
+    return `<button class="tab ${f.key===filter?'on':''}" data-f="${f.key}">${f.label}<span class="n">${n}</span></button>`;
+  }).join('');
+}
+
+function renderTotals(){
+  const live = state.filter(r => !r.kaishu);
+  const plan = live.reduce((s,r) => s + r.amount, 0);
+  const paid = live.filter(r => r.paid).reduce((s,r) => s + r.amount, 0);
+  const kk = state.filter(r => r.kaishu);
+  document.querySelectorAll('.total-kaishu').forEach(el => {
+    el.innerHTML = kk.length
+      ? `このほかに、回収済み ${kk.length}件（残債 ${yen(kk.reduce((s,r) => s + r.debt, 0))}円）があります。`
+      : '';
+  });
+  const be = state.filter(r => r.bonus > 10);
+  document.querySelectorAll('.total-bonus').forEach(el => {
+    el.innerHTML = be.length
+      ? `ボーナス見込み ${yen(be.reduce((s,r) => s + r.bonus, 0))}円（${be.length}件）。督促の対象外ですが、`
+        + `うち ${state.filter(heavyBonus).length}件 は毎月額の${BONUS_RATIO}回分を超えています。`
+      : '';
+  });
+  const set = (id, v) => document.getElementById(id).innerHTML = yen(v) + '<span class="yen">円</span>';
+  set('tPlan', plan); set('tPaid', paid); set('tRest', plan - paid);
+  set('dPlan', plan); set('dPaid', paid); set('dRest', plan - paid);
+}
+
+function renderDash(){
+  const unpaid = f => state.filter(r => !r.paid && f(r));
+  const today = unpaid(r => statusOf(r)==='today');
+  const late  = unpaid(r => statusOf(r)==='overdue');
+  const prom  = PROMISES.filter(p => { const r = state.find(x => x.id===p.id); return r && !r.paid; });
+  const cashSum = CASH.reduce((s,c) => s + c.amount, 0);
+
+  const byMethod = list => list.length ? `合計 ${yen(list.reduce((s,r) => s + r.amount, 0))}円` : '';
+
+  const items = [
+    {n:today.length, label:'本日の入金を確かめる', sub:byMethod(today) || 'すべて確認済みです', go:'today', tone:'today'},
+    {n:late.length,  label:'遅れている方に連絡する', sub:late.length ? `いちばん長い方で ${Math.max(...late.map(r => daysLate(r.due)))}日` : '遅れはありません', go:'overdue', tone:'overdue'},
+    {n: imported ? unmatched.length : BANK.length, label:'誰の入金か分からないものを片づける', sub: imported ? (unmatched.length ? '振込人の名前から本人を探します' : 'すべて片づきました') : '銀行明細を取り込むと出てきます', go: imported ? 'unmatched' : 'import', tone:'overdue'},
+    {n:prom.length, label:'後日の約束を確かめる', sub:prom.length ? '約束の日が来た方がいます' : '本日ぶんの約束はありません', go:'hold', tone:'today'},
+  ];
+
+  document.getElementById('workList').innerHTML = items
+    .slice().sort((a,b) => (a.n === 0 ? 1 : 0) - (b.n === 0 ? 1 : 0))
+    .map(it => {
+    const tone = it.n === 0 ? 'w-done' : 'w-' + it.tone;
+    return `<button class="work ${tone}" data-go="${it.go}">
+      <span class="cnt">${it.n === 0 ? '<span class="stamp">済</span>' : it.n}</span>
+      <span class="lbl">${it.label}<span class="sub">${it.sub}</span></span>
+      <span class="go">${it.n === 0 ? '' : '→'}</span>
+    </button>`;
+  }).join('');
+
+  document.getElementById('dashRule').textContent =
+    `いまの決めごと：差額は ${yen(THRESHOLD)}円 以上を督促の対象にする。`
+    + `完済前の精算は、金額にかかわらず残り${NOTICE_REMAIN}回から案内する`
+    + `（該当が出るのは2029年2月ごろの見込み）。`
+    + `ボーナス頼みは毎月額の${BONUS_RATIO}回分を超えたら見直す。`;
+
+  const ages = [];
+  late.forEach(r => ages.push({t:r.name, n:daysLate(r.due), note:r.note || '入金の確認が取れていません'}));
+  unmatched.forEach(u => ages.push({t:u.payer, n:daysLate(u.date), note:'誰の入金か分からないまま'}));
+  prom.filter(p => p.day < TODAY).forEach(p => {
+    const r = state.find(x => x.id===p.id);
+    ages.push({t:r.name, n:daysLate(p.day), note:'約束の日を過ぎています'});
+  });
+  const seen = new Set();
+  const list = ages.filter(a => !seen.has(a.t) && seen.add(a.t)).sort((a,b) => b.n - a.n).slice(0,7);
+
+  document.getElementById('agingList').innerHTML = list.length ? list.map(a => `
+    <div class="age">
+      <div class="age-top"><span class="age-name">${a.t}</span><span class="age-days">${a.n}日</span></div>
+      <div class="age-note">${a.note}</div>
+      <div class="age-bar" style="width:${Math.min(a.n / 21, 1) * 100}%"></div>
+    </div>`).join('') : '<div class="age-note" style="padding:12px 0">溜まっているものはありません。</div>';
+
+  document.getElementById('cashBox').innerHTML = `<h4>手元の現金(まだ銀行へ入れていない分)</h4>
+    ${CASH.map(c => `<div class="cash-row"><span>${c.date.replace('-','/')}</span><span>${c.name}</span>
+      <span class="rcpt">${c.receipt}</span><span class="amt">${yen(c.amount)}</span></div>`).join('')}
+    <div class="cash-sum"><span>合計</span><span class="amt">${yen(cashSum)}円</span></div>`;
+}
+
+// 出来事は追記のみ。訂正は「取り消した」という出来事を足す
+const EVENTS = [];
+let clock = 9 * 60;
+function stamp(){ const m = clock += 3;
+  return `${TODAY.replace('-','/')} ${pad(Math.floor(m/60))}:${pad(m%60)}`; }
+function logEvent(r, kind, text, memo){
+  EVENTS.push({cid:r.id, no:r.no, when:stamp(), who:'管理者', kind, text, memo:memo || ''});
+}
+function pastEvents(r){
+  const out = [], hh = HIST[r.id] || [];
+  hh.forEach((c, mi) => {
+    if(c === 'none' || c === 'pending' || c === 'live') return;
+    const no = mi - r.si + 1, mo = MONTHS[mi], when = `${mo.y}/${String(mo.m).padStart(2,'0')}`;
+    out.push({cid:r.id, no, when, who:'—', kind:'請求', text:`${no}回目の請求`, memo:''});
+    if(c === 'paid')   out.push({cid:r.id, no, when, who:'管理者', kind:'入金', text:'期日までに入金', memo:''});
+    if(c === 'late')   out.push({cid:r.id, no, when, who:'管理者', kind:'遅れ', text:'期日より後に入金', memo:''});
+    if(c === 'part')   out.push({cid:r.id, no, when, who:'管理者', kind:'差額', text:'請求と違う金額で入金', memo:''});
+    if(c === 'unpaid') out.push({cid:r.id, no, when, who:'—', kind:'未収', text:'入金の確認が取れないまま', memo:''});
+  });
+  PROMISES.filter(pr => pr.id === r.id).forEach(pr => {
+    out.push({cid:r.id, no:r.no, when:`2026/${pr.heard.replace('-','/')}`, who:'管理者', kind:'約束',
+              text:`${pr.day.replace('-','/')}に支払うと約束`, memo:pr.memo});
+    if(pr.day < TODAY) out.push({cid:r.id, no:r.no, when:`2026/${pr.day.replace('-','/')}`, who:'—',
+              kind:'不履行', text:'約束の日を過ぎても入金なし', memo:''});
+  });
+  if(r.kaishu) out.push({cid:r.id, no:r.no, when:'2026/06', who:'管理者', kind:'回収',
+              text:'車両を回収', memo:'残債の扱いは未確定'});
+  return out;
+}
+const KIND_CLASS = {'請求':'k-plain','入金':'k-ok','遅れ':'k-warn','差額':'k-info','未収':'k-bad',
+                    '約束':'k-warn','不履行':'k-bad','回収':'k-bad','メモ':'k-info','保留':'k-warn','取消':'k-plain'};
+
+let histId = null;
+function openHist(id){ histId = id; document.getElementById('histModal').hidden = false; renderHist(); }
+function closeHist(){ histId = null; document.getElementById('histModal').hidden = true; }
+function renderHist(){
+  const r = state.find(x => x.id === histId);
+  const all = pastEvents(r).concat(EVENTS.filter(e => e.cid === r.id));
+  const groups = {};
+  all.forEach(e => { (groups[e.no] = groups[e.no] || []).push(e); });
+  const keys = Object.keys(groups).map(Number).sort((a,b) => b - a);
+  document.getElementById('histName').textContent = `${r.name} さんの記録`;
+  document.getElementById('histBody').innerHTML =
+    `<p class="hist-sub">${r.ct}　${r.no}回目 / 48回　${r.diff ? (r.diff<0?'不足 ':'余り ') + yen(Math.abs(r.diff)) + '円' : '過不足なし'}</p>
+     <div class="tree">${keys.map(k => `
+       <div class="tree-g"><h5>${k}回目</h5>
+         ${groups[k].map(e => `<div class="tree-i">
+            <span class="when">${e.when}</span>
+            <span><span class="kind ${KIND_CLASS[e.kind]||'k-plain'}">${e.kind}</span>${e.text}
+              ${e.memo ? `<span class="tree-memo">${e.memo}</span>` : ''}</span>
+            <span class="who">${e.who}</span>
+          </div>`).join('')}
+       </div>`).join('')}</div>
+     <p class="imp-mock">記録は足すだけで、書き換えられません。訂正は「取り消した」という記録が増えます。</p>`;
+}
+
+let otherId = null;
+
+let payChoice = 'plan';   // plan（今回分） / need（過不足こみ） / other（ちがう金額）
+let diffMode  = 'carry';  // carry（繰り越す） / settle（精算する）
+let planOpen  = false;
+
+function resetPanel(r){
+  payChoice = 'plan'; diffMode = 'carry';
+  planOpen = !!(r && r.diff && r.rest <= NOTICE_REMAIN);
+}
+
+function panelHtml(r){
+  const rows = r.parts.map(p => `<tr><td class="k">${p[0]}</td><td class="v">${yen(p[1])}</td></tr>`).join('');
+  const c = record(r), need = r.amount - r.diff;
+  const way = ['振込','現金','その他'].map(m =>
+    `<button class="${m===r.method?'on':''}" data-m="${m}" data-id="${r.id}">${m}</button>`).join('');
+  const money = [['plan', `${yen(r.amount)}円`]]
+    .concat(r.diff ? [['need', `${yen(need)}円`]] : [])
+    .concat([['other','ちがう金額']])
+    .map(([k,l]) => `<button class="${payChoice===k?'on':''}" data-choice="${k}">${l}</button>`).join('');
+  const hintText = payChoice==='need' ? '過不足をふくめた金額です'
+                 : payChoice==='plan' && r.diff ? '過不足はそのまま繰り越します' : '';
+  const hint = hintText ? `<div class="pay-row tight"><span class="pay-label"></span>
+                           <span class="hint">${hintText}</span></div>` : '';
+
+  const other = payChoice !== 'other' ? '' : `
+    <div class="pay-row"><span class="pay-label">入った金額</span>
+      <input class="imp-input pay-input" id="otherInput" inputmode="numeric" autocomplete="off" placeholder="0"><span>円</span></div>
+    <div class="pay-row"><span class="pay-label">差額は</span>
+      <span class="seg">
+        <button class="${diffMode==='carry'?'on':''}" data-dmode="carry">次へ繰り越す</button>
+        <button class="${diffMode==='settle'?'on':''}" data-dmode="settle">精算して0にする</button>
+        ${r.bonus > 10 ? `<button class="${diffMode==='bonus'?'on':''}" data-dmode="bonus">ボーナス分に充てる</button>` : ''}
+      </span></div>`;
+
+  const label = payChoice==='other' ? '入れた金額で記録する'
+              : `${yen(payChoice==='need' ? need : r.amount)}円 を記録する`;
+
+  const diffBox = !r.diff ? '' : `
+    <div class="plan">
+      <button class="disclose" data-planopen="1">${planOpen?'▾':'▸'} 差額 ${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}円 の扱い${r.rest<=NOTICE_REMAIN?`（残り${r.rest}回）`:''}</button>
+      ${!planOpen ? '' : (r.plan
+        ? `<div class="plan-set">${PLAN[r.plan]}${r.plan==='split'
+             ? `（1回あたり ${yen(Math.ceil(Math.abs(r.diff)/Math.max(r.rest,1)))}円 を${r.diff<0?'上乗せ':'差し引き'}）` : ''}
+           <button class="btn btn-weak" data-planclear="${r.id}">決め直す</button></div>`
+        : `<div class="plan-btns">
+             <button class="btn" data-plan="last" data-pid="${r.id}">最終回にまとめて</button>
+             <button class="btn" data-plan="split" data-pid="${r.id}">残り${r.rest}回で均等に</button>
+             <button class="btn" data-plan="separate" data-pid="${r.id}">別途いっかつで請求</button>
+           </div>`)}
+    </div>`;
+
+  return `<div class="panel open" data-panel="${r.id}">
+    <div class="panel-grid">
+      <div class="breakdown">
+        <h4>何の分か</h4>
+        <table>${rows}<tr class="sum"><td class="k">今回の請求</td><td class="v">${yen(r.amount)}</td></tr>
+        ${r.bonus > 10 ? `<tr><td class="k">ボーナス見込み</td><td class="v b-exp">残り ${yen(r.bonus)}</td></tr>
+        <tr><td class="k">毎月額の何回分か</td><td class="v ${heavyBonus(r)?'d-short':''}">${bonusRatio(r).toFixed(1)}回分</td></tr>` : ''}
+        ${r.bonus > 0 && r.bonus <= 10 ? `<tr><td class="k">端数のずれ</td><td class="v">${yen(r.bonus)}</td></tr>` : ''}
+        ${r.diff ? `<tr><td class="k">これまでの過不足</td><td class="v ${r.diff<0?'d-short':'d-over'}">${r.diff<0?'不足 ':'余り '}${yen(Math.abs(r.diff))}</td></tr>` : ''}</table>
+      </div>
+      <div class="breakdown">
+        <h4>これまでの実績（経過 ${c.months}回）</h4>
+        <table>
+          <tr><td class="k">支払った回数</td><td class="v">${c.paid} / ${c.months}</td></tr>
+          <tr><td class="k">期日に遅れた</td><td class="v">${c.late}</td></tr>
+          <tr><td class="k">未収のまま</td><td class="v ${c.unpaid?'d-short':''}">${c.unpaid}</td></tr>
+          <tr><td class="k">最長の連続滞納</td><td class="v ${c.maxRun>1?'d-short':''}">${c.maxRun}ヶ月</td></tr>
+          <tr><td class="k">金額が違った</td><td class="v">${c.part}</td></tr>
+          <tr><td class="k">約束を守らなかった</td><td class="v ${c.broken?'d-short':''}">${c.broken}</td></tr>
+          ${r.bonus > 10 || c.bonusPaid ? `<tr><td class="k">ボーナスを入れた</td><td class="v ${c.bonusPaid?'d-over':''}">${c.bonusPaid}</td></tr>` : ''}
+        </table>
+        <button class="linky" data-hist="${r.id}">すべての記録を見る →</button>
+      </div>
+      <div class="pay">
+        <div class="pay-row"><span class="pay-label">受け取り方</span><span class="seg">${way}</span></div>
+        <div class="pay-row"><span class="pay-label">金額</span><span class="seg">${money}</span></div>
+        ${hint}
+        ${other}
+        <div class="pay-row"><span class="pay-label">メモ</span>
+          <input class="memo-input" id="memoInput" autocomplete="off" placeholder="必要なら書いてください（任意）"></div>
+        <div class="pay-row commit"><span class="pay-label"></span>
+          <button class="btn-pay" data-commit="${r.id}">${label}</button></div>
+        <div class="pay-row alt"><span class="pay-label"></span>
+          <span class="alt-label">入金がなかったときは</span>
+          <button class="btn btn-weak" data-promise="${r.id}">後日の約束</button>
+          <button class="btn btn-weak" data-hold="${r.id}">保留にする</button>
+        </div>
+        ${diffBox}
+        ${r.note ? `<div class="memo">${r.note}</div>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function takeMemo(){
+  const pv = document.getElementById('viewPend');
+  const el = (pv && !pv.hidden) ? pv.querySelector('.memo-input')
+                                : document.getElementById('memoInput');
+  return el ? el.value.trim() : '';
+}
+
+function focusOther(){
+  const el = document.getElementById('otherInput');
+  if(!el) return;
+  el.focus();
+  el.addEventListener('input', () => {
+    const n = el.value.replace(/[^0-9]/g, '');
+    el.value = n ? Number(n).toLocaleString('ja-JP') : '';
+  });
+}
+
+function renderRows(){
+  const list = state.filter(FILTERS.find(f => f.key===filter).test);
+  const el = document.getElementById('rows');
+  if(!list.length){ el.innerHTML = '<div class="empty">この区分に該当する方はいません。</div>'; return; }
+  el.innerHTML = list.map(r => {
+    const st = statusOf(r);
+    const rec = r.paid ? `入金 ${TODAY.replace('-','/')} ${r.paidWith}`
+              : (st==='kaishu' ? '回収済み'
+              : (st==='overdue' ? `${daysLate(r.due)}日 遅れ` : (st==='hold' ? '保留中' : '')));
+    return `<button class="lrow s-${st} ${r.paid?'paid':''}" data-row="${r.id}">
+        <span class="bar"></span>
+        <span class="due">${r.due.replace('-','/')}</span>
+        <span class="nm">${r.name}${testTag(r)}</span>
+        <span class="ct">${r.ct}</span>
+        <span class="dt">${r.dt}</span>
+        <span class="am"><span>${yen(r.amount)}</span>${r.diff ? `<span class="am-diff ${r.diff<0?'d-short':'d-over'}">${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}</span>` : ''}</span>
+        <span class="mt">${r.n}</span>
+        <span class="rc">${heavyBonus(r) ? `<span class="bonus-tag">ボ ${Math.round(bonusRatio(r))}回分</span>` : rec}</span>
+        <span class="strike"></span>
+      </button>` + (openId===r.id && !r.paid ? panelHtml(r) : '');
+  }).join('');
+}
+
+function renderUnmatched(){
+  const bar = document.getElementById('umBar');
+  const txt = document.getElementById('umText');
+  const list = document.getElementById('umList');
+  if(!unmatched.length){
+    bar.classList.add('is-empty');
+    document.getElementById('umCaret').textContent = '';
+    txt.textContent = '誰の入金か分からないものはありません。';
+    list.innerHTML = ''; list.classList.remove('open');
+    return;
+  }
+  bar.classList.remove('is-empty');
+  txt.textContent = `誰の入金か分からないもの ${unmatched.length}件`;
+  list.innerHTML = unmatched.map(u => {
+    const t = state.find(r => r.id===u.target);
+    return `<div class="um">
+      <span class="um-date">${u.date.replace('-','/')}</span>
+      <span class="um-amount">${yen(u.amount)}</span>
+      <span class="um-payer">${u.payer}</span>
+      <span class="um-arrow">→</span>
+      ${t ? `<span class="um-guess">${t.name} <span class="sub">${t.ct} ／ ${u.why}</span></span>`
+          : '<span class="um-none">似た方が見つかりません</span>'}
+      <span class="um-act">
+        ${t ? `<button class="btn btn-main" data-assign="${u.uid}">この方の入金にする</button>` : ''}
+        <button class="btn" data-search="${u.uid}">名簿から探す</button>
+      </span>
+    </div>`;
+  }).join('');
+}
+
+const HIST = {"1": ["paid", "paid", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "2": ["none", "paid", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "3": ["none", "paid", "paid", "paid", "part", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "4": ["none", "paid", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "5": ["none", "paid", "unpaid", "unpaid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "6": ["none", "paid", "paid", "paid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "7": ["none", "paid", "paid", "late", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "8": ["none", "paid", "unpaid", "unpaid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "9": ["none", "paid", "late", "paid", "part", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "10": ["none", "none", "paid", "paid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "11": ["none", "none", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "12": ["none", "none", "paid", "unpaid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "13": ["none", "none", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "14": ["none", "none", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "15": ["none", "none", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "16": ["none", "none", "paid", "paid", "part", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "17": ["none", "none", "none", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "18": ["none", "none", "none", "paid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "19": ["none", "none", "none", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "20": ["none", "none", "none", "paid", "late", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "21": ["none", "none", "none", "late", "part", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "22": ["none", "none", "none", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "23": ["none", "none", "none", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "24": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "25": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "26": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "27": ["none", "none", "none", "none", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "28": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "29": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "30": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "31": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "32": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "33": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "34": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "35": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "36": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "37": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "38": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "39": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "40": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "41": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "42": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "43": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "44": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "45": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "46": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "47": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "48": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "49": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "50": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "51": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "52": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "53": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "54": ["none", "none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending"]};
+const MONTHS = [{"y": 2026, "m": 2}, {"y": 2026, "m": 3}, {"y": 2026, "m": 4}, {"y": 2026, "m": 5}, {"y": 2026, "m": 6}, {"y": 2026, "m": 7}, {"y": 2026, "m": 8}, {"y": 2026, "m": 9}, {"y": 2026, "m": 10}, {"y": 2026, "m": 11}, {"y": 2026, "m": 12}, {"y": 2027, "m": 1}];
+let mtxSort = 'late';
+let pendOpen = null;
+let mtxOpen = null;
+
+function cellState(r, mi){
+  const h = (HIST[r.id] || [])[mi] || 'none';
+  return h === 'live' ? (r.paid ? 'paid' : (r.kaishu ? 'unpaid' : 'due')) : h;
+}
+const MARK = {paid:'済', late:'遅', unpaid:'未', due:'未', part:'差', pending:'', none:''};
+
+function pendPanel(k, row, i){
+  const r = row.id ? state.find(x => x.id === row.id) : null;
+  const memo = `<div class="prow"><span class="plabel">メモ</span>
+      <input class="memo-input" autocomplete="off" placeholder="必要なら書いてください（任意）"></div>`;
+  const hist = r ? `<button class="linky" data-hist="${r.id}">この契約の記録を見る →</button>` : '';
+
+  if(k === 'cash'){
+    const c = CASH[i];
+    return `<div class="pend-p"><p class="pend-q">銀行に入れましたか</p>
+      <p class="pend-note">${c.date.replace('-','/')}に受け取り、領収書は ${c.receipt}。金額は ${yen(c.amount)}円 です。</p>
+      ${memo}
+      <div class="prow commit"><span class="plabel"></span>
+        <button class="btn-pay" data-cashdone="${i}">銀行へ入れた</button></div></div>`;
+  }
+
+  if(k === 'diff' || k === 'settle'){
+    const rest = Math.max(r.rest, 1);
+    return `<div class="pend-p">
+      <p class="pend-q">${r.diff<0?'不足':'余り'}の ${yen(Math.abs(r.diff))}円 を、どう処理しますか</p>
+      <p class="pend-note">${k === 'settle'
+        ? `残り${r.rest}回です。ここで決めておかないと、最終回に一括で請求することになります。`
+        : '決めるまで毎回この一覧に出ます。'}</p>
+      ${memo}
+      ${r.plan
+        ? `<div class="plan-set">${PLAN[r.plan]}${r.plan==='split'
+             ? `（1回あたり ${yen(Math.ceil(Math.abs(r.diff)/rest))}円 を${r.diff<0?'上乗せ':'差し引き'}）` : ''}
+           <button class="btn btn-weak" data-planclear="${r.id}">決め直す</button></div>`
+        : `<div class="plan-btns">
+             <button class="btn" data-plan="last" data-pid="${r.id}">最終回にまとめて</button>
+             <button class="btn" data-plan="split" data-pid="${r.id}">残り${rest}回で均等に（1回 ${yen(Math.ceil(Math.abs(r.diff)/rest))}円）</button>
+             <button class="btn" data-plan="separate" data-pid="${r.id}">別途いっかつで請求</button>
+           </div>`}
+      ${hist}</div>`;
+  }
+
+  const q = k === 'kaishu'
+    ? {q:'この残債を、どう扱いますか', n:'売却代金をどう充てるか、残りを請求するかが決まっていません。決まり次第、ここに選択肢を出します。'}
+    : {q:'この契約を、どうしますか', n:'本人に確認するのか、条件を見直すのかが決まっていません。決まり次第、ここに選択肢を出します。'};
+  return `<div class="pend-p"><p class="pend-q">${q.q}</p>
+    <p class="pend-note pend-undecided">${q.n}</p>
+    ${memo}
+    <div class="prow commit"><span class="plabel"></span>
+      <button class="btn" data-pmemo="${r.id}">記録だけ残す</button></div>
+    ${hist}</div>`;
+}
+
+function renderPend(){
+  const g = [];
+  const cash = CASH.filter(c => !c.done);
+  const cashSum = cash.reduce((s,c) => s + c.amount, 0);
+  if(cash.length) g.push({k:'cash', t:'預かった現金を銀行へ入れる', sum:cashSum,
+    w:'受け取ってから日が空くほど、通帳と合わなくなります。',
+    rows:cash.map(c => ({id:null, a:c.name, b:`領収書 ${c.receipt}`,
+      c:`${c.date.replace('-','/')} 受領`, n:c.amount}))});
+
+  const dd = state.filter(r => bigDiff(r) && !r.kaishu);
+  if(dd.length) g.push({k:'diff', t:'差額の扱いを決める', sum:dd.reduce((s,r) => s + Math.abs(r.diff), 0),
+    w:`${yen(THRESHOLD)}円 以上ずれている契約です。決めるまで毎回くり返します。`,
+    rows:dd.map(r => ({id:r.id, a:r.name, b:r.ct,
+      c:r.plan ? `${PLAN[r.plan]} と決めています` : '扱いが未定です', n:r.diff}))});
+
+  const kk = state.filter(r => r.kaishu);
+  if(kk.length) g.push({k:'kaishu', t:'回収した車の残債を片づける', sum:kk.reduce((s,r) => s + r.debt, 0),
+    w:'売却代金の充当と、残りをどうするかが決まっていません。',
+    rows:kk.map(r => ({id:r.id, a:r.name, b:r.ct, c:`${r.no}回目で回収`, n:r.debt}))});
+
+  const hb = state.filter(heavyBonus).slice().sort((a,b) => b.bonus/b.amount - a.bonus/a.amount);
+  if(hb.length) g.push({k:'bonus', t:'ボーナス頼みが重い契約を見直す', sum:hb.reduce((s,r) => s + r.bonus, 0),
+    w:`毎月額の${BONUS_RATIO}回分を超えています。督促の対象ではありませんが、放っておくと最後に残ります。`,
+    rows:hb.map(r => ({id:r.id, a:r.name, b:r.ct,
+      c:`毎月額の ${(r.bonus/r.amount).toFixed(1)}回分`, n:r.bonus}))});
+
+  const ns = state.filter(needSettle);
+  if(ns.length) g.push({k:'settle', t:'完済前の精算を案内する', sum:ns.reduce((s,r) => s + Math.abs(r.diff), 0),
+    w:`残り${NOTICE_REMAIN}回を切って差額が残っています。`,
+    rows:ns.map(r => ({id:r.id, a:r.name, b:r.ct, c:`残り${r.rest}回`, n:r.diff, test:r.test}))});
+
+  document.getElementById('pendList').innerHTML = g.length ? g.map(x => `
+    <div class="pend-g">
+      <div class="pend-h"><b>${x.t}</b><span class="cnt">${x.rows.length}件</span>
+        <span class="sum">${yen(x.sum)}円</span></div>
+      <p class="pend-w">${x.w}</p>
+      ${x.rows.map((r, i) => {
+        const key = `${x.k}:${i}`;
+        return `<button class="pend-r${pendOpen === key ? ' on' : ''}" data-pendopen="${key}">
+          <span class="nm">${r.a}${r.test ? testTag(r) : ''}</span><span class="sub">${r.b}</span>
+          <span class="sub">${r.c}</span>
+          <span class="n ${r.n < 0 ? 'd-short' : ''}">${yen(Math.abs(r.n))}</span>
+        </button>` + (pendOpen === key ? pendPanel(x.k, r, i) : '');
+      }).join('')}
+    </div>`).join('') : '<p class="pend-none">片づいていない仕事はありません。</p>';
+}
+
+function renderMatrix(){
+  const rows = state.map(r => {
+    const cells = MONTHS.map((_, mi) => cellState(r, mi));
+    const late = cells.filter(c => c === 'unpaid').length;
+    return {r, cells, late, owed:late * r.amount};
+  });
+  const sorted = rows.slice().sort((a, b) =>
+    mtxSort === 'late' ? (b.late - a.late) || (b.owed - a.owed) : a.r.id - b.r.id);
+
+  const owedAll = rows.reduce((s, x) => s + x.owed, 0);
+  const people = rows.filter(x => x.late).length;
+  const worst = Math.max(0, ...rows.map(x => x.late));
+  document.getElementById('mtxSum').innerHTML =
+    `未収の合計 <b>${yen(owedAll)}円</b> ／ 滞りのある方 <b>${people}</b>名 ／ いちばん長い方で <b>${worst}</b>ヶ月`;
+
+  const head = `<thead><tr><th class="nmcol">お名前 ・ 契約</th>
+    ${MONTHS.map((m, i) => `<th>${(m.m === 1 || i === 0) ? m.y + '<br>' : ''}${m.m}月</th>`).join('')}
+    <th class="col-n">滞り</th><th class="col-n">未収額</th><th class="col-n">累計差額</th></tr></thead>`;
+
+  const body = sorted.map(x => {
+    const cells = x.cells.map((c, mi) =>
+      `<td><i class="cell c-${c}" title="${MONTHS[mi].y}年${MONTHS[mi].m}月">${MARK[c]}</i></td>`).join('');
+    const detail = mtxOpen === x.r.id ? `<tr class="mtx-detail"><td class="nmcol"></td>
+      <td colspan="${MONTHS.length + 3}"><div class="in">${(() => { const c = record(x.r); return `
+        ${x.r.bonus > 10 ? `<div class="line"><span class="b-exp">ボーナス見込み 残り ${yen(x.r.bonus)}円</span><span class="${heavyBonus(x.r)?'rec-unpaid':''}">毎月額の ${bonusRatio(x.r).toFixed(1)}回分</span></div>` : ''}
+        <div class="line rec-line">
+          <span>支払った <b>${c.paid}</b> / ${c.months}回</span>
+          <span class="${c.late?'rec-late':''}">期日に遅れた <b>${c.late}</b></span>
+          <span class="${c.unpaid?'rec-unpaid':''}">未収 <b>${c.unpaid}</b></span>
+          <span class="${c.maxRun>1?'rec-unpaid':''}">最長の連続滞納 <b>${c.maxRun}</b>ヶ月</span>
+          <span class="${c.part?'rec-part':''}">金額ちがい <b>${c.part}</b></span>
+          <span class="${c.broken?'rec-unpaid':''}">約束を守らなかった <b>${c.broken}</b></span>
+        </div>`; })()}${
+        x.cells.map((c, mi) => c === 'unpaid' || c === 'late'
+          ? `<div class="line"><span>${MONTHS[mi].y}/${String(MONTHS[mi].m).padStart(2,'0')}</span>
+             <span>${c === 'unpaid' ? '未収のまま' : '期日より後に入金'}</span>
+             <span class="amt">${yen(x.r.amount)}円</span></div>` : '').join('') ||
+        '<div class="line">この12ヶ月、遅れはありません。</div>'
+      }<div class="line"><button class="btn" data-hist="${x.r.id}">これまでの記録を見る</button></div></div></td></tr>` : '';
+    return `<tr data-mrow="${x.r.id}" tabindex="0">
+      <td class="nmcol"><span class="mrow-name">${x.r.name}${testTag(x.r)}</span><span class="mrow-sub">${x.r.ct}${x.r.kaishu ? ' ／ <b class="kaishu-tag">回収済み</b>' : ''}</span></td>
+      ${cells}
+      <td class="col-n ${x.late ? 'n-late' : ''}">${x.late ? x.late + 'ヶ月' : '—'}</td>
+      <td class="col-n ${x.late ? 'n-late' : ''}">${x.owed ? yen(x.owed) : '—'}</td>
+      <td class="col-n">${x.r.diff ? `<span class="${Math.abs(x.r.diff)<THRESHOLD ? 'd-small' : (x.r.diff<0?'d-short':'d-over')}">${x.r.diff<0?'不足':'余り'} ${yen(Math.abs(x.r.diff))}</span>` : '—'}</td>
+    </tr>${detail}`;
+  }).join('');
+
+  document.getElementById('mtxTable').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+function render(){ renderTabs(); renderTotals(); renderRows(); renderUnmatched();
+                   renderDash(); renderPend(); renderMatrix(); }
+
+function go(view){
+  document.getElementById('viewDash').hidden = (view !== 'dash');
+  document.getElementById('viewPend').hidden = (view !== 'pend');
+  document.getElementById('viewLedger').hidden = (view !== 'ledger');
+  document.getElementById('viewMatrix').hidden = (view !== 'matrix');
+  document.querySelectorAll('.vn[data-view]').forEach(b =>
+    b.classList.toggle('on', b.dataset.view === view));
+  window.scrollTo(0, 0);
+  render();
+}
+
+function showUndo(text, undoFn){
+  history.push(undoFn);
+  document.getElementById('undoText').textContent = text;
+  document.getElementById('undoBar').classList.add('show');
+  document.getElementById('btnUndoTop').disabled = false;
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => document.getElementById('undoBar').classList.remove('show'), 9000);
+}
+
+function doUndo(){
+  const fn = history.pop();
+  if(fn) fn();
+  document.getElementById('undoBar').classList.remove('show');
+  document.getElementById('btnUndoTop').disabled = history.length===0;
+  render();
+}
+
+function pay(id, silent){
+  const r = state.find(x => x.id===id);
+  if(!r || r.paid) return;
+  r.paid = true; r.paidWith = r.method; r.hold = false;
+  openId = null;
+  render();
+  if(!silent) showUndo(`${r.name}さん ${yen(r.amount)}円 を入金ありにしました`, () => { r.paid=false; r.paidWith=null; });
+}
+
+document.addEventListener('click', e => {
+  const t = e.target;
+
+  const hb = t.closest('[data-hist]');
+  if(hb){ openHist(+hb.dataset.hist); return; }
+  if(t.closest('[data-histclose]')){ closeHist(); return; }
+
+  const pl = t.closest('[data-plan]');
+  if(pl){
+    const r = state.find(x => x.id === +pl.dataset.pid), before = r.plan;
+    const memo = takeMemo();
+    r.plan = pl.dataset.plan; render();
+    logEvent(r, 'メモ', `差額の扱いを「${PLAN[r.plan]}」に決めた`, memo);
+    showUndo(`${r.name}さん の差額を「${PLAN[r.plan]}」で処理すると決めました`, () => { r.plan = before; });
+    return;
+  }
+  const pc = t.closest('[data-planclear]');
+  if(pc){ const r = state.find(x => x.id === +pc.dataset.planclear);
+    const before = r.plan; r.plan = null; render();
+    showUndo(`${r.name}さん の差額の扱いを取り消しました`, () => { r.plan = before; }); return; }
+
+  const ch = t.closest('[data-choice]');
+  if(ch){ payChoice = ch.dataset.choice; render(); if(payChoice==='other') focusOther(); return; }
+  const dm = t.closest('[data-dmode]');
+  if(dm){ diffMode = dm.dataset.dmode; render(); focusOther(); return; }
+  if(t.closest('[data-planopen]')){ planOpen = !planOpen; render(); return; }
+
+  const cm = t.closest('[data-commit]');
+  if(cm){
+    const r = state.find(x => x.id === +cm.dataset.commit), memo = takeMemo();
+    const before = r.diff;
+    if(payChoice === 'other'){
+      const v = +(document.getElementById('otherInput').value || '').replace(/[^0-9]/g,'');
+      if(!v){ alert('入った金額を入れてください。'); return; }
+      const d = v - r.amount, bBefore = r.bonus;
+      let tail;
+      if(diffMode === 'bonus' && d > 0){
+        const use = Math.min(d, r.bonus);
+        r.bonus -= use; r.bonusPaid++;
+        r.diff = before + (d - use);
+        tail = `${yen(use)}円 をボーナス分に充てました（見込みの残り ${yen(r.bonus)}円）`;
+      } else {
+        r.diff = diffMode === 'carry' ? before + d : 0;
+        tail = diffMode === 'settle' ? '差額を精算しました'
+          : (r.diff === 0 ? '過不足はなくなりました'
+             : `過不足は ${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}円 になりました`);
+      }
+      pay(r.id, true);
+      logEvent(r, diffMode === 'bonus' ? 'ボーナス' : '差額',
+        `${yen(v)}円 を受け取り（請求 ${yen(r.amount)}円）。${tail}`, memo);
+      showUndo(`${r.name}さん ${yen(v)}円 を記録。${tail}`,
+        () => { r.paid=false; r.paidWith=null; r.diff=before;
+                if(r.bonus !== bBefore){ r.bonus = bBefore; r.bonusPaid--; } });
+    } else if(payChoice === 'need'){
+      const v = r.amount - before;
+      r.diff = 0; pay(r.id, true);
+      logEvent(r, '入金', `${yen(v)}円 を受け取り、過不足を0にした`, memo);
+      showUndo(`${r.name}さん ${yen(v)}円 を記録し、過不足を0にしました`,
+        () => { r.paid=false; r.paidWith=null; r.diff=before; });
+    } else {
+      pay(r.id, true);
+      logEvent(r, '入金', `${yen(r.amount)}円 を受け取ったとして記録`, memo);
+      showUndo(`${r.name}さん ${yen(r.amount)}円 を入金ありにしました`,
+        () => { r.paid=false; r.paidWith=null; });
+    }
+    return;
+  }
+
+  const impBtn = t.closest('[data-imp]');
+  if(impBtn){
+    const a = impBtn.dataset.imp;
+    if(a === 'close'){ closeImport(); return; }
+    if(a === 'retry'){ imp.mode = 'input'; renderImport(); return; }
+    if(a === 'check'){
+      const v = +document.getElementById('impInput').value.replace(/[^0-9]/g, '');
+      if(!v){ alert('通帳に入っていた金額を入れてください。'); return; }
+      imp.typed = v; imp.mode = 'result'; renderImport(); return;
+    }
+    if(a === 'park'){
+      closeImport();
+      alert('「溜まっているもの」に、調べる分として残しました。(モックでは表示のみ)');
+      return;
+    }
+    if(a === 'commit'){
+      const ids = [];
+      BANK.filter(b => b.auto).forEach(b => {
+        const r = state.find(x => x.id === b.target);
+        if(r && !r.paid){ r.paid = true; r.paidWith = '振込'; r.hold = false; ids.push(r.id); }
+      });
+      unmatched = BANK.filter(b => !b.auto).map(b => ({...b}));
+      imported = true;
+      const amt = imp.typed;
+      closeImport();
+      render();
+      showUndo(`通帳 ${yen(amt)}円 と照合のうえ ${ids.length}件を消し込みました(残り${unmatched.length}件は本人の確認待ち)`,
+        () => { ids.forEach(id => { const r = state.find(x => x.id===id); r.paid = false; r.paidWith = null; });
+                unmatched = []; imported = false; });
+      return;
+    }
+    return;
+  }
+
+  const po = t.closest('[data-pendopen]');
+  if(po){ const k = po.dataset.pendopen; pendOpen = (pendOpen === k ? null : k); renderPend(); return; }
+
+  const cd = t.closest('[data-cashdone]');
+  if(cd){ const i = +cd.dataset.cashdone, c = CASH[i], memo = takeMemo();
+    c.done = true; pendOpen = null; renderPend();
+    showUndo(`${c.name}さん からの ${yen(c.amount)}円（${c.receipt}）を、銀行へ入れたことにしました`,
+      () => { c.done = false; });
+    return; }
+
+  const pm = t.closest('[data-pmemo]');
+  if(pm){ const r = state.find(x => x.id === +pm.dataset.pmemo), memo = takeMemo();
+    if(!memo){ alert('メモを書いてください。'); return; }
+    logEvent(r, 'メモ', '懸案として確認', memo);
+    pendOpen = null; renderPend();
+    showUndo(`${r.name}さん の記録にメモを残しました`, () => {});
+    return; }
+
+  const vnav = t.closest('.vn[data-view]');
+  if(vnav){ go(vnav.dataset.view); return; }
+
+  const srt = t.closest('[data-sort]');
+  if(srt){ mtxSort = srt.dataset.sort;
+    document.querySelectorAll('[data-sort]').forEach(b => b.classList.toggle('on', b === srt));
+    renderMatrix(); return; }
+
+  const mrow = t.closest('[data-mrow]');
+  if(mrow){ const id = +mrow.dataset.mrow; mtxOpen = (mtxOpen === id ? null : id); renderMatrix(); return; }
+
+  const work = t.closest('[data-go]');
+  if(work){
+    const key = work.dataset.go;
+    if(key === 'cash'){ alert('銀行へ入れる手続きの画面(モックでは省略)'); return; }
+    if(key === 'import'){ openImport(); return; }
+    filter = (key === 'unmatched') ? 'all' : key;
+    openId = null;
+    go('ledger');
+    if(key === 'unmatched'){
+      const list = document.getElementById('umList');
+      list.classList.add('open');
+      document.getElementById('umCaret').textContent = '▼';
+    }
+    return;
+  }
+
+  const tab = t.closest('.tab');
+  if(tab){ filter = tab.dataset.f; openId = null; render(); return; }
+
+  const seg = t.closest('.seg button');
+  if(seg){
+    const r = state.find(x => x.id === +seg.dataset.id);
+    r.method = seg.dataset.m; render(); return;
+  }
+
+  const payBtn = t.closest('[data-pay]');
+  if(payBtn){ const r = state.find(x => x.id === +payBtn.dataset.pay), memo = takeMemo();
+    pay(r.id); logEvent(r, '入金', `${yen(r.amount)}円 を受け取ったとして記録`, memo); return; }
+
+  const promise = t.closest('[data-promise]');
+  if(promise){
+    const r = state.find(x => x.id === +promise.dataset.promise), memo = takeMemo();
+    r.hold = true; r.note = '後日入金の約束(本日確認)';
+    openId = null; render();
+    logEvent(r, '約束', '後日支払うと約束', memo);
+    showUndo(`${r.name}さん を後日の約束にしました`, () => { r.hold=false; });
+    return;
+  }
+
+  const hold = t.closest('[data-hold]');
+  if(hold){
+    const r = state.find(x => x.id === +hold.dataset.hold), memo = takeMemo();
+    r.hold = true; openId = null; render();
+    logEvent(r, '保留', '保留にした', memo);
+    showUndo(`${r.name}さん を保留にしました`, () => { r.hold=false; });
+    return;
+  }
+
+  const assign = t.closest('[data-assign]');
+  if(assign){
+    const u = unmatched.find(x => x.uid === assign.dataset.assign);
+    const r = state.find(x => x.id === u.target);
+    unmatched = unmatched.filter(x => x.uid !== u.uid);
+    const d = u.amount - r.amount, bBefore = r.bonus, dBefore = r.diff;
+    if(d > 0 && r.bonus > 10){ const use = Math.min(d, r.bonus); r.bonus -= use; r.bonusPaid++; r.diff += (d - use); }
+    else if(d !== 0){ r.diff += d; }
+    r.paid = true; r.paidWith = '振込'; r.hold = false;
+    logEvent(r, (d > 0 && bBefore > 10) ? 'ボーナス' : '入金', `${u.payer} からの ${yen(u.amount)}円 を割り当て`, '');
+    render();
+    showUndo(`${u.payer} を ${r.name}さん の入金にしました`, () => {
+      r.paid=false; r.paidWith=null; r.bonus=bBefore; r.diff=dBefore; unmatched.push(u);
+      unmatched.sort((a,b) => a.uid.localeCompare(b.uid));
+    });
+    return;
+  }
+
+  if(t.closest('[data-search]')){ alert('名簿から探す画面(モックでは省略)'); return; }
+
+  const row = t.closest('.lrow');
+  if(row){
+    const id = +row.dataset.row;
+    const r = state.find(x => x.id===id);
+    if(r.paid){
+      r.paid=false; r.paidWith=null; render();
+      showUndo(`${r.name}さん の入金を取り消しました`, () => { r.paid=true; r.paidWith=r.method; });
+      return;
+    }
+    openId = (openId===id ? null : id);
+    resetPanel(openId ? r : null);
+    render();
+    return;
+  }
+
+  if(t.closest('#umBar') && unmatched.length){
+    const list = document.getElementById('umList');
+    list.classList.toggle('open');
+    document.getElementById('umCaret').textContent = list.classList.contains('open') ? '▼' : '▶';
+  }
+});
+
+document.getElementById('btnUndo').addEventListener('click', doUndo);
+document.getElementById('btnUndoTop').addEventListener('click', doUndo);
+
+const BANK_FEE = 0;
+let imp = null;
+const bankTotal = () => BANK.reduce((s,b) => s + b.amount, 0);
+
+function renderImport(){
+  const box = document.getElementById('importBody');
+  const auto = BANK.filter(b => b.auto), manual = BANK.filter(b => !b.auto);
+
+  if(imp.mode === 'input'){
+    box.innerHTML = `
+      <div class="imp-line"><span>取り込む明細</span><b>${BANK.length}件</b></div>
+      <div class="imp-line"><span>お名前が一致した</span><b>${auto.length}件</b></div>
+      <div class="imp-line"><span>本人を確かめる必要がある</span><b>${manual.length}件</b></div>
+      <p class="imp-ask">通帳に入っていた合計を入れてください</p>
+      <div class="imp-input-row">
+        <input class="imp-input" id="impInput" inputmode="numeric" autocomplete="off" placeholder="0">
+        <span>円</span>
+      </div>
+      <p class="imp-note">こちらの計算額は、入力していただいた後にお見せします。<br>
+        先に出すと写すだけになり、確かめたことになりません。</p>
+      <div class="imp-actions">
+        <button class="btn-pay" data-imp="check">照合する</button>
+        <button class="btn" data-imp="close">やめる</button>
+      </div>
+      <p class="imp-mock">※このモックの通帳には ${yen(bankTotal())}円 が入っている想定です(練習用の案内)</p>`;
+    const el = document.getElementById('impInput');
+    el.focus();
+    el.addEventListener('input', () => {
+      const n = el.value.replace(/[^0-9]/g, '');
+      el.value = n ? Number(n).toLocaleString('ja-JP') : '';
+    });
+    return;
+  }
+
+  const exp = bankTotal(), diff = imp.typed - exp;
+  box.innerHTML = `
+    <div class="imp-line"><span>明細の合計 ${BANK.length}件</span><b>${yen(exp)}</b></div>
+    <div class="imp-line"><span>通帳に入っていた金額</span><b>${yen(imp.typed)}</b></div>
+    ${diff === 0
+      ? `<div class="imp-verdict imp-ok">一致しました。取り込んで大丈夫です。</div>
+         <div class="imp-actions">
+           <button class="btn-pay" data-imp="commit">取り込む</button>
+           <button class="btn" data-imp="close">やめる</button>
+         </div>`
+      : `<div class="imp-verdict imp-bad">${yen(Math.abs(diff))}円 ${diff > 0 ? '多い' : '足りない'}ので、取り込めません。</div>
+         <ul class="imp-cause">
+           <li>期間の指定が通帳と違っていませんか</li>
+           <li>同じ日の明細を二重に取り込んでいませんか</li>
+           <li>割賦以外の入金が混ざっていませんか</li>
+         </ul>
+         <div class="imp-actions">
+           <button class="btn-pay" data-imp="retry">入れ直す</button>
+           <button class="btn" data-imp="park">調べる分として残す</button>
+         </div>`}`;
+}
+
+function openImport(){
+  if(imported){ alert('この期間の明細はすでに取り込んでいます。'); return; }
+  imp = {mode:'input', typed:0};
+  document.getElementById('importModal').hidden = false;
+  renderImport();
+}
+function closeImport(){
+  document.getElementById('importModal').hidden = true;
+  imp = null;
+}
+
+document.getElementById('btnImport').addEventListener('click', openImport);
+
+render();
+</script>
+</body>
+</html>

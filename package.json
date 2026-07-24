@@ -1,0 +1,6 @@
+{
+  "name": "nyukin-daicho-mock",
+  "version": "0.0.1",
+  "private": true,
+  "description": "入金管理台帳モックの認証つき配信(Vercel)"
+}
