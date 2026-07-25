@@ -508,6 +508,27 @@
     .lrow{cursor:default;}
     .lrow.paid{display:none;}
   }
+
+  /* ── 連絡(督促) ─────────────────────── */
+  .contact{margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);max-width:520px;}
+  .contact h4{margin:0 0 8px;font-size:12px;letter-spacing:.08em;color:var(--ink-2);font-weight:600;}
+  .contact-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+  .contact-k{font-size:12px;color:var(--ink-2);letter-spacing:.08em;width:66px;flex:0 0 66px;}
+  .contact-tel{font-size:17px;font-weight:600;color:var(--indigo);text-decoration:none;
+    font-variant-numeric:tabular-nums;letter-spacing:.02em;}
+  .contact-tel:hover{text-decoration:underline;}
+  .contact-dummy{font-size:11.5px;color:var(--ink-3);}
+  .contact-note{font-size:12px;color:var(--ink-2);line-height:1.7;margin-top:2px;}
+  .undec{color:var(--overdue);font-weight:700;}
+  .cmp-line{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dotted var(--rule);}
+  .cmp-k{font-size:12px;color:var(--ink-2);letter-spacing:.06em;width:48px;flex:0 0 48px;}
+  .cmp-v{font-size:14px;}
+  .cmp-input{flex:1;font-family:inherit;font-size:15px;padding:7px 9px;
+    border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .cmp-lbl{display:block;margin:12px 0 4px;font-size:12px;color:var(--ink-2);letter-spacing:.06em;}
+  .cmp-text{width:100%;font-family:inherit;font-size:14px;line-height:1.7;padding:10px;
+    border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);resize:vertical;}
+  .cmp-input:focus,.cmp-text:focus{outline:2px solid var(--indigo);outline-offset:1px;border-color:var(--indigo);}
 </style>
 </head>
 <body>
@@ -623,6 +644,13 @@
   <div class="modal-box">
     <h3>銀行明細の取り込み</h3>
     <div id="importBody"></div>
+  </div>
+</div>
+
+<div class="modal" id="contactModal" hidden>
+  <div class="modal-box">
+    <h3>督促メール<button class="btn" data-contactclose="1" style="float:right">閉じる</button></h3>
+    <div id="contactBody"></div>
   </div>
 </div>
 
@@ -851,6 +879,61 @@ function resetPanel(r){
   planOpen = !!(r && r.diff && r.rest <= NOTICE_REMAIN);
 }
 
+// 連絡先はすべてテスト用のダミー。実データ(氏名・携帯)は入れない。
+function dummyTel(r){
+  const a = 1000 + (r.id * 7919) % 9000;
+  const b = 1000 + (r.id * 1299709) % 9000;
+  return `090-${a}-${b}`;
+}
+function dummyMail(r){ return `kokyaku${String(r.id).padStart(3,'0')}@example.com`; }
+function dunningSubject(r){ return `【ご確認のお願い】${r.due.replace('-','/')}期日のお支払いについて`; }
+function dunningBody(r){
+  return `${r.name} 様\n\nいつもお世話になっております。\n`
+    + `${r.due.replace('-','月')}日が期日のお支払い（${yen(r.amount)}円）につきまして、`
+    + `本日時点で入金の確認が取れておりません。\n`
+    + `すでにお手続き済みでしたら、行き違いのご連絡となりますことをお詫び申し上げます。\n`
+    + `お手数ですが、ご入金の状況をご確認いただけますようお願い申し上げます。\n\n`
+    + `ご不明な点がございましたら、当方までご連絡ください。`;
+}
+// 連絡欄は「追いかける相手」(遅れ・約束の相手)のときだけ出す。出番のないものは置かない。
+function contactBlock(r){
+  if(!['overdue','hold'].includes(statusOf(r))) return '';
+  const tel = dummyTel(r);
+  return `<div class="contact">
+    <h4>連絡する</h4>
+    <div class="contact-row">
+      <span class="contact-k">電話</span>
+      <a class="contact-tel" href="tel:${tel.replace(/-/g,'')}">${tel}</a>
+      <span class="contact-dummy">（テスト用のダミー）</span>
+    </div>
+    <div class="contact-row">
+      <span class="contact-k"></span>
+      <button class="btn btn-weak" data-callrec="${r.id}" data-out="done">電話した</button>
+      <button class="btn btn-weak" data-callrec="${r.id}" data-out="miss">不在だった</button>
+      <button class="btn btn-weak" data-mail="${r.id}">督促メールを作成</button>
+    </div>
+    <div class="contact-note">いつ電話・文書・催告に進めるかの段取りは<b class="undec">決まっていません</b>。
+      催告書・内容証明は用意していません（弁護士に確認してから）。</div>
+  </div>`;
+}
+function openContact(id){
+  const r = state.find(x => x.id === id);
+  document.getElementById('contactBody').innerHTML = `
+    <div class="cmp-line"><span class="cmp-k">宛先</span>
+      <span class="cmp-v">${dummyMail(r)} <span class="contact-dummy">（ダミー）</span></span></div>
+    <div class="cmp-line"><span class="cmp-k">件名</span>
+      <input class="cmp-input" id="cmpSubject" value="${dunningSubject(r)}"></div>
+    <label class="cmp-lbl">本文</label>
+    <textarea class="cmp-text" id="cmpBody" rows="9">${dunningBody(r)}</textarea>
+    <p class="imp-mock">これは見た目だけの下書きです。実際の送信はまだ行いません。宛先・電話番号もテスト用のダミーです。</p>
+    <div class="imp-actions">
+      <button class="btn-pay" data-mailsend="${r.id}">送信</button>
+      <button class="btn btn-weak" data-contactclose="1">やめる</button>
+    </div>`;
+  document.getElementById('contactModal').hidden = false;
+}
+function closeContact(){ document.getElementById('contactModal').hidden = true; }
+
 function panelHtml(r){
   const rows = r.parts.map(p => `<tr><td class="k">${p[0]}</td><td class="v">${yen(p[1])}</td></tr>`).join('');
   const c = record(r), need = r.amount - r.diff;
@@ -929,6 +1012,7 @@ function panelHtml(r){
           <button class="btn btn-weak" data-promise="${r.id}">後日の約束</button>
           <button class="btn btn-weak" data-hold="${r.id}">保留にする</button>
         </div>
+        ${contactBlock(r)}
         ${diffBox}
         ${r.note ? `<div class="memo">${r.note}</div>` : ''}
       </div>
@@ -1380,6 +1464,30 @@ document.addEventListener('click', e => {
     showUndo(`${r.name}さん を保留にしました`, () => { r.hold=false; });
     return;
   }
+
+  // 電話の結果を記録(電話そのものは tel: リンクが発信する)
+  const callrec = t.closest('[data-callrec]');
+  if(callrec){
+    const r = state.find(x => x.id === +callrec.dataset.callrec);
+    const done = callrec.dataset.out === 'done';
+    logEvent(r, '請求', done ? '電話で連絡（つながった）' : '電話したが不在', '');
+    showUndo(`${r.name}さん に${done ? '電話しました' : '電話（不在）を記録しました'}`, () => { EVENTS.pop(); });
+    render();
+    return;
+  }
+  // 督促メールの下書きを開く(見た目だけ)
+  const mail = t.closest('[data-mail]');
+  if(mail){ openContact(+mail.dataset.mail); return; }
+  // 送信(見た目だけ)。実送信はせず、送った事実を記録する
+  const mailsend = t.closest('[data-mailsend]');
+  if(mailsend){
+    const r = state.find(x => x.id === +mailsend.dataset.mailsend);
+    logEvent(r, '請求', `督促メールを送信（${dummyMail(r)}）`, '');
+    closeContact(); render();
+    showUndo(`${r.name}さん に督促メールを送信しました（見た目のみ）`, () => { EVENTS.pop(); });
+    return;
+  }
+  if(t.closest('[data-contactclose]')){ closeContact(); return; }
 
   const assign = t.closest('[data-assign]');
   if(assign){
