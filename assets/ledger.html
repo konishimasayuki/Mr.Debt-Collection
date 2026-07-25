@@ -1365,17 +1365,6 @@ document.addEventListener('click', e => {
       catch(err){ imp.error = 'サンプルの生成に失敗：' + err.message; renderImport(); }
       return;
     }
-    if(a === 'retry'){ imp.mode = 'input'; renderImport(); return; }
-    if(a === 'check'){
-      const v = +document.getElementById('impInput').value.replace(/[^0-9]/g, '');
-      if(!v){ alert('通帳に入っていた金額を入れてください。'); return; }
-      imp.typed = v; imp.mode = 'result'; renderImport(); return;
-    }
-    if(a === 'park'){
-      closeImport();
-      alert('「溜まっているもの」に、調べる分として残しました。(モックでは表示のみ)');
-      return;
-    }
     if(a === 'commit'){
       const ids = [];
       BANK.filter(b => b.auto).forEach(b => {
@@ -1384,10 +1373,9 @@ document.addEventListener('click', e => {
       });
       unmatched = BANK.filter(b => !b.auto).map(b => ({...b}));
       imported = true;
-      const amt = imp.typed;
       closeImport();
       render();
-      showUndo(`通帳 ${yen(amt)}円 と照合のうえ ${ids.length}件を消し込みました(残り${unmatched.length}件は本人の確認待ち)`,
+      showUndo(`明細から ${ids.length}件を消し込みました(残り${unmatched.length}件は本人の確認待ち)`,
         () => { ids.forEach(id => { const r = state.find(x => x.id===id); r.paid = false; r.paidWith = null; });
                 unmatched = []; imported = false; });
       return;
@@ -1674,7 +1662,7 @@ function ingestZengin(text){
 // 解析後、通帳照合(ADR-006)のステップへ
 function startCheck(summary, isSample){
   summary.isSample = !!isSample;
-  imp.summary = summary; imp.error = null; imp.typed = 0; imp.mode = 'input';
+  imp.summary = summary; imp.error = null; imp.mode = 'confirm';
   renderImport();
 }
 
@@ -1716,56 +1704,22 @@ function renderImport(){
     return;
   }
 
-  if(imp.mode === 'input'){
+  if(imp.mode === 'confirm'){
+    // CSV取込に一本化したので、人が通帳合計を手入力する照合(ADR-006の暫定)は廃止。
+    // ファイル内の検算(トレーラの入金合計=明細合計)を自動で行い、崩れたときだけ知らせる。
+    const bad = imp.summary && imp.summary.checksumOK === false;
     box.innerHTML = `
       <div class="imp-line"><span>取り込む入金</span><b>${BANK.length}件</b></div>
       <div class="imp-line"><span>お名前が一致した</span><b>${auto.length}件</b></div>
       <div class="imp-line"><span>本人を確かめる必要がある</span><b>${manual.length}件</b></div>
-      ${imp.summary && imp.summary.checksumOK === false
-        ? `<div class="imp-verdict imp-bad">ファイルの合計(トレーラ)と明細の合計が一致しません。ファイルが壊れている可能性があります。</div>` : ''}
-      <p class="imp-ask">通帳に入っていた合計を入れてください</p>
-      <div class="imp-input-row">
-        <input class="imp-input" id="impInput" inputmode="numeric" autocomplete="off" placeholder="0">
-        <span>円</span>
-      </div>
-      <p class="imp-note">こちらの計算額は、入力していただいた後にお見せします。<br>
-        先に出すと写すだけになり、確かめたことになりません。</p>
+      ${bad ? `<div class="imp-verdict imp-bad">ファイルの合計(トレーラ)と明細の合計が一致しません。一部しか取れていないか、ファイルが壊れている可能性があります。</div>` : ''}
+      <p class="imp-note">お名前が一致した分はそのまま取り込み、確かめる必要がある分は「誰の入金か分からないもの」に残します。</p>
       <div class="imp-actions">
-        <button class="btn-pay" data-imp="check">照合する</button>
+        <button class="btn-pay" data-imp="commit">${bad ? 'それでも取り込む' : '取り込む'}</button>
         <button class="btn" data-imp="close">やめる</button>
-      </div>
-      ${imp.summary && imp.summary.isSample
-        ? `<p class="imp-mock">※練習用サンプルの通帳には ${yen(bankTotal())}円 が入っている想定です(練習用の案内)</p>`
-        : `<p class="imp-mock">通帳の合計を入れると、こちらの計算額と突き合わせます。</p>`}`;
-    const el = document.getElementById('impInput');
-    el.focus();
-    el.addEventListener('input', () => {
-      const n = el.value.replace(/[^0-9]/g, '');
-      el.value = n ? Number(n).toLocaleString('ja-JP') : '';
-    });
+      </div>`;
     return;
   }
-
-  const exp = bankTotal(), diff = imp.typed - exp;
-  box.innerHTML = `
-    <div class="imp-line"><span>明細の合計 ${BANK.length}件</span><b>${yen(exp)}</b></div>
-    <div class="imp-line"><span>通帳に入っていた金額</span><b>${yen(imp.typed)}</b></div>
-    ${diff === 0
-      ? `<div class="imp-verdict imp-ok">一致しました。取り込んで大丈夫です。</div>
-         <div class="imp-actions">
-           <button class="btn-pay" data-imp="commit">取り込む</button>
-           <button class="btn" data-imp="close">やめる</button>
-         </div>`
-      : `<div class="imp-verdict imp-bad">${yen(Math.abs(diff))}円 ${diff > 0 ? '多い' : '足りない'}ので、取り込めません。</div>
-         <ul class="imp-cause">
-           <li>期間の指定が通帳と違っていませんか</li>
-           <li>同じ日の明細を二重に取り込んでいませんか</li>
-           <li>割賦以外の入金が混ざっていませんか</li>
-         </ul>
-         <div class="imp-actions">
-           <button class="btn-pay" data-imp="retry">入れ直す</button>
-           <button class="btn" data-imp="park">調べる分として残す</button>
-         </div>`}`;
 }
 
 function openImport(){
