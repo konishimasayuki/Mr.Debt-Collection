@@ -529,6 +529,17 @@
   .cmp-text{width:100%;font-family:inherit;font-size:14px;line-height:1.7;padding:10px;
     border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);resize:vertical;}
   .cmp-input:focus,.cmp-text:focus{outline:2px solid var(--indigo);outline-offset:1px;border-color:var(--indigo);}
+
+  /* ── 新しいお客さんの追加 ───────────────── */
+  .nc-num{max-width:160px;} .nc-day{max-width:70px;}
+  .nc-unit{font-size:12.5px;color:var(--ink-2);}
+  .nc-preview{margin:12px 0 4px;padding:10px 12px;background:#FFFDF6;border:1px solid var(--rule);
+    font-size:13.5px;line-height:1.7;}
+  .nc-line{font-variant-numeric:tabular-nums;}
+  .nc-line b{font-weight:700;}
+  .nc-hint{color:var(--ink-3);}
+  .nc-ok{margin-top:6px;color:var(--paid);font-weight:600;}
+  .nc-warn{margin-top:6px;color:var(--overdue);font-weight:600;}
 </style>
 </head>
 <body>
@@ -545,6 +556,7 @@
         <button class="vn" data-view="matrix">入金表</button>
       </nav>
       <span class="head-actions">
+        <button class="btn" id="btnNew">新しいお客さんを追加</button>
         <button class="btn" id="btnImport">銀行明細を取り込む</button>
         <button class="btn" onclick="window.print()">遅れの一覧を印刷</button>
         <button class="btn" id="btnUndoTop" disabled>元に戻す</button>
@@ -651,6 +663,13 @@
   <div class="modal-box">
     <h3>督促メール<button class="btn" data-contactclose="1" style="float:right">閉じる</button></h3>
     <div id="contactBody"></div>
+  </div>
+</div>
+
+<div class="modal" id="newModal" hidden>
+  <div class="modal-box">
+    <h3>新しいお客さん<button class="btn" data-ncclose="1" style="float:right">閉じる</button></h3>
+    <div id="newBody"></div>
   </div>
 </div>
 
@@ -1484,6 +1503,10 @@ document.addEventListener('click', e => {
   }
   if(t.closest('[data-contactclose]')){ closeContact(); return; }
 
+  // 新しいお客さんの追加
+  if(t.closest('[data-ncadd]')){ addCustomer(); return; }
+  if(t.closest('[data-ncclose]')){ closeNewCustomer(); return; }
+
   const assign = t.closest('[data-assign]');
   if(assign){
     const u = unmatched.find(x => x.uid === assign.dataset.assign);
@@ -1733,7 +1756,98 @@ function closeImport(){
   imp = null;
 }
 
+// ─── 新しいお客さん(契約)の追加 ───────────────────────
+function ncDigits(id){ const el = document.getElementById(id); return el ? +el.value.replace(/[^0-9]/g,'') : 0; }
+function ncMonths(id){ const el = document.getElementById(id); return el ? (el.value.match(/\d+/g)||[]).map(Number).filter(m => m>=1 && m<=12) : []; }
+function ncFirstMonth(){ return new Date(NOW.getFullYear(), NOW.getMonth()+1, 1); } // 原則、納車の翌月
+
+function openNewCustomer(){ document.getElementById('newModal').hidden = false; renderNewCustomer(); }
+function closeNewCustomer(){ document.getElementById('newModal').hidden = true; }
+
+function renderNewCustomer(){
+  document.getElementById('newBody').innerHTML = `
+    <div class="cmp-line"><span class="cmp-k">お名前</span><input class="cmp-input" id="ncName" autocomplete="off"></div>
+    <div class="cmp-line"><span class="cmp-k">車両</span><input class="cmp-input" id="ncCar" autocomplete="off"></div>
+    <div class="cmp-line"><span class="cmp-k">毎月の額</span><input class="cmp-input nc-num" id="ncMonthly" inputmode="numeric" autocomplete="off" placeholder="0"><span class="nc-unit">円</span></div>
+    <div class="cmp-line"><span class="cmp-k">車の代金</span><input class="cmp-input nc-num" id="ncPrice" inputmode="numeric" autocomplete="off" placeholder="任意（確認用）"><span class="nc-unit">円</span></div>
+    <div class="cmp-line"><span class="cmp-k">支払日</span><input class="cmp-input nc-day" id="ncDay" inputmode="numeric" autocomplete="off" value="27"><span class="nc-unit">日（原則27）</span></div>
+    <div class="cmp-line"><span class="cmp-k">初回</span><span class="cmp-v" id="ncFirst"></span></div>
+    <div class="cmp-line"><span class="cmp-k">ボーナス月</span><input class="cmp-input" id="ncBonusMonths" autocomplete="off" placeholder="例: 8,12（任意）"></div>
+    <div class="cmp-line"><span class="cmp-k">ボーナス額</span><input class="cmp-input nc-num" id="ncBonusEach" inputmode="numeric" autocomplete="off" placeholder="1回あたり（任意）"><span class="nc-unit">円</span></div>
+    <div class="cmp-line"><span class="cmp-k">連絡先</span><input class="cmp-input" id="ncContact" autocomplete="off" placeholder="電話/メール（任意）"></div>
+    <div class="nc-preview" id="ncPreview"></div>
+    <p class="imp-note">支払いは全48回、支払日は原則27日(変更できます)。手数料は支払総額の25%で自動計算します。連絡先は権限を分けて扱う項目です。</p>
+    <div class="imp-actions">
+      <button class="btn-pay" data-ncadd="1">登録する</button>
+      <button class="btn" data-ncclose="1">やめる</button>
+    </div>`;
+  ['ncMonthly','ncPrice','ncBonusEach'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', () => { const n = el.value.replace(/[^0-9]/g,''); el.value = n ? Number(n).toLocaleString('ja-JP') : ''; ncPreview(); });
+  });
+  ['ncDay','ncBonusMonths'].forEach(id => document.getElementById(id).addEventListener('input', ncPreview));
+  document.getElementById('ncName').focus();
+  ncPreview();
+}
+
+function ncPreview(){
+  const box = document.getElementById('ncPreview'); if(!box) return;
+  const day = Math.min(Math.max(ncDigits('ncDay')||27, 1), 31);
+  const nm = ncFirstMonth();
+  const first = document.getElementById('ncFirst');
+  if(first) first.textContent = `${nm.getFullYear()}年${nm.getMonth()+1}月${day}日から`;
+  const amount = ncDigits('ncMonthly');
+  if(!amount){ box.innerHTML = '<span class="nc-hint">毎月の額を入れると、内訳と支払総額が出ます。</span>'; return; }
+  const moto = Math.round(amount*0.75), fee = amount - moto;
+  const bm = ncMonths('ncBonusMonths'), be = ncDigits('ncBonusEach');
+  const bonusTotal = be * bm.length * 4;                    // 1回あたり × 年の回数 × 4年(48回)
+  const total = amount*48 + bonusTotal, feeTotal = Math.round(total*0.25), motoTotal = total - feeTotal;
+  const price = ncDigits('ncPrice');
+  let rec = '';
+  if(price){ const df = price - motoTotal; rec = Math.abs(df) <= 100
+    ? '<div class="nc-ok">車の代金と、計算した元本が一致しています ✓</div>'
+    : `<div class="nc-warn">車の代金 ${yen(price)}円 と、毎月額から計算した元本 ${yen(motoTotal)}円 が ${yen(Math.abs(df))}円 ちがいます。ご確認ください。</div>`; }
+  box.innerHTML = `
+    <div class="nc-line">毎月 <b>${yen(amount)}円</b>（元本 ${yen(moto)} + 手数料 ${yen(fee)}）</div>
+    <div class="nc-line">全48回の支払総額 <b>${yen(total)}円</b>（うち手数料25% ${yen(feeTotal)}円）</div>
+    ${bonusTotal ? `<div class="nc-line">ボーナス見込み ${yen(bonusTotal)}円（${bm.join('・')}月 × ${yen(be)}円 × 4年）</div>` : ''}
+    ${rec}`;
+}
+
+function addCustomer(){
+  const name = (document.getElementById('ncName').value||'').trim();
+  const car  = (document.getElementById('ncCar').value||'').trim();
+  const amount = ncDigits('ncMonthly');
+  if(!name){ alert('お名前を入れてください。'); return; }
+  if(!amount){ alert('毎月の額を入れてください。'); return; }
+  const day = Math.min(Math.max(ncDigits('ncDay')||27, 1), 31);
+  const bm = ncMonths('ncBonusMonths'), be = ncDigits('ncBonusEach');
+  const bonusTotal = be * bm.length * 4;
+  const moto = Math.round(amount*0.75), fee = amount - moto;
+  const nm = ncFirstMonth(), fy = nm.getFullYear(), fm = nm.getMonth()+1;
+  const due = `${pad(fm)}-${pad(day)}`;
+  let si = MONTHS.findIndex(mo => mo.y===fy && mo.m===fm); if(si < 0) si = MONTHS.length;
+  const id = Math.max(0, ...state.map(r => r.id)) + 1;
+  const row = { id, due, name,
+    ct: `${car || '車両未記入'}（${NOW.getMonth()+1}月契約）`,
+    dt: `元本 ${yen(moto)} / 手数料 ${yen(fee)}`, amount, method: '振込', note: '',
+    parts: [['元本相当', moto], ['手数料相当', fee]], n: '1/48',
+    paid0: false, paid: false, paidWith: null, kaishu: false, diff: 0,
+    no: 1, rest: 47, si, debt: amount*48 + bonusTotal, bonus: bonusTotal, bonusPaid: 0,
+    contact: (document.getElementById('ncContact').value||'').trim() };
+  HIST[id] = MONTHS.map((_, i) => i < si ? 'none' : 'pending');
+  state.push(row);
+  logEvent(row, 'メモ', `新しいお客さん（${name}／${car || '車両未記入'}）を登録した`, '');
+  closeNewCustomer();
+  filter = 'up'; openId = id; resetPanel(row); go('ledger');
+  showUndo(`${name}さん を新しく登録しました`, () => {
+    const i = state.findIndex(x => x.id === id); if(i >= 0) state.splice(i, 1);
+    delete HIST[id]; EVENTS.pop(); openId = null;
+  });
+}
+
 document.getElementById('btnImport').addEventListener('click', openImport);
+document.getElementById('btnNew').addEventListener('click', openNewCustomer);
 
 render();
 </script>
