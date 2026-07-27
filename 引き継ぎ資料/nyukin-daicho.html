@@ -576,8 +576,16 @@
   .say-main{font-size:19px;font-weight:700;line-height:1.45;}
   .say-sub{font-size:13.5px;color:var(--ink-2);margin-top:5px;line-height:1.7;}
 
-  .card-cols{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:20px;align-items:start;}
-  @media (max-width:820px){ .card-cols{grid-template-columns:1fr;gap:20px;} }
+  /* 左=お金・ようす・メモ / 右=支払いの記録(全48回) */
+  .card-cols{display:grid;grid-template-columns:minmax(280px,1fr) minmax(400px,1.25fr);
+    gap:30px;margin-top:20px;align-items:start;}
+  .card-left{display:flex;flex-direction:column;gap:22px;min-width:0;}
+  .card-right{min-width:0;}
+  .card-right .terms{max-height:calc(100vh - 300px);overflow-y:auto;}
+  @media (max-width:900px){
+    .card-cols{grid-template-columns:1fr;gap:22px;}
+    .card-right .terms{max-height:none;}
+  }
   .card-sec h4{margin:0 0 8px;font-size:12px;letter-spacing:.1em;color:var(--ink-2);font-weight:600;
     border-bottom:1px solid var(--rule-strong);padding-bottom:6px;}
   .kv{width:100%;border-collapse:collapse;font-size:14.5px;}
@@ -1457,6 +1465,7 @@ function renderCard(){
     </div>
 
     <div class="card-cols">
+     <div class="card-left">
       <div class="card-sec">
         <h4>お金のこと</h4>
         <table class="kv">
@@ -1486,20 +1495,21 @@ function renderCard(){
           ${!r.paid && !r.kaishu ? `<button class="btn btn-weak" data-promise="${r.id}">後日の約束</button>` : ''}
         </div>
       </div>
-    </div>
 
-    <div class="memo-box card-sec">
-      <h4>この方についてのメモ</h4>
-      <textarea id="custMemo" rows="3" placeholder="連絡のつきやすい時間、勤務先、家族のこと、事情など">${r.memo || ''}</textarea>
-      <div class="memo-save">
-        <button class="btn" data-custmemo="${r.id}">メモを保存</button>
-        <span class="nc-hint">この欄は書き直せます。やり取りの記録は下に足していってください。</span>
+      <div class="memo-box card-sec">
+        <h4>この方についてのメモ</h4>
+        <textarea id="custMemo" rows="4" placeholder="連絡のつきやすい時間、勤務先、家族のこと、事情など">${r.memo || ''}</textarea>
+        <div class="memo-save">
+          <button class="btn" data-custmemo="${r.id}">メモを保存</button>
+          <span class="nc-hint">この欄は書き直せます。</span>
+        </div>
       </div>
-    </div>
+     </div>
 
-    <div class="card-sec" style="margin-top:22px">
-      <h4>支払いの記録（全${termOf(r)}回）　回を押すと、その回のやり取りとメモが出ます</h4>
-      <div class="terms">${termRows(r)}</div>
+     <div class="card-right card-sec">
+       <h4>支払いの記録（全${termOf(r)}回）　回を押すと、その回のやり取りとメモが出ます</h4>
+       <div class="terms">${termRows(r)}</div>
+     </div>
     </div>
   </div>`;
 }
