@@ -848,7 +848,7 @@ const daysLate = due => Math.round((asDate(TODAY) - asDate(due)) / 86400000);
 const FILTERS = [
   {key:'today',   label:'入金待ち', test:r => statusOf(r)==='today'},
   {key:'overdue', label:'遅れ',    test:r => statusOf(r)==='overdue'},
-  {key:'hold',    label:'保留',    test:r => statusOf(r)==='hold'},
+  {key:'hold',    label:'保留',    test:r => statusOf(r)==='hold', auto:true},
   {key:'up',      label:'次回',    test:r => statusOf(r)==='up'},
   {key:'kaishu',  label:'回収',     test:r => r.kaishu, auto:true},
   {key:'bonus',   label:'ボーナス依存', test:heavyBonus, auto:true},
@@ -1141,11 +1141,6 @@ function panelHtml(r){
           <input class="memo-input" id="memoInput" autocomplete="off" placeholder="必要なら書いてください（任意）"></div>
         <div class="pay-row commit"><span class="pay-label"></span>
           <button class="btn-pay" data-commit="${r.id}">${label}</button></div>
-        <div class="pay-row alt"><span class="pay-label"></span>
-          <span class="alt-label">入金がなかったときは</span>
-          <button class="btn btn-weak" data-promise="${r.id}">後日の約束</button>
-          <button class="btn btn-weak" data-hold="${r.id}">保留にする</button>
-        </div>
         ${contactBlock(r)}
         ${diffBox}
         ${r.note ? `<div class="memo">${r.note}</div>` : ''}
@@ -1517,7 +1512,6 @@ function renderCard(){
         <div class="card-do">
           ${r.paid ? '<span class="hint">今回の分は入金ありとして記録済みです。</span>'
                    : `<button class="btn-pay" data-cardpay="${r.id}">入金を記録する</button>`}
-          ${!r.paid && !r.kaishu ? `<button class="btn btn-weak" data-promise="${r.id}">後日の約束</button>` : ''}
         </div>
         ${r.bonus > 10 ? `
         <div class="bonus-box">
@@ -1830,25 +1824,6 @@ document.addEventListener('click', e => {
   const payBtn = t.closest('[data-pay]');
   if(payBtn){ const r = state.find(x => x.id === +payBtn.dataset.pay), memo = takeMemo();
     pay(r.id); logEvent(r, '入金', `${yen(r.amount)}円 を受け取ったとして記録`, memo); return; }
-
-  const promise = t.closest('[data-promise]');
-  if(promise){
-    const r = state.find(x => x.id === +promise.dataset.promise), memo = takeMemo();
-    r.hold = true; r.note = '後日入金の約束(本日確認)';
-    openId = null; render();
-    logEvent(r, '約束', '後日支払うと約束', memo);
-    showUndo(`${r.name}さん を後日の約束にしました`, () => { r.hold=false; });
-    return;
-  }
-
-  const hold = t.closest('[data-hold]');
-  if(hold){
-    const r = state.find(x => x.id === +hold.dataset.hold), memo = takeMemo();
-    r.hold = true; openId = null; render();
-    logEvent(r, '保留', '保留にした', memo);
-    showUndo(`${r.name}さん を保留にしました`, () => { r.hold=false; });
-    return;
-  }
 
   // 電話の結果を記録(電話そのものは tel: リンクが発信する)
   const callrec = t.closest('[data-callrec]');
