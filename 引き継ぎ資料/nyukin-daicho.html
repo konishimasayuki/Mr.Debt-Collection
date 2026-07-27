@@ -503,8 +503,8 @@
   @media print{
     body{background:#fff;}
     .sheet{border:0;max-width:none;}
-    .head-actions,.back,.viewnav,#viewMatrix,.tabs,.unmatched,.undo,.panel,#viewDash{display:none !important;}
-    #viewLedger{display:block !important;}
+    .head-actions,.back,.viewnav,.tabs,.unmatched,.undo,.panel,#viewDash,#cardPane{display:none !important;}
+    #viewCard,#listPane{display:block !important;}
     .lrow{cursor:default;}
     .lrow.paid{display:none;}
   }
@@ -656,8 +656,6 @@
         <button class="vn on" data-view="dash">本日の作業</button>
         <button class="vn" data-view="card">お客さん</button>
         <button class="vn" data-view="pend">懸案</button>
-        <button class="vn" data-view="ledger">台帳</button>
-        <button class="vn" data-view="matrix">入金表</button>
       </nav>
       <span class="head-actions">
         <button class="btn" id="btnNew">新しいお客さんを追加</button>
@@ -693,7 +691,41 @@
   </section>
 
   <section id="viewCard" hidden>
-    <div class="card-wrap">
+    <div id="listPane">
+      <div class="totals">
+        <div><span class="total-label">今月の予定</span><span class="total-value" id="tPlan">0<span class="yen">円</span></span></div>
+        <div><span class="total-label">入金済み</span><span class="total-value" id="tPaid">0<span class="yen">円</span></span></div>
+        <div class="total-unpaid"><span class="total-label">未収</span><span class="total-value" id="tRest">0<span class="yen">円</span></span></div>
+      </div>
+      <p class="mtx-sum" id="mtxSum" style="padding:0 20px 12px"></p>
+
+      <div class="unmatched">
+        <button class="unmatched-bar" id="umBar">
+          <span class="caret" id="umCaret">&#9654;</span>
+          <span id="umText">誰の入金か分からないもの 3件</span>
+        </button>
+        <div class="unmatched-list" id="umList"></div>
+      </div>
+
+      <nav class="tabs" id="tabs"></nav>
+
+      <div class="ledger">
+        <div class="lrow-head">
+          <span></span>
+          <span>期日</span>
+          <span>お名前</span>
+          <span class="col-ct">契約</span>
+          <span class="num">請求額</span>
+          <span class="col-mt">回次</span>
+          <span>記録</span>
+        </div>
+        <p class="yomi-note" id="yomiNote"></p>
+        <div id="rows"></div>
+      </div>
+    </div>
+
+    <div class="card-wrap" id="cardPane" hidden>
+      <button class="back" id="backList">&#8592; お客さんの一覧へ戻る</button>
       <div id="cardBody"></div>
     </div>
   </section>
@@ -702,57 +734,6 @@
     <div class="ledger" id="pendList"></div>
   </section>
 
-  <section id="viewLedger" hidden>
-    <div class="totals">
-      <div><span class="total-label">今月の予定</span><span class="total-value" id="tPlan">0<span class="yen">円</span></span></div>
-      <div><span class="total-label">入金済み</span><span class="total-value" id="tPaid">0<span class="yen">円</span></span></div>
-      <div class="total-unpaid"><span class="total-label">未収</span><span class="total-value" id="tRest">0<span class="yen">円</span></span></div>
-    </div>
-
-    <div class="unmatched">
-    <button class="unmatched-bar" id="umBar">
-      <span class="caret" id="umCaret">▶</span>
-      <span id="umText">誰の入金か分からないもの 3件</span>
-    </button>
-    <div class="unmatched-list" id="umList"></div>
-  </div>
-
-  <nav class="tabs" id="tabs"></nav>
-
-  <div class="ledger">
-    <div class="lrow-head">
-      <span></span>
-      <span>期日</span>
-      <span>お名前</span>
-      <span class="col-ct">契約</span>
-      <span class="num">請求額</span>
-      <span class="col-mt">回次</span>
-      <span>記録</span>
-    </div>
-    <p class="yomi-note" id="yomiNote"></p>
-    <div id="rows"></div>
-  </div>
-  </section>
-
-  <section id="viewMatrix" hidden>
-    <div class="mtx-legend">
-      <span><i class="cell c-paid">済</i> 期日までに入金</span>
-      <span><i class="cell c-late">遅</i> 期日より後に入金</span>
-      <span><i class="cell c-unpaid">未</i> 未収のまま</span>
-      <span><i class="cell c-part">差</i> 金額が違った</span>
-      <span><i class="cell c-due">未</i> 期日が来ている</span>
-      <span><i class="cell c-none"></i> 契約前</span>
-      <span><i class="cell c-pending"></i> これから</span>
-    </div>
-    <div class="mtx-head">
-      <div class="mtx-sum" id="mtxSum"></div>
-      <div class="mtx-sort">
-        <button class="vn on" data-sort="late">滞りの多い順</button>
-        <button class="vn" data-sort="name">あいうえお順</button>
-      </div>
-    </div>
-    <div class="mtx-wrap"><table class="mtx" id="mtxTable"></table></div>
-  </section>
 </div>
 
 <div class="modal" id="histModal" hidden>
@@ -1231,9 +1212,7 @@ function renderUnmatched(){
 
 const HIST = {"1": ["paid", "paid", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "2": ["none", "paid", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "3": ["none", "paid", "paid", "paid", "part", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "4": ["none", "paid", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "5": ["none", "paid", "unpaid", "unpaid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "6": ["none", "paid", "paid", "paid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "7": ["none", "paid", "paid", "late", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "8": ["none", "paid", "unpaid", "unpaid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "9": ["none", "paid", "late", "paid", "part", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "10": ["none", "none", "paid", "paid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "11": ["none", "none", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "12": ["none", "none", "paid", "unpaid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "13": ["none", "none", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "14": ["none", "none", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "15": ["none", "none", "paid", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "16": ["none", "none", "paid", "paid", "part", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "17": ["none", "none", "none", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "18": ["none", "none", "none", "paid", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "19": ["none", "none", "none", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "20": ["none", "none", "none", "paid", "late", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "21": ["none", "none", "none", "late", "part", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "22": ["none", "none", "none", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "23": ["none", "none", "none", "paid", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "24": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "25": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "26": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "27": ["none", "none", "none", "none", "unpaid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "28": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "29": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "30": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "31": ["none", "none", "none", "none", "paid", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "32": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "33": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "34": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "35": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "36": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "37": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "38": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "39": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "40": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "41": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "42": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "43": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "44": ["none", "none", "none", "none", "none", "live", "pending", "pending", "pending", "pending", "pending", "pending"], "45": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "46": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "47": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "48": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "49": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "50": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "51": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "52": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "53": ["none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending", "pending"], "54": ["none", "none", "none", "none", "none", "none", "none", "pending", "pending", "pending", "pending", "pending"]};
 const MONTHS = [{"y": 2026, "m": 2}, {"y": 2026, "m": 3}, {"y": 2026, "m": 4}, {"y": 2026, "m": 5}, {"y": 2026, "m": 6}, {"y": 2026, "m": 7}, {"y": 2026, "m": 8}, {"y": 2026, "m": 9}, {"y": 2026, "m": 10}, {"y": 2026, "m": 11}, {"y": 2026, "m": 12}, {"y": 2027, "m": 1}];
-let mtxSort = 'late';
 let pendOpen = null;
-let mtxOpen = null;
 
 function cellState(r, mi){
   const h = (HIST[r.id] || [])[mi] || 'none';
@@ -1334,57 +1313,14 @@ function renderPend(){
     </div>`).join('') : '<p class="pend-none">片づいていない仕事はありません。</p>';
 }
 
-function renderMatrix(){
-  const rows = state.map(r => {
-    const cells = MONTHS.map((_, mi) => cellState(r, mi));
-    const late = cells.filter(c => c === 'unpaid').length;
-    return {r, cells, late, owed:late * r.amount};
-  });
-  const sorted = rows.slice().sort((a, b) =>
-    mtxSort === 'late' ? (b.late - a.late) || (b.owed - a.owed) : byKana(a.r, b.r));
-
-  const owedAll = rows.reduce((s, x) => s + x.owed, 0);
+function renderSummary(){
+  const rows = state.map(r => { const o = owedOf(r); return {late:o.n, owed:o.yen}; });
+  const owedAll = rows.reduce((a, x) => a + x.owed, 0);
   const people = rows.filter(x => x.late).length;
   const worst = Math.max(0, ...rows.map(x => x.late));
-  document.getElementById('mtxSum').innerHTML =
-    `未収の合計 <b>${yen(owedAll)}円</b> ／ 滞りのある方 <b>${people}</b>名 ／ いちばん長い方で <b>${worst}</b>ヶ月`;
-
-  const head = `<thead><tr><th class="nmcol">お名前 ・ 契約</th>
-    ${MONTHS.map((m, i) => `<th>${(m.m === 1 || i === 0) ? m.y + '<br>' : ''}${m.m}月</th>`).join('')}
-    <th class="col-n">滞り</th><th class="col-n">未収額</th><th class="col-n">累計差額</th></tr></thead>`;
-
-  const body = sorted.map(x => {
-    const cells = x.cells.map((c, mi) =>
-      `<td><i class="cell c-${c}" title="${MONTHS[mi].y}年${MONTHS[mi].m}月">${MARK[c]}</i></td>`).join('');
-    const detail = mtxOpen === x.r.id ? `<tr class="mtx-detail"><td class="nmcol"></td>
-      <td colspan="${MONTHS.length + 3}"><div class="in">${(() => { const c = record(x.r); return `
-        ${x.r.bonus > 10 ? `<div class="line"><span class="b-exp">ボーナス見込み 残り ${yen(x.r.bonus)}円</span><span class="${heavyBonus(x.r)?'rec-unpaid':''}">毎月額の ${bonusRatio(x.r).toFixed(1)}回分</span></div>` : ''}
-        <div class="line rec-line">
-          <span>支払った <b>${c.paid}</b> / ${c.months}回</span>
-          <span class="${c.late?'rec-late':''}">期日に遅れた <b>${c.late}</b></span>
-          <span class="${c.unpaid?'rec-unpaid':''}">未収 <b>${c.unpaid}</b></span>
-          <span class="${c.maxRun>1?'rec-unpaid':''}">最長の連続滞納 <b>${c.maxRun}</b>ヶ月</span>
-          <span class="${c.part?'rec-part':''}">金額ちがい <b>${c.part}</b></span>
-          <span class="${c.broken?'rec-unpaid':''}">約束を守らなかった <b>${c.broken}</b></span>
-        </div>`; })()}${
-        x.cells.map((c, mi) => c === 'unpaid' || c === 'late'
-          ? `<div class="line"><span>${MONTHS[mi].y}/${String(MONTHS[mi].m).padStart(2,'0')}</span>
-             <span>${c === 'unpaid' ? '未収のまま' : '期日より後に入金'}</span>
-             <span class="amt">${yen(x.r.amount)}円</span></div>` : '').join('') ||
-        '<div class="line">この12ヶ月、遅れはありません。</div>'
-      }<div class="line"><button class="btn" data-hist="${x.r.id}">これまでの記録を見る</button></div></div></td></tr>` : '';
-    return `<tr data-mrow="${x.r.id}" tabindex="0">
-      <td class="nmcol"><span class="mrow-name"><span class="nmlink" data-card="${x.r.id}">${x.r.name}</span>${testTag(x.r)}</span><span class="mrow-sub">${x.r.ct}${x.r.kaishu ? ' ／ <b class="kaishu-tag">回収済み</b>' : ''}</span></td>
-      ${cells}
-      <td class="col-n ${x.late ? 'n-late' : ''}">${x.late ? x.late + 'ヶ月' : '—'}</td>
-      <td class="col-n ${x.late ? 'n-late' : ''}">${x.owed ? yen(x.owed) : '—'}</td>
-      <td class="col-n">${x.r.diff ? `<span class="${Math.abs(x.r.diff)<THRESHOLD ? 'd-small' : (x.r.diff<0?'d-short':'d-over')}">${x.r.diff<0?'不足':'余り'} ${yen(Math.abs(x.r.diff))}</span>` : '—'}</td>
-    </tr>${detail}`;
-  }).join('');
-
-  document.getElementById('mtxTable').innerHTML = head + '<tbody>' + body + '</tbody>';
+  const el = document.getElementById('mtxSum');
+  if(el) el.innerHTML = `未収の合計 <b>${yen(owedAll)}円</b> ／ 滞りのある方 <b>${people}</b>名 ／ いちばん長い方で <b>${worst}</b>ヶ月`;
 }
-
 // ─── お客さんカード:電話を受けながら1画面で答えられるようにする ─────────
 // あいうえお順:漢字だけでは正しい五十音順にならないため、契約ごとに「よみ(カナ)」を持つ。
 // よみが入っている人はよみで、まだの人は漢字で並べる(入れるほど正確になる)。
@@ -1491,16 +1427,11 @@ function termRows(r){
 function renderCard(){
   const box = document.getElementById('cardBody'); if(!box) return;
   const r = state.find(x => x.id === cardId);
-  // 誰も選んでいないときは、全員をあいうえお順で出す(探さずに選べる)
-  if(!r){
-    const all = state.slice().sort(byKana);
-    box.innerHTML = `<div class="clist">${all.map(x => { const s = statusOf(x); return `
-      <button class="hit" data-card="${x.id}">
-        <span class="nm">${x.name}</span><span class="ct">${x.ct}</span>
-        <span class="st ${s==='overdue'?'d-short':''}">${x.paid ? '入金あり' : (s==='overdue' ? daysLate(x.due)+'日 遅れ' : (s==='today' ? '本日が期日' : (s==='kaishu' ? '回収済み' : (s==='hold' ? '約束あり' : jpDate(x.due)))))}</span>
-      </button>`; }).join('')}</div>`;
-    return;
-  }
+  // 一覧とカードは同じ画面。お名前を押すとカードに切り替わり、戻れば一覧。
+  const listPane = document.getElementById('listPane'), cardPane = document.getElementById('cardPane');
+  if(listPane) listPane.hidden = !!r;
+  if(cardPane) cardPane.hidden = !r;
+  if(!r){ box.innerHTML = ''; return; }
 
   const say = sayOf(r), o = owedOf(r), c = record(r), tel = dummyTel(r);
   const paidTotal = c.paid * r.amount;
@@ -1574,14 +1505,12 @@ function renderCard(){
 }
 
 function render(){ renderTabs(); renderTotals(); renderRows(); renderUnmatched();
-                   renderDash(); renderPend(); renderMatrix(); renderCard(); }
+                   renderDash(); renderPend(); renderSummary(); renderCard(); }
 
 function go(view){
   document.getElementById('viewDash').hidden = (view !== 'dash');
   document.getElementById('viewCard').hidden = (view !== 'card');
   document.getElementById('viewPend').hidden = (view !== 'pend');
-  document.getElementById('viewLedger').hidden = (view !== 'ledger');
-  document.getElementById('viewMatrix').hidden = (view !== 'matrix');
   document.querySelectorAll('.vn[data-view]').forEach(b =>
     b.classList.toggle('on', b.dataset.view === view));
   window.scrollTo(0, 0);
@@ -1733,6 +1662,9 @@ document.addEventListener('click', e => {
     openCard(+cardBtn.dataset.card);
     return;
   }
+  // カードから一覧へ戻る
+  if(t.closest('#backList')){ cardId = null; openNo = null; render(); window.scrollTo(0,0); return; }
+
   // 回を開く / 閉じる
   const termBtn = t.closest('[data-term]');
   if(termBtn){
@@ -1786,7 +1718,7 @@ document.addEventListener('click', e => {
   const cardpay = t.closest('[data-cardpay]');
   if(cardpay){
     const id = +cardpay.dataset.cardpay;
-    filter = 'all'; openId = id; resetPanel(state.find(x => x.id === id)); go('ledger');
+    filter = 'all'; openId = id; cardId = null; resetPanel(state.find(x => x.id === id)); go('card');
     return;
   }
 
@@ -1797,13 +1729,7 @@ document.addEventListener('click', e => {
     return;
   }
 
-  const srt = t.closest('[data-sort]');
-  if(srt){ mtxSort = srt.dataset.sort;
-    document.querySelectorAll('[data-sort]').forEach(b => b.classList.toggle('on', b === srt));
-    renderMatrix(); return; }
 
-  const mrow = t.closest('[data-mrow]');
-  if(mrow){ const id = +mrow.dataset.mrow; mtxOpen = (mtxOpen === id ? null : id); renderMatrix(); return; }
 
   const work = t.closest('[data-go]');
   if(work){
@@ -1812,7 +1738,7 @@ document.addEventListener('click', e => {
     if(key === 'import'){ openImport(); return; }
     filter = (key === 'unmatched') ? 'all' : key;
     openId = null;
-    go('ledger');
+    go('card');
     if(key === 'unmatched'){
       const list = document.getElementById('umList');
       list.classList.add('open');
@@ -2215,7 +2141,7 @@ function addCustomer(){
   state.push(row);
   logEvent(row, 'メモ', `新しいお客さん（${name}／${car || '車両未記入'}）を登録した`, '');
   closeNewCustomer();
-  filter = 'up'; openId = id; resetPanel(row); go('ledger');
+  filter = 'up'; openId = id; cardId = null; resetPanel(row); go('card');
   showUndo(`${name}さん を新しく登録しました`, () => {
     const i = state.findIndex(x => x.id === id); if(i >= 0) state.splice(i, 1);
     delete HIST[id]; EVENTS.pop(); openId = null;
