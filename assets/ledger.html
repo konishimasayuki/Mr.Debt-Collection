@@ -639,10 +639,6 @@
   .term-m .mtxt{color:var(--ink);line-height:1.6;overflow-wrap:anywhere;}
   .term-m .who{color:var(--ink-3);font-size:11px;white-space:nowrap;}
   .term-m.more{color:var(--ink-3);font-size:11.5px;display:block;padding-left:84px;}
-  .term-more{width:100%;text-align:left;font-family:inherit;font-size:12.5px;color:var(--ink-2);
-    background:var(--paper-2);border:0;border-bottom:1px solid var(--rule);padding:9px 4px 9px 46px;
-    cursor:pointer;letter-spacing:.02em;}
-  .term-more:hover{background:#EFEDE6;color:var(--ink);}
   .term-p{padding:10px 0 14px 46px;border-bottom:1px solid var(--rule);background:#FFFDF6;}
   .term-e{display:grid;grid-template-columns:74px 1fr auto;gap:10px;align-items:baseline;
     padding:4px 0 4px 10px;border-left:2px solid var(--rule);font-size:13px;}
@@ -1476,7 +1472,6 @@ function sayOf(r){
 const TERM = 48;                 // 基本の支払い回数(48回=4年)
 const termOf = r => r.term || TERM;
 let openNo = null;               // 開いている回次
-let termsAll = false;            // これからの回をすべて出すか
 
 // 回次kの支払期日
 function dueOfNo(r, k){
@@ -1499,7 +1494,7 @@ function logAt(r, no, kind, text, memo){
 }
 
 function openCard(id){
-  cardId = id; openNo = null; termsAll = false;
+  cardId = id; openNo = null;
   resetPanel(state.find(x => x.id === id));   // 前の方の選択を持ち越さない
   go('card');
 }
@@ -1508,23 +1503,12 @@ function openCard(id){
 function termRows(r){
   const past = pastEvents(r);
   const out = [];
-  // 「これから」の回は同じ行が続くだけなので、最初の1回だけ出す。
-  let futureShown = 0, hiddenFrom = 0, hiddenTo = 0, hiddenSum = 0;
+  // 全48回を出す。「これから」の札は次の1回だけに付け、それ以降は付けない。
+  let futureSeen = 0;
   for(let k = 1; k <= termOf(r); k++){
     const st = stateOfNo(r, k), d = dueOfNo(r, k);
-    if(st === 'pending' && !termsAll){
-      futureShown++;
-      if(futureShown > 1){
-        if(!hiddenFrom) hiddenFrom = k;
-        hiddenTo = k; hiddenSum += r.amount;
-        if(k === termOf(r)){
-          const last = dueOfNo(r, hiddenTo);
-          out.push(`<button class="term-more" data-termsall="1">
-            このあと ${hiddenTo - hiddenFrom + 1}回（${hiddenFrom}回目〜${hiddenTo}回目、${last.y}年${last.m}月まで） 合計 ${yen(hiddenSum)}円　▼ すべて表示</button>`);
-        }
-        continue;
-      }
-    }
+    if(st === 'pending') futureSeen++;
+    const showTag = st !== 'pending' || futureSeen === 1;
     const ev = past.concat(EVENTS.filter(e => e.cid === r.id)).filter(e => e.no === k);
     // メモは畳まない。各回の下に新しい順で3件まで出す。
     const memos = ev.filter(e => e.kind === 'メモ' || e.memo)
@@ -1536,7 +1520,7 @@ function termRows(r){
       <span class="no">${k}回</span>
       <span class="dt">${d.m}/${pad(d.d)}</span>
       <span class="am">${yen(r.amount)}</span>
-      <span class="st-tag t-${st}">${ST_LABEL[st]||'—'}</span>
+      <span class="${showTag ? `st-tag t-${st}` : ''}">${showTag ? (ST_LABEL[st]||'—') : ''}</span>
       <span class="sub">${memos.length ? `<span class="cv">メモ${memos.length}件</span>` : ''}</span>
       <span class="cv">${open?'▼':'▶'}</span>
     </button>`);
@@ -1859,8 +1843,6 @@ document.addEventListener('click', e => {
   // 何の入金か(毎月の分 / ボーナス)の切り替え
   const pk = t.closest('[data-pkind]');
   if(pk){ payKind = pk.dataset.pkind; render(); return; }
-  // これからの回をすべて表示
-  if(t.closest('[data-termsall]')){ termsAll = true; renderCard(); return; }
 
   // カードから一覧へ戻る
   if(t.closest('#backList')){ cardId = null; openNo = null; render(); window.scrollTo(0,0); return; }
