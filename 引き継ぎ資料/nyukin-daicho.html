@@ -639,6 +639,10 @@
   .term-m .mtxt{color:var(--ink);line-height:1.6;overflow-wrap:anywhere;}
   .term-m .who{color:var(--ink-3);font-size:11px;white-space:nowrap;}
   .term-m.more{color:var(--ink-3);font-size:11.5px;display:block;padding-left:84px;}
+  .term-more{width:100%;text-align:left;font-family:inherit;font-size:12.5px;color:var(--ink-2);
+    background:var(--paper-2);border:0;border-bottom:1px solid var(--rule);padding:9px 4px 9px 46px;
+    cursor:pointer;letter-spacing:.02em;}
+  .term-more:hover{background:#EFEDE6;color:var(--ink);}
   .term-p{padding:10px 0 14px 46px;border-bottom:1px solid var(--rule);background:#FFFDF6;}
   .term-e{display:grid;grid-template-columns:74px 1fr auto;gap:10px;align-items:baseline;
     padding:4px 0 4px 10px;border-left:2px solid var(--rule);font-size:13px;}
@@ -1004,12 +1008,13 @@ function renderHist(){
 
 let otherId = null;
 
+let payKind = 'monthly';
 let payChoice = 'plan';   // plan（今回分） / need（過不足こみ） / other（ちがう金額）
 let diffMode  = 'carry';  // carry（繰り越す） / settle（精算する）
 let planOpen  = false;
 
 function resetPanel(r){
-  payChoice = 'plan'; diffMode = 'carry';
+  payKind = 'monthly'; payChoice = 'plan'; diffMode = 'carry';
   planOpen = !!(r && r.diff && r.rest <= NOTICE_REMAIN);
 }
 
@@ -1072,6 +1077,23 @@ function closeContact(){ document.getElementById('contactModal').hidden = true; 
 // 入金を記録する欄。台帳の行内でも、お客さんカードでも同じものを使う。
 function payBox(r){
   const need = r.amount - r.diff;
+  // 毎月分とボーナスを1つの欄でまとめて扱う
+  const kinds = r.bonus > 10
+    ? `<div class="pay-row"><span class="pay-label">何の入金</span><span class="seg">
+         <button class="${payKind==='monthly'?'on':''}" data-pkind="monthly">毎月の分</button>
+         <button class="${payKind==='bonus'?'on':''}" data-pkind="bonus">ボーナス</button>
+       </span></div>` : '';
+  if(r.bonus > 10 && payKind === 'bonus'){
+    return `${kinds}
+      <div class="pay-row tight"><span class="pay-label"></span>
+        <span class="hint">ボーナス見込みの残り <b class="b-exp">${yen(r.bonus)}円</b></span></div>
+      <div class="pay-row"><span class="pay-label">入った金額</span>
+        <input class="imp-input pay-input" id="otherInput" inputmode="numeric" autocomplete="off" placeholder="0"><span>円</span></div>
+      <div class="pay-row"><span class="pay-label">メモ</span>
+        <input class="memo-input" id="memoInput" autocomplete="off" placeholder="いつの分か、約束の有無など（任意）"></div>
+      <div class="pay-row commit"><span class="pay-label"></span>
+        <button class="btn-pay" data-commit="${r.id}">ボーナス入金を記録する</button></div>`;
+  }
   const way = ['振込','現金','その他'].map(m =>
     `<button class="${m===r.method?'on':''}" data-m="${m}" data-id="${r.id}">${m}</button>`).join('');
   const money = [['plan', `${yen(r.amount)}円`]]
@@ -1093,7 +1115,7 @@ function payBox(r){
       </span></div>`;
   const label = payChoice==='other' ? '入れた金額で記録する'
               : `${yen(payChoice==='need' ? need : r.amount)}円 を記録する`;
-  return `
+  return `${kinds}
     <div class="pay-row"><span class="pay-label">受け取り方</span><span class="seg">${way}</span></div>
     <div class="pay-row"><span class="pay-label">金額</span><span class="seg">${money}</span></div>
     ${hint}
@@ -1410,7 +1432,7 @@ function sayOf(r){
 const TERM = 48;                 // 基本の支払い回数(48回=4年)
 const termOf = r => r.term || TERM;
 let openNo = null;               // 開いている回次
-let bonusOpen = false;           // ボーナス入金の欄(最初は閉じておく)
+let termsAll = false;            // これからの回をすべて出すか
 
 // 回次kの支払期日
 function dueOfNo(r, k){
@@ -1433,7 +1455,7 @@ function logAt(r, no, kind, text, memo){
 }
 
 function openCard(id){
-  cardId = id; openNo = null; bonusOpen = false;
+  cardId = id; openNo = null; termsAll = false;
   resetPanel(state.find(x => x.id === id));   // 前の方の選択を持ち越さない
   go('card');
 }
@@ -1442,8 +1464,23 @@ function openCard(id){
 function termRows(r){
   const past = pastEvents(r);
   const out = [];
+  // 「これから」の回は同じ行が続くだけなので、最初の1回だけ出す。
+  let futureShown = 0, hiddenFrom = 0, hiddenTo = 0, hiddenSum = 0;
   for(let k = 1; k <= termOf(r); k++){
     const st = stateOfNo(r, k), d = dueOfNo(r, k);
+    if(st === 'pending' && !termsAll){
+      futureShown++;
+      if(futureShown > 1){
+        if(!hiddenFrom) hiddenFrom = k;
+        hiddenTo = k; hiddenSum += r.amount;
+        if(k === termOf(r)){
+          const last = dueOfNo(r, hiddenTo);
+          out.push(`<button class="term-more" data-termsall="1">
+            このあと ${hiddenTo - hiddenFrom + 1}回（${hiddenFrom}回目〜${hiddenTo}回目、${last.y}年${last.m}月まで） 合計 ${yen(hiddenSum)}円　▼ すべて表示</button>`);
+        }
+        continue;
+      }
+    }
     const ev = past.concat(EVENTS.filter(e => e.cid === r.id)).filter(e => e.no === k);
     // メモは畳まない。各回の下に新しい順で3件まで出す。
     const memos = ev.filter(e => e.kind === 'メモ' || e.memo)
@@ -1551,21 +1588,6 @@ function renderCard(){
           : (r.kaishu
             ? '<div class="card-do"><span class="hint">回収済みのため、日々の入金記録の対象外です。</span></div>'
             : `<div class="pay">${payBox(r)}</div>`)}
-        ${r.bonus > 10 ? `
-        <div class="bonus-box">
-          <button class="disclose" data-bonusopen="1">${bonusOpen?'▾':'▸'} ボーナスの入金を記録する</button>
-          ${bonusOpen ? `
-          <div class="bonus-in">
-            <div class="bonus-row"><span class="bonus-k">見込みの残り</span>
-              <span class="bonus-v b-exp">${yen(r.bonus)}円</span></div>
-            <div class="bonus-row"><span class="bonus-k">入った額</span>
-              <input class="cmp-input" id="bonusAmt" inputmode="numeric" autocomplete="off" placeholder="0" style="max-width:150px"><span class="nc-unit">円</span></div>
-            <div class="bonus-row"><span class="bonus-k">メモ</span>
-              <input class="cmp-input" id="bonusMemo" autocomplete="off" placeholder="いつの分か、約束の有無など（任意）"></div>
-            <div class="bonus-row"><span class="bonus-k"></span>
-              <button class="btn-pay" data-bonusadd="${r.id}">ボーナス入金を記録する</button></div>
-          </div>` : ''}
-        </div>` : ''}
       </div>
 
       <div class="memo-box card-sec">
@@ -1655,6 +1677,19 @@ document.addEventListener('click', e => {
   const cm = t.closest('[data-commit]');
   if(cm){
     const r = state.find(x => x.id === +cm.dataset.commit), memo = takeMemo();
+    // ボーナスの入金は見込みから差し引く(毎月分の請求とは別勘定)
+    if(payKind === 'bonus' && r.bonus > 10){
+      const v = +((document.getElementById('otherInput') || {}).value || '').replace(/[^0-9]/g,'');
+      if(!v){ alert('入った金額を入れてください。'); return; }
+      const bBefore = r.bonus, pBefore = r.bonusPaid;
+      r.bonus = Math.max(0, r.bonus - v); r.bonusPaid++;
+      logAt(r, r.no, 'ボーナス', `ボーナス入金 ${yen(v)}円 を受け取り（見込みの残り ${yen(r.bonus)}円）`, memo);
+      payKind = 'monthly';
+      render();
+      showUndo(`${r.name}さん のボーナス入金 ${yen(v)}円 を記録しました`,
+        () => { r.bonus = bBefore; r.bonusPaid = pBefore; EVENTS.pop(); });
+      return;
+    }
     const before = r.diff;
     if(payChoice === 'other'){
       const v = +(document.getElementById('otherInput').value || '').replace(/[^0-9]/g,'');
@@ -1745,26 +1780,11 @@ document.addEventListener('click', e => {
     openCard(+cardBtn.dataset.card);
     return;
   }
-  // ボーナス入金の欄を開く / 閉じる
-  if(t.closest('[data-bonusopen]')){ bonusOpen = !bonusOpen; renderCard(); return; }
-  // ボーナス入金を記録する(見込みから減らす)
-  const bAdd = t.closest('[data-bonusadd]');
-  if(bAdd){
-    const r = state.find(x => x.id === +bAdd.dataset.bonusadd);
-    const amtEl = document.getElementById('bonusAmt');
-    const v = +((amtEl && amtEl.value || '').replace(/[^0-9]/g, ''));
-    if(!v){ alert('入った額を入れてください。'); return; }
-    const memoEl = document.getElementById('bonusMemo');
-    const memo = (memoEl && memoEl.value || '').trim();
-    const before = r.bonus, beforePaid = r.bonusPaid;
-    r.bonus = Math.max(0, r.bonus - v); r.bonusPaid++;
-    logAt(r, r.no, 'ボーナス', `ボーナス入金 ${yen(v)}円 を受け取り（見込みの残り ${yen(r.bonus)}円）`, memo);
-    bonusOpen = false;
-    render();
-    showUndo(`${r.name}さん のボーナス入金 ${yen(v)}円 を記録しました`,
-      () => { r.bonus = before; r.bonusPaid = beforePaid; EVENTS.pop(); });
-    return;
-  }
+  // 何の入金か(毎月の分 / ボーナス)の切り替え
+  const pk = t.closest('[data-pkind]');
+  if(pk){ payKind = pk.dataset.pkind; render(); return; }
+  // これからの回をすべて表示
+  if(t.closest('[data-termsall]')){ termsAll = true; renderCard(); return; }
 
   // カードから一覧へ戻る
   if(t.closest('#backList')){ cardId = null; openNo = null; render(); window.scrollTo(0,0); return; }
