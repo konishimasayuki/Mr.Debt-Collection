@@ -631,6 +631,14 @@
   .t-paid{background:#EDF3F0;color:var(--paid);} .t-late{background:var(--today-bg);color:var(--today);}
   .t-unpaid{background:var(--overdue-bg);color:var(--overdue);} .t-part{background:#EAF0F6;color:var(--indigo);}
   .t-due{background:var(--today-bg);color:var(--today);} .t-pending{background:var(--paper-2);color:var(--ink-3);}
+  /* 各回の下に出るメモ(畳まない・最新3件) */
+  .term-memos{padding:2px 0 8px 46px;border-bottom:1px solid var(--rule);background:#FFFDF9;}
+  .term-m{display:grid;grid-template-columns:74px 1fr auto;gap:10px;align-items:baseline;
+    padding:3px 0;font-size:12.5px;color:var(--ink-2);}
+  .term-m .when{color:var(--ink-3);font-size:11.5px;font-variant-numeric:tabular-nums;}
+  .term-m .mtxt{color:var(--ink);line-height:1.6;overflow-wrap:anywhere;}
+  .term-m .who{color:var(--ink-3);font-size:11px;white-space:nowrap;}
+  .term-m.more{color:var(--ink-3);font-size:11.5px;display:block;padding-left:84px;}
   .term-p{padding:10px 0 14px 46px;border-bottom:1px solid var(--rule);background:#FFFDF6;}
   .term-e{display:grid;grid-template-columns:74px 1fr auto;gap:10px;align-items:baseline;
     padding:4px 0 4px 10px;border-left:2px solid var(--rule);font-size:13px;}
@@ -841,7 +849,7 @@ const FILTERS = [
   {key:'today',   label:'入金待ち', test:r => statusOf(r)==='today'},
   {key:'overdue', label:'遅れ',    test:r => statusOf(r)==='overdue'},
   {key:'hold',    label:'保留',    test:r => statusOf(r)==='hold'},
-  {key:'up',      label:'期日はまだ先', test:r => statusOf(r)==='up'},
+  {key:'up',      label:'次回',    test:r => statusOf(r)==='up'},
   {key:'kaishu',  label:'回収',     test:r => r.kaishu, auto:true},
   {key:'bonus',   label:'ボーナス依存', test:heavyBonus, auto:true},
   {key:'diff',    label:'金額ちがい', test:bigDiff},
@@ -1409,17 +1417,28 @@ function termRows(r){
   for(let k = 1; k <= termOf(r); k++){
     const st = stateOfNo(r, k), d = dueOfNo(r, k);
     const ev = past.concat(EVENTS.filter(e => e.cid === r.id)).filter(e => e.no === k);
-    const memoCount = ev.filter(e => e.kind === 'メモ' || e.memo).length;
+    // メモは畳まない。各回の下に新しい順で3件まで出す。
+    const memos = ev.filter(e => e.kind === 'メモ' || e.memo)
+                    .map(e => ({when:e.when, who:e.who, text: e.kind === 'メモ' ? e.text : e.memo}));
+    const shown = memos.slice(-3).reverse();
     const open = openNo === k;
-    const last = ev.length ? ev[ev.length-1] : null;
     out.push(`<button class="term-r ${open?'on':''}" data-term="${r.id}:${k}">
       <span class="no">${k}回</span>
       <span class="dt">${d.m}/${pad(d.d)}</span>
       <span class="am">${yen(r.amount)}</span>
       <span class="st-tag t-${st}">${ST_LABEL[st]||'—'}</span>
-      <span class="sub">${last ? (last.memo || last.text) : ''}${memoCount ? `　<span class="cv">メモ${memoCount}</span>` : ''}</span>
+      <span class="sub">${memos.length ? `<span class="cv">メモ${memos.length}件</span>` : ''}</span>
       <span class="cv">${open?'▼':'▶'}</span>
     </button>`);
+    if(shown.length && !open){
+      out.push(`<div class="term-memos">
+        ${shown.map(m => `<div class="term-m">
+            <span class="when">${m.when}</span>
+            <span class="mtxt">${m.text}</span>
+            <span class="who">${m.who}</span></div>`).join('')}
+        ${memos.length > 3 ? `<div class="term-m more">ほか ${memos.length - 3}件（回を押すとすべて出ます）</div>` : ''}
+      </div>`);
+    }
     if(open){
       out.push(`<div class="term-p">
         ${ev.length ? ev.map(e => `<div class="term-e">
