@@ -854,7 +854,6 @@ const FILTERS = [
   {key:'overdue', label:'遅れ',    test:r => statusOf(r)==='overdue'},
   {key:'hold',    label:'約束した方', test:r => !r.paid && PROMISES.some(p => p.id === r.id), hidden:true},
   {key:'up',      label:'次回',    test:r => statusOf(r)==='up'},
-  {key:'diff',    label:'金額ちがい', test:bigDiff},
   {key:'settle',  label:'完済前',   test:needSettle, hidden:true},
   {key:'all',     label:'すべて',  test:() => true}
 ];
@@ -864,8 +863,7 @@ function renderTabs(){
     .filter(f => f.key === filter
              || (!f.hidden && (!f.auto || state.filter(f.test).length)))
     .map(f => {
-    const n = f.key === 'diff' ? state.filter(f.test).length
-                               : state.filter(r => f.test(r) && !r.paid).length;
+    const n = state.filter(r => f.test(r) && !r.paid).length;
     return `<button class="tab ${f.key===filter?'on':''}" data-f="${f.key}">${f.label}<span class="n">${n}</span></button>`;
   }).join('');
 }
