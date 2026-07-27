@@ -851,8 +851,10 @@ let history = [];
 let undoTimer = null;
 
 const yen = n => n.toLocaleString('ja-JP');
+// 入金が済んだ方は、その回の追いかけが終わったので「次回」へ移す
 const statusOf = r => r.kaishu ? 'kaishu'
-  : (r.hold ? 'hold' : (r.due < TODAY ? 'overdue' : (r.due === TODAY ? 'today' : 'up')));
+  : (r.paid ? 'up'
+  : (r.hold ? 'hold' : (r.due < TODAY ? 'overdue' : (r.due === TODAY ? 'today' : 'up'))));
 const asDate = s => new Date(YEAR, (+s.slice(0,2)) - 1, +s.slice(3,5));
 const daysLate = due => Math.round((asDate(TODAY) - asDate(due)) / 86400000);
 
