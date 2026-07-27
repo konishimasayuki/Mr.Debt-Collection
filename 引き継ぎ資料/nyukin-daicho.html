@@ -852,7 +852,7 @@ const daysLate = due => Math.round((asDate(TODAY) - asDate(due)) / 86400000);
 const FILTERS = [
   {key:'today',   label:'入金待ち', test:r => statusOf(r)==='today'},
   {key:'overdue', label:'遅れ',    test:r => statusOf(r)==='overdue'},
-  {key:'hold',    label:'約束した方', test:r => !r.paid && PROMISES.some(p => p.id === r.id), hidden:true},
+  {key:'hold',    label:'約束した方', test:r => !r.paid && (r.hold || PROMISES.some(p => p.id === r.id)), hidden:true},
   {key:'up',      label:'次回',    test:r => statusOf(r)==='up'},
   {key:'settle',  label:'完済前',   test:needSettle, hidden:true},
   {key:'all',     label:'すべて',  test:() => true}
@@ -894,7 +894,7 @@ function renderDash(){
   const unpaid = f => state.filter(r => !r.paid && f(r));
   const today = unpaid(r => statusOf(r)==='today');
   const late  = unpaid(r => statusOf(r)==='overdue');
-  const prom  = PROMISES.filter(p => { const r = state.find(x => x.id===p.id); return r && !r.paid; });
+  const prom  = state.filter(r => !r.paid && (r.hold || PROMISES.some(p => p.id === r.id)));
   const cashSum = CASH.reduce((s,c) => s + c.amount, 0);
 
   const byMethod = list => list.length ? `合計 ${yen(list.reduce((s,r) => s + r.amount, 0))}円` : '';
@@ -926,8 +926,10 @@ function renderDash(){
   const ages = [];
   late.forEach(r => ages.push({t:r.name, id:r.id, n:daysLate(r.due), note:r.note || '入金の確認が取れていません'}));
   unmatched.forEach(u => ages.push({t:u.payer, n:daysLate(u.date), note:'誰の入金か分からないまま'}));
-  prom.filter(p => p.day < TODAY).forEach(p => {
+  // 約束の日を過ぎたものは、約束の記録(日付つき)から拾う
+  PROMISES.filter(p => p.day < TODAY).forEach(p => {
     const r = state.find(x => x.id===p.id);
+    if(!r || r.paid) return;
     ages.push({t:r.name, id:r.id, n:daysLate(p.day), note:'約束の日を過ぎています'});
   });
   const seen = new Set();
@@ -1119,7 +1121,10 @@ function payBox(r){
     <div class="pay-row"><span class="pay-label">メモ</span>
       <input class="memo-input" id="memoInput" autocomplete="off" placeholder="必要なら書いてください（任意）"></div>
     <div class="pay-row commit"><span class="pay-label"></span>
-      <button class="btn-pay" data-commit="${r.id}">${label}</button></div>`;
+      <button class="btn-pay" data-commit="${r.id}">${label}</button></div>
+    ${r.kaishu ? '' : `<div class="pay-row alt"><span class="pay-label"></span>
+      <span class="alt-label">入金がなかったときは</span>
+      <button class="btn btn-weak" data-promise="${r.id}">後日の約束</button></div>`}`;
 }
 
 function panelHtml(r){
@@ -1776,6 +1781,20 @@ document.addEventListener('click', e => {
     openCard(+cardBtn.dataset.card);
     return;
   }
+  // 後日の約束にする(日々の消し込みから外し、ダッシュボードの「後日の約束を確かめる」に出す)
+  const promise = t.closest('[data-promise]');
+  if(promise){
+    const r = state.find(x => x.id === +promise.dataset.promise), memo = takeMemo();
+    const beforeHold = r.hold, beforeNote = r.note;
+    r.hold = true; r.note = '後日入金の約束(本日確認)';
+    openId = null;
+    logAt(r, r.no, '約束', '後日支払うと約束', memo);
+    render();
+    showUndo(`${r.name}さん を後日の約束にしました`,
+      () => { r.hold = beforeHold; r.note = beforeNote; EVENTS.pop(); });
+    return;
+  }
+
   // 何の入金か(毎月の分 / ボーナス)の切り替え
   const pk = t.closest('[data-pkind]');
   if(pk){ payKind = pk.dataset.pkind; render(); return; }
