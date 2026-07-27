@@ -717,8 +717,7 @@
         <p class="dash-rule" id="dashRule"></p>
         </div>
         <div>
-          <h2 class="sec-title">溜まっているもの</h2>
-          <div class="aging" id="agingList"></div>
+          <h2 class="sec-title">手元の現金</h2>
           <div class="cash" id="cashBox"></div>
         </div>
       </div>
@@ -930,25 +929,6 @@ function renderDash(){
     + `完済前の精算は、金額にかかわらず残り${NOTICE_REMAIN}回から案内する`
     + `（該当が出るのは2029年2月ごろの見込み）。`
     + `ボーナス頼みは毎月額の${BONUS_RATIO}回分を超えたら見直す。`;
-
-  const ages = [];
-  late.forEach(r => ages.push({t:r.name, id:r.id, n:daysLate(r.due), note:r.note || '入金の確認が取れていません'}));
-  unmatched.forEach(u => ages.push({t:u.payer, n:daysLate(u.date), note:'誰の入金か分からないまま'}));
-  // 約束の日を過ぎたものは、約束の記録(日付つき)から拾う
-  PROMISES.filter(p => p.day < TODAY).forEach(p => {
-    const r = state.find(x => x.id===p.id);
-    if(!r || r.paid) return;
-    ages.push({t:r.name, id:r.id, n:daysLate(p.day), note:'約束の日を過ぎています'});
-  });
-  const seen = new Set();
-  const list = ages.filter(a => !seen.has(a.t) && seen.add(a.t)).sort((a,b) => b.n - a.n).slice(0,7);
-
-  document.getElementById('agingList').innerHTML = list.length ? list.map(a => `
-    <div class="age">
-      <div class="age-top"><span class="age-name">${a.id ? `<span class="nmlink" data-card="${a.id}">${a.t}</span>` : a.t}</span><span class="age-days">${a.n}日</span></div>
-      <div class="age-note">${a.note}</div>
-      <div class="age-bar" style="width:${Math.min(a.n / 21, 1) * 100}%"></div>
-    </div>`).join('') : '<div class="age-note" style="padding:12px 0">溜まっているものはありません。</div>';
 
   document.getElementById('cashBox').innerHTML = `<h4>手元の現金(まだ銀行へ入れていない分)</h4>
     ${CASH.map(c => `<div class="cash-row"><span>${c.date.replace('-','/')}</span><span>${c.name}</span>
@@ -1249,7 +1229,9 @@ function focusOther(){
 }
 
 function renderRows(){
-  const list = state.filter(FILTERS.find(f => f.key===filter).test).slice().sort(byKana);
+  // 遅れは「どれが一番ほったらかしか」で動くので、日数の長い順。ほかはあいうえお順。
+  const list = state.filter(FILTERS.find(f => f.key===filter).test).slice()
+    .sort(filter === 'overdue' ? (a,b) => daysLate(b.due) - daysLate(a.due) || byKana(a,b) : byKana);
   const el = document.getElementById('rows');
   // 並びが中途半端に見える理由を隠さない。よみが入るほど正しい順になる。
   const noYomi = list.filter(r => !hasYomi(r)).length;
