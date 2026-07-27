@@ -128,7 +128,7 @@
   .ledger{padding:0 20px 120px;}
   .lrow-head,.lrow{
     display:grid;
-    grid-template-columns:5px 58px minmax(130px,1.3fr) minmax(120px,1.1fr) minmax(150px,1.6fr) 96px 52px 118px;
+    grid-template-columns:5px 58px minmax(150px,1.5fr) minmax(130px,1.2fr) 96px 52px 118px;
     align-items:center;
     column-gap:12px;
   }
@@ -600,6 +600,44 @@
   .log-memo{display:block;font-size:12.5px;color:var(--ink-2);margin-top:1px;}
   .card-do{margin-top:18px;padding-top:14px;border-top:1px solid var(--rule-strong);
     display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  /* ── 支払いの記録(全42回・ツリー)と メモ ───────────── */
+  .memo-box{margin-top:18px;}
+  .memo-box textarea{width:100%;font-family:inherit;font-size:14px;line-height:1.7;padding:10px;
+    border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);resize:vertical;}
+  .memo-box textarea:focus{outline:2px solid var(--indigo);outline-offset:1px;border-color:var(--indigo);}
+  .memo-save{margin-top:8px;display:flex;gap:8px;align-items:center;}
+  .memo-saved{font-size:12px;color:var(--paid);font-weight:600;}
+
+  .terms{margin-top:8px;border-top:1px solid var(--rule-strong);}
+  .term-r{display:grid;grid-template-columns:46px 78px 92px 60px 1fr 20px;gap:10px;align-items:center;
+    width:100%;padding:8px 4px;background:none;border:0;border-bottom:1px solid var(--rule);
+    font-family:inherit;font-size:13.5px;color:var(--ink);text-align:left;cursor:pointer;}
+  .term-r:hover{background:#FFFDF7;}
+  .term-r.on{background:#FFFDF6;}
+  .term-r .no{font-variant-numeric:tabular-nums;color:var(--ink-2);}
+  .term-r .dt{font-variant-numeric:tabular-nums;color:var(--ink-2);}
+  .term-r .am{font-variant-numeric:tabular-nums;text-align:right;font-weight:600;}
+  .term-r .sub{font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .term-r .cv{color:var(--ink-3);font-size:11px;}
+  .st-tag{font-size:11px;font-weight:700;padding:2px 6px;border-radius:2px;text-align:center;white-space:nowrap;}
+  .t-paid{background:#EDF3F0;color:var(--paid);} .t-late{background:var(--today-bg);color:var(--today);}
+  .t-unpaid{background:var(--overdue-bg);color:var(--overdue);} .t-part{background:#EAF0F6;color:var(--indigo);}
+  .t-due{background:var(--today-bg);color:var(--today);} .t-pending{background:var(--paper-2);color:var(--ink-3);}
+  .term-p{padding:10px 0 14px 46px;border-bottom:1px solid var(--rule);background:#FFFDF6;}
+  .term-e{display:grid;grid-template-columns:74px 1fr auto;gap:10px;align-items:baseline;
+    padding:4px 0 4px 10px;border-left:2px solid var(--rule);font-size:13px;}
+  .term-e .when{color:var(--ink-3);font-size:11.5px;font-variant-numeric:tabular-nums;}
+  .term-e .who{color:var(--ink-3);font-size:11px;white-space:nowrap;}
+  .term-add{display:flex;gap:8px;margin-top:10px;padding-left:10px;flex-wrap:wrap;}
+  .term-add input{flex:1;min-width:200px;font-family:inherit;font-size:14px;padding:8px 10px;
+    border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .term-add input:focus{outline:2px solid var(--indigo);outline-offset:1px;border-color:var(--indigo);}
+  .clist{border-top:1px solid var(--rule-strong);}
+  @media (max-width:720px){
+    .term-r{grid-template-columns:40px 66px 82px 54px 20px;}
+    .term-r .sub{display:none;}
+  }
+
   .yomi-note{font-size:12px;color:var(--today);background:var(--today-bg);
     border-left:3px solid var(--today);padding:7px 11px;margin:8px 0 0;line-height:1.6;}
   .nmlink{cursor:pointer;text-decoration:underline;text-decoration-color:var(--rule-strong);
@@ -616,7 +654,7 @@
       <span class="head-date" id="headDate"></span>
       <nav class="viewnav">
         <button class="vn on" data-view="dash">本日の作業</button>
-        <button class="vn" data-view="card">お客さんを探す</button>
+        <button class="vn" data-view="card">お客さん</button>
         <button class="vn" data-view="pend">懸案</button>
         <button class="vn" data-view="ledger">台帳</button>
         <button class="vn" data-view="matrix">入金表</button>
@@ -656,10 +694,6 @@
 
   <section id="viewCard" hidden>
     <div class="card-wrap">
-      <div class="find">
-        <span class="find-lbl">お名前で探す</span>
-        <input id="findInput" autocomplete="off" placeholder="名字の一部でも見つかります">
-      </div>
       <div id="cardBody"></div>
     </div>
   </section>
@@ -691,7 +725,6 @@
       <span>期日</span>
       <span>お名前</span>
       <span class="col-ct">契約</span>
-      <span class="col-dt">何の分か</span>
       <span class="num">請求額</span>
       <span class="col-mt">回次</span>
       <span>記録</span>
@@ -1158,7 +1191,6 @@ function renderRows(){
         <span class="due">${r.due.replace('-','/')}</span>
         <span class="nm"><span class="nmlink" data-card="${r.id}">${r.name}</span>${testTag(r)}</span>
         <span class="ct">${r.ct}</span>
-        <span class="dt">${r.dt}</span>
         <span class="am"><span>${yen(r.amount)}</span>${r.diff ? `<span class="am-diff ${r.diff<0?'d-short':'d-over'}">${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}</span>` : ''}</span>
         <span class="mt">${r.n}</span>
         <span class="rc">${heavyBonus(r) ? `<span class="bonus-tag">ボ ${Math.round(bonusRatio(r))}回分</span>` : rec}</span>
@@ -1364,7 +1396,7 @@ const jaOrder = new Intl.Collator('ja');
 const sortKey = r => yomiOf(r) || r.name;
 const byKana = (a, b) => jaOrder.compare(sortKey(a), sortKey(b)) || (a.id - b.id);
 
-let cardId = null, findQ = '';
+let cardId = null;
 
 // この人の未収(12ヶ月のうち「未」の回数×毎月額)
 function owedOf(r){
@@ -1394,32 +1426,84 @@ function sayOf(r){
     sub:`${o.n ? `過去に未収が ${o.n}回 あります。` : 'これまで遅れたことはありません。'}${r.note || ''}`};
 }
 
-function openCard(id){ cardId = id; go('card'); }
+const TERM = 42;                 // 基本の支払い回数
+const termOf = r => r.term || TERM;
+let openNo = null;               // 開いている回次
+
+// 回次kの支払期日
+function dueOfNo(r, k){
+  const st = MONTHS[r.si] || MONTHS[0];
+  const t = st.y * 12 + (st.m - 1) + (k - 1);
+  return {y: Math.floor(t / 12), m: t % 12 + 1, d: +r.due.slice(3)};
+}
+// 回次kのようす
+function stateOfNo(r, k){
+  const mi = r.si + (k - 1);
+  if(mi >= MONTHS.length) return 'pending';
+  return cellState(r, mi);
+}
+const ST_LABEL = {paid:'入金', late:'遅れて入金', unpaid:'未収', part:'金額ちがい',
+                  due:'期日', pending:'これから', none:'—'};
+
+// 回次を指定して記録を足す(追記のみ)
+function logAt(r, no, kind, text, memo){
+  EVENTS.push({cid:r.id, no, when:stamp(), who:'管理者', kind, text, memo:memo || ''});
+}
+
+function openCard(id){ cardId = id; openNo = null; go('card'); }
+
+// 全42回をツリーで。回を開くと、その回のやり取りとメモ欄が出る。
+function termRows(r){
+  const past = pastEvents(r);
+  const out = [];
+  for(let k = 1; k <= termOf(r); k++){
+    const st = stateOfNo(r, k), d = dueOfNo(r, k);
+    const ev = past.concat(EVENTS.filter(e => e.cid === r.id)).filter(e => e.no === k);
+    const memoCount = ev.filter(e => e.kind === 'メモ' || e.memo).length;
+    const open = openNo === k;
+    const last = ev.length ? ev[ev.length-1] : null;
+    out.push(`<button class="term-r ${open?'on':''}" data-term="${r.id}:${k}">
+      <span class="no">${k}回</span>
+      <span class="dt">${d.m}/${pad(d.d)}</span>
+      <span class="am">${yen(r.amount)}</span>
+      <span class="st-tag t-${st}">${ST_LABEL[st]||'—'}</span>
+      <span class="sub">${last ? (last.memo || last.text) : ''}${memoCount ? `　<span class="cv">メモ${memoCount}</span>` : ''}</span>
+      <span class="cv">${open?'▼':'▶'}</span>
+    </button>`);
+    if(open){
+      out.push(`<div class="term-p">
+        ${ev.length ? ev.map(e => `<div class="term-e">
+            <span class="when">${e.when}</span>
+            <span><span class="kind ${KIND_CLASS[e.kind]||'k-plain'}">${e.kind}</span>${e.text}
+              ${e.memo ? `<span class="log-memo">${e.memo}</span>` : ''}</span>
+            <span class="who">${e.who}</span></div>`).join('')
+          : '<div class="term-e"><span class="when"></span><span>まだ記録はありません。</span><span class="who"></span></div>'}
+        <div class="term-add">
+          <input id="termMemo" autocomplete="off" placeholder="この回のメモ（電話の内容、いくら入ったか、約束など）">
+          <button class="btn-pay" data-termadd="${r.id}:${k}">メモを残す</button>
+        </div>
+      </div>`);
+    }
+  }
+  return out.join('');
+}
 
 function renderCard(){
   const box = document.getElementById('cardBody'); if(!box) return;
-  // 探している最中は候補を出す(電話中に名前で引けること)
-  if(findQ){
-    const q = findQ.trim();
-    const hits = state.filter(r => r.name.includes(q) || r.ct.includes(q)
-        || normKana(r.name).includes(normKana(q)) || yomiOf(r).includes(normKana(q)))
-      .slice().sort(byKana);
-    box.innerHTML = hits.length
-      ? `<div class="find-hits">${hits.map(r => { const s = statusOf(r); return `
-          <button class="hit" data-card="${r.id}">
-            <span class="nm">${r.name}</span><span class="ct">${r.ct}</span>
-            <span class="st ${s==='overdue'?'d-short':''}">${r.paid ? '入金あり' : (s==='overdue' ? daysLate(r.due)+'日 遅れ' : (s==='today' ? '本日が期日' : (s==='kaishu' ? '回収済み' : (s==='hold' ? '約束あり' : r.due.replace('-','/')))))}</span>
-          </button>`; }).join('')}</div>`
-      : `<div class="empty">「${q}」に当てはまる方が見つかりません。</div>`;
+  const r = state.find(x => x.id === cardId);
+  // 誰も選んでいないときは、全員をあいうえお順で出す(探さずに選べる)
+  if(!r){
+    const all = state.slice().sort(byKana);
+    box.innerHTML = `<div class="clist">${all.map(x => { const s = statusOf(x); return `
+      <button class="hit" data-card="${x.id}">
+        <span class="nm">${x.name}</span><span class="ct">${x.ct}</span>
+        <span class="st ${s==='overdue'?'d-short':''}">${x.paid ? '入金あり' : (s==='overdue' ? daysLate(x.due)+'日 遅れ' : (s==='today' ? '本日が期日' : (s==='kaishu' ? '回収済み' : (s==='hold' ? '約束あり' : jpDate(x.due)))))}</span>
+      </button>`; }).join('')}</div>`;
     return;
   }
-  const r = state.find(x => x.id === cardId);
-  if(!r){ box.innerHTML = `<div class="empty">お名前を入れて探すか、台帳や入金表からお名前を押してください。</div>`; return; }
 
   const say = sayOf(r), o = owedOf(r), c = record(r), tel = dummyTel(r);
   const paidTotal = c.paid * r.amount;
-  const log = pastEvents(r).concat(EVENTS.filter(e => e.cid === r.id)).reverse();
-  const mini = o.cells.map((cs, mi) => `<span class="mini-c">${MONTHS[mi].m}月<i class="cell c-${cs}">${MARK[cs]}</i></span>`).join('');
 
   box.innerHTML = `<div class="cardv">
     <div class="card-head">
@@ -1446,7 +1530,6 @@ function renderCard(){
         <h4>お金のこと</h4>
         <table class="kv">
           <tr class="big"><td class="k">毎月の支払い</td><td class="v">${yen(r.amount)}円</td></tr>
-          <tr><td class="k">内訳</td><td class="v">元本 ${r.parts[0][1].toLocaleString('ja-JP')} / 手数料 ${r.parts[1][1].toLocaleString('ja-JP')}</td></tr>
           <tr><td class="k">次の期日</td><td class="v">${jpDate(r.due)}</td></tr>
           <tr><td class="k">これまでに払った</td><td class="v">${c.paid}回 ／ ${yen(paidTotal)}円</td></tr>
           <tr><td class="k">残っている支払い</td><td class="v">${yen(r.debt)}円</td></tr>
@@ -1457,8 +1540,7 @@ function renderCard(){
       </div>
 
       <div class="card-sec">
-        <h4>支払いのようす（この12ヶ月）</h4>
-        <div class="mini">${mini}</div>
+        <h4>支払いのようす</h4>
         <div class="card-rec">
           <span>払った <b>${c.paid}</b>/${c.months}回</span>
           <span class="${c.late?'rec-late':''}">遅れ <b>${c.late}</b></span>
@@ -1475,14 +1557,18 @@ function renderCard(){
       </div>
     </div>
 
+    <div class="memo-box card-sec">
+      <h4>この方についてのメモ</h4>
+      <textarea id="custMemo" rows="3" placeholder="連絡のつきやすい時間、勤務先、家族のこと、事情など">${r.memo || ''}</textarea>
+      <div class="memo-save">
+        <button class="btn" data-custmemo="${r.id}">メモを保存</button>
+        <span class="nc-hint">この欄は書き直せます。やり取りの記録は下に足していってください。</span>
+      </div>
+    </div>
+
     <div class="card-sec" style="margin-top:22px">
-      <h4>これまでの記録（新しい順・書き換えできません）</h4>
-      <div class="log">${log.map(e => `<div class="log-i">
-          <span class="when">${e.when}</span>
-          <span><span class="kind ${KIND_CLASS[e.kind]||'k-plain'}">${e.kind}</span>${e.text}
-            ${e.memo ? `<span class="log-memo">${e.memo}</span>` : ''}</span>
-          <span class="who">${e.who}</span></div>`).join('') ||
-        '<div class="log-i"><span class="when"></span><span>まだ記録はありません。</span><span class="who"></span></div>'}</div>
+      <h4>支払いの記録（全${termOf(r)}回）　回を押すと、その回のやり取りとメモが出ます</h4>
+      <div class="terms">${termRows(r)}</div>
     </div>
   </div>`;
 }
@@ -1644,11 +1730,43 @@ document.addEventListener('click', e => {
   // お名前を押したら、その人の全部を1画面で出す
   const cardBtn = t.closest('[data-card]');
   if(cardBtn){
-    const el = document.getElementById('findInput');
-    findQ = ''; if(el) el.value = '';
     openCard(+cardBtn.dataset.card);
     return;
   }
+  // 回を開く / 閉じる
+  const termBtn = t.closest('[data-term]');
+  if(termBtn){
+    const k = +termBtn.dataset.term.split(':')[1];
+    openNo = (openNo === k ? null : k);
+    renderCard();
+    return;
+  }
+  // その回にメモを足す(追記のみ)
+  const termAdd = t.closest('[data-termadd]');
+  if(termAdd){
+    const [id, k] = termAdd.dataset.termadd.split(':').map(Number);
+    const r = state.find(x => x.id === id);
+    const el = document.getElementById('termMemo');
+    const v = (el && el.value || '').trim();
+    if(!v){ alert('メモを入れてください。'); return; }
+    logAt(r, k, 'メモ', v, '');
+    renderCard();
+    showUndo(`${r.name}さん ${k}回目 にメモを残しました`, () => { EVENTS.pop(); renderCard(); });
+    return;
+  }
+  // この方についてのメモ(書き直せる欄)
+  const cmemo = t.closest('[data-custmemo]');
+  if(cmemo){
+    const r = state.find(x => x.id === +cmemo.dataset.custmemo);
+    const el = document.getElementById('custMemo');
+    const before = r.memo || '';
+    r.memo = (el && el.value || '').trim();
+    logAt(r, r.no, 'メモ', 'この方についてのメモを更新した', '');
+    renderCard();
+    showUndo(`${r.name}さん のメモを保存しました`, () => { r.memo = before; EVENTS.pop(); renderCard(); });
+    return;
+  }
+
   // よみ(カナ)を登録する
   const yomiBtn = t.closest('[data-yomi]');
   if(yomiBtn){
@@ -1674,9 +1792,8 @@ document.addEventListener('click', e => {
 
   const vnav = t.closest('.vn[data-view]');
   if(vnav){
-    if(vnav.dataset.view === 'card'){ cardId = null; findQ = ''; const el = document.getElementById('findInput'); if(el) el.value = ''; }
+    if(vnav.dataset.view === 'card'){ cardId = null; openNo = null; }
     go(vnav.dataset.view);
-    if(vnav.dataset.view === 'card'){ const el = document.getElementById('findInput'); if(el) el.focus(); }
     return;
   }
 
@@ -2107,9 +2224,6 @@ function addCustomer(){
 
 document.getElementById('btnImport').addEventListener('click', openImport);
 document.getElementById('btnNew').addEventListener('click', openNewCustomer);
-document.getElementById('findInput').addEventListener('input', e => {
-  findQ = e.target.value; if(findQ) cardId = null; renderCard();
-});
 
 render();
 </script>
