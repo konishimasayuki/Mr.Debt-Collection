@@ -540,6 +540,69 @@
   .nc-hint{color:var(--ink-3);}
   .nc-ok{margin-top:6px;color:var(--paid);font-weight:600;}
   .nc-warn{margin-top:6px;color:var(--overdue);font-weight:600;}
+
+  /* ── お客さんカード(1画面で全部)───────────── */
+  .card-wrap{padding:0 20px 120px;}
+  .find{display:flex;align-items:center;gap:10px;padding:14px 0 12px;flex-wrap:wrap;}
+  .find input{font-family:inherit;font-size:16px;padding:9px 12px;width:min(320px,70vw);
+    border:1px solid var(--rule-strong);border-radius:2px;background:#fff;color:var(--ink);}
+  .find input:focus{outline:2px solid var(--indigo);outline-offset:1px;border-color:var(--indigo);}
+  .find-lbl{font-size:12px;color:var(--ink-2);letter-spacing:.08em;}
+  .find-hits{border-top:1px solid var(--rule-strong);}
+  .hit{display:flex;align-items:center;gap:12px;width:100%;padding:12px 2px;background:none;
+    border:0;border-bottom:1px solid var(--rule);font-family:inherit;font-size:15px;
+    color:var(--ink);text-align:left;cursor:pointer;}
+  .hit:hover{background:#FFFDF7;}
+  .hit .nm{font-weight:600;}
+  .hit .ct{font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .hit .st{margin-left:auto;font-size:12.5px;white-space:nowrap;}
+
+  .cardv{padding-bottom:8px;}
+  .card-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;
+    padding:14px 0 12px;border-bottom:2px solid var(--indigo);}
+  .card-name{font-size:26px;font-weight:700;letter-spacing:.04em;line-height:1.2;}
+  .card-ct{font-size:13.5px;color:var(--ink-2);margin-top:3px;}
+  .card-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .card-tel{font-size:17px;font-weight:700;color:#fff;background:var(--indigo);
+    border:1px solid var(--indigo);border-radius:2px;padding:9px 16px;text-decoration:none;
+    font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .card-tel:hover{background:var(--indigo-2);}
+
+  /* いま何を言えばよいか：最上段に1行で */
+  .say{margin:14px 0 0;padding:14px 16px;border-left:5px solid var(--indigo);background:#F1F4F8;}
+  .say.s-overdue{border-left-color:var(--overdue);background:var(--overdue-bg);}
+  .say.s-today{border-left-color:var(--today);background:var(--today-bg);}
+  .say.s-ok{border-left-color:var(--paid);background:#EDF3F0;}
+  .say-main{font-size:19px;font-weight:700;line-height:1.45;}
+  .say-sub{font-size:13.5px;color:var(--ink-2);margin-top:5px;line-height:1.7;}
+
+  .card-cols{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:20px;align-items:start;}
+  @media (max-width:820px){ .card-cols{grid-template-columns:1fr;gap:20px;} }
+  .card-sec h4{margin:0 0 8px;font-size:12px;letter-spacing:.1em;color:var(--ink-2);font-weight:600;
+    border-bottom:1px solid var(--rule-strong);padding-bottom:6px;}
+  .kv{width:100%;border-collapse:collapse;font-size:14.5px;}
+  .kv td{padding:6px 0;border-bottom:1px dotted var(--rule);}
+  .kv td.k{color:var(--ink-2);font-size:13.5px;white-space:nowrap;padding-right:14px;}
+  .kv td.v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap;}
+  .kv tr.big td{font-size:17px;padding:9px 0;}
+
+  .mini{display:flex;gap:3px;flex-wrap:wrap;margin:4px 0 8px;}
+  .mini-c{width:34px;text-align:center;font-size:10.5px;color:var(--ink-3);}
+  .mini-c i{display:block;height:24px;line-height:24px;font-size:11.5px;border-radius:1px;font-style:normal;}
+  .card-rec{display:flex;gap:8px 18px;flex-wrap:wrap;font-size:13.5px;margin-top:4px;}
+  .card-rec b{font-variant-numeric:tabular-nums;}
+
+  .log{margin-top:6px;max-height:340px;overflow:auto;}
+  .log-i{display:grid;grid-template-columns:74px 1fr auto;gap:10px;align-items:baseline;
+    padding:6px 0;border-bottom:1px dotted var(--rule);font-size:13.5px;}
+  .log-i .when{color:var(--ink-3);font-size:12px;font-variant-numeric:tabular-nums;}
+  .log-i .who{color:var(--ink-3);font-size:11.5px;white-space:nowrap;}
+  .log-memo{display:block;font-size:12.5px;color:var(--ink-2);margin-top:1px;}
+  .card-do{margin-top:18px;padding-top:14px;border-top:1px solid var(--rule-strong);
+    display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .nmlink{cursor:pointer;text-decoration:underline;text-decoration-color:var(--rule-strong);
+    text-underline-offset:3px;}
+  .nmlink:hover{text-decoration-color:var(--indigo);color:var(--indigo);}
 </style>
 </head>
 <body>
@@ -551,6 +614,7 @@
       <span class="head-date" id="headDate"></span>
       <nav class="viewnav">
         <button class="vn on" data-view="dash">本日の作業</button>
+        <button class="vn" data-view="card">お客さんを探す</button>
         <button class="vn" data-view="pend">懸案</button>
         <button class="vn" data-view="ledger">台帳</button>
         <button class="vn" data-view="matrix">入金表</button>
@@ -585,6 +649,16 @@
           <div class="cash" id="cashBox"></div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section id="viewCard" hidden>
+    <div class="card-wrap">
+      <div class="find">
+        <span class="find-lbl">お名前で探す</span>
+        <input id="findInput" autocomplete="off" placeholder="名字の一部でも見つかります">
+      </div>
+      <div id="cardBody"></div>
     </div>
   </section>
 
@@ -811,18 +885,18 @@ function renderDash(){
     + `ボーナス頼みは毎月額の${BONUS_RATIO}回分を超えたら見直す。`;
 
   const ages = [];
-  late.forEach(r => ages.push({t:r.name, n:daysLate(r.due), note:r.note || '入金の確認が取れていません'}));
+  late.forEach(r => ages.push({t:r.name, id:r.id, n:daysLate(r.due), note:r.note || '入金の確認が取れていません'}));
   unmatched.forEach(u => ages.push({t:u.payer, n:daysLate(u.date), note:'誰の入金か分からないまま'}));
   prom.filter(p => p.day < TODAY).forEach(p => {
     const r = state.find(x => x.id===p.id);
-    ages.push({t:r.name, n:daysLate(p.day), note:'約束の日を過ぎています'});
+    ages.push({t:r.name, id:r.id, n:daysLate(p.day), note:'約束の日を過ぎています'});
   });
   const seen = new Set();
   const list = ages.filter(a => !seen.has(a.t) && seen.add(a.t)).sort((a,b) => b.n - a.n).slice(0,7);
 
   document.getElementById('agingList').innerHTML = list.length ? list.map(a => `
     <div class="age">
-      <div class="age-top"><span class="age-name">${a.t}</span><span class="age-days">${a.n}日</span></div>
+      <div class="age-top"><span class="age-name">${a.id ? `<span class="nmlink" data-card="${a.id}">${a.t}</span>` : a.t}</span><span class="age-days">${a.n}日</span></div>
       <div class="age-note">${a.note}</div>
       <div class="age-bar" style="width:${Math.min(a.n / 21, 1) * 100}%"></div>
     </div>`).join('') : '<div class="age-note" style="padding:12px 0">溜まっているものはありません。</div>';
@@ -910,7 +984,7 @@ function dummyMail(r){ return `kokyaku${String(r.id).padStart(3,'0')}@example.co
 function dunningSubject(r){ return `【ご確認のお願い】${r.due.replace('-','/')}期日のお支払いについて`; }
 function dunningBody(r){
   return `${r.name} 様\n\nいつもお世話になっております。\n`
-    + `${r.due.replace('-','月')}日が期日のお支払い（${yen(r.amount)}円）につきまして、`
+    + `${jpDate(r.due)}が期日のお支払い（${yen(r.amount)}円）につきまして、`
     + `本日時点で入金の確認が取れておりません。\n`
     + `すでにお手続き済みでしたら、行き違いのご連絡となりますことをお詫び申し上げます。\n`
     + `お手数ですが、ご入金の状況をご確認いただけますようお願い申し上げます。\n\n`
@@ -1070,7 +1144,7 @@ function renderRows(){
     return `<button class="lrow s-${st} ${r.paid?'paid':''}" data-row="${r.id}">
         <span class="bar"></span>
         <span class="due">${r.due.replace('-','/')}</span>
-        <span class="nm">${r.name}${testTag(r)}</span>
+        <span class="nm"><span class="nmlink" data-card="${r.id}">${r.name}</span>${testTag(r)}</span>
         <span class="ct">${r.ct}</span>
         <span class="dt">${r.dt}</span>
         <span class="am"><span>${yen(r.amount)}</span>${r.diff ? `<span class="am-diff ${r.diff<0?'d-short':'d-over'}">${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}</span>` : ''}</span>
@@ -1256,7 +1330,7 @@ function renderMatrix(){
         '<div class="line">この12ヶ月、遅れはありません。</div>'
       }<div class="line"><button class="btn" data-hist="${x.r.id}">これまでの記録を見る</button></div></div></td></tr>` : '';
     return `<tr data-mrow="${x.r.id}" tabindex="0">
-      <td class="nmcol"><span class="mrow-name">${x.r.name}${testTag(x.r)}</span><span class="mrow-sub">${x.r.ct}${x.r.kaishu ? ' ／ <b class="kaishu-tag">回収済み</b>' : ''}</span></td>
+      <td class="nmcol"><span class="mrow-name"><span class="nmlink" data-card="${x.r.id}">${x.r.name}</span>${testTag(x.r)}</span><span class="mrow-sub">${x.r.ct}${x.r.kaishu ? ' ／ <b class="kaishu-tag">回収済み</b>' : ''}</span></td>
       ${cells}
       <td class="col-n ${x.late ? 'n-late' : ''}">${x.late ? x.late + 'ヶ月' : '—'}</td>
       <td class="col-n ${x.late ? 'n-late' : ''}">${x.owed ? yen(x.owed) : '—'}</td>
@@ -1267,11 +1341,131 @@ function renderMatrix(){
   document.getElementById('mtxTable').innerHTML = head + '<tbody>' + body + '</tbody>';
 }
 
+// ─── お客さんカード:電話を受けながら1画面で答えられるようにする ─────────
+let cardId = null, findQ = '';
+
+// この人の未収(12ヶ月のうち「未」の回数×毎月額)
+function owedOf(r){
+  const cells = MONTHS.map((_, mi) => cellState(r, mi));
+  return {n: cells.filter(c => c === 'unpaid').length,
+          yen: cells.filter(c => c === 'unpaid').length * r.amount, cells};
+}
+// 「06月27日」ではなく「6月27日」と読めるように
+const jpDate = md => `${+md.slice(0,2)}月${+md.slice(3,5)}日`;
+// いちばん上に出す「いま伝えること」
+function sayOf(r){
+  const st = statusOf(r), o = owedOf(r), pr = PROMISES.find(p => p.id === r.id);
+  const money = `${yen(r.amount)}円`;
+  if(r.kaishu) return {tone:'overdue', main:`車両を回収済みです。残っているお支払いは ${yen(r.debt)}円。`,
+    sub:'この方には督促をしません。残債の扱いは決まっていません。'};
+  if(r.paid) return {tone:'ok', main:`今回の分（${money}）は入金を確認しています。`,
+    sub:`次は ${jpDate(r.due)}ごろ。${o.n ? `過去に未収が ${o.n}回 あります。` : 'これまで遅れはありません。'}`};
+  if(st === 'overdue') return {tone:'overdue',
+    main:`${daysLate(r.due)}日 遅れています。${jpDate(r.due)}が期日の ${money} が未入金です。`,
+    sub:`${o.n ? `未収は通算 ${o.n}回（${yen(o.yen)}円）。` : ''}${pr ? `${jpDate(pr.day)}に支払う約束があります。` : ''}${r.note || ''}`};
+  if(st === 'today') return {tone:'today', main:`今日が期日です。${money} をお預かりします。`,
+    sub:`受け取り方は ${r.method}。${r.note || ''}`};
+  if(st === 'hold') return {tone:'today',
+    main:`${pr ? jpDate(pr.day) : '後日'} に支払う約束です。${money}。`,
+    sub:`${pr && pr.memo ? pr.memo : ''}${o.n ? ` 未収は通算 ${o.n}回。` : ''}`};
+  return {tone:'ok', main:`遅れはありません。次は ${jpDate(r.due)}、${money} です。`,
+    sub:`${o.n ? `過去に未収が ${o.n}回 あります。` : 'これまで遅れたことはありません。'}${r.note || ''}`};
+}
+
+function openCard(id){ cardId = id; go('card'); }
+
+function renderCard(){
+  const box = document.getElementById('cardBody'); if(!box) return;
+  // 探している最中は候補を出す(電話中に名前で引けること)
+  if(findQ){
+    const q = findQ.trim();
+    const hits = state.filter(r => r.name.includes(q) || r.ct.includes(q) || normKana(r.name).includes(normKana(q)));
+    box.innerHTML = hits.length
+      ? `<div class="find-hits">${hits.map(r => { const s = statusOf(r); return `
+          <button class="hit" data-card="${r.id}">
+            <span class="nm">${r.name}</span><span class="ct">${r.ct}</span>
+            <span class="st ${s==='overdue'?'d-short':''}">${r.paid ? '入金あり' : (s==='overdue' ? daysLate(r.due)+'日 遅れ' : (s==='today' ? '本日が期日' : (s==='kaishu' ? '回収済み' : (s==='hold' ? '約束あり' : r.due.replace('-','/')))))}</span>
+          </button>`; }).join('')}</div>`
+      : `<div class="empty">「${q}」に当てはまる方が見つかりません。</div>`;
+    return;
+  }
+  const r = state.find(x => x.id === cardId);
+  if(!r){ box.innerHTML = `<div class="empty">お名前を入れて探すか、台帳や入金表からお名前を押してください。</div>`; return; }
+
+  const say = sayOf(r), o = owedOf(r), c = record(r), tel = dummyTel(r);
+  const paidTotal = c.paid * r.amount;
+  const log = pastEvents(r).concat(EVENTS.filter(e => e.cid === r.id)).reverse();
+  const mini = o.cells.map((cs, mi) => `<span class="mini-c">${MONTHS[mi].m}月<i class="cell c-${cs}">${MARK[cs]}</i></span>`).join('');
+
+  box.innerHTML = `<div class="cardv">
+    <div class="card-head">
+      <div>
+        <div class="card-name">${r.name}${testTag(r)}</div>
+        <div class="card-ct">${r.ct}　${r.no}回目 / 全48回　支払日 ${r.due.slice(3)}日　${r.method}</div>
+      </div>
+      <div class="card-actions">
+        <a class="card-tel" href="tel:${tel.replace(/-/g,'')}">${tel} に電話</a>
+        <button class="btn" data-mail="${r.id}">督促メール</button>
+      </div>
+    </div>
+
+    <div class="say s-${say.tone}">
+      <div class="say-main">${say.main}</div>
+      ${say.sub ? `<div class="say-sub">${say.sub}</div>` : ''}
+    </div>
+
+    <div class="card-cols">
+      <div class="card-sec">
+        <h4>お金のこと</h4>
+        <table class="kv">
+          <tr class="big"><td class="k">毎月の支払い</td><td class="v">${yen(r.amount)}円</td></tr>
+          <tr><td class="k">内訳</td><td class="v">元本 ${r.parts[0][1].toLocaleString('ja-JP')} / 手数料 ${r.parts[1][1].toLocaleString('ja-JP')}</td></tr>
+          <tr><td class="k">次の期日</td><td class="v">${jpDate(r.due)}</td></tr>
+          <tr><td class="k">これまでに払った</td><td class="v">${c.paid}回 ／ ${yen(paidTotal)}円</td></tr>
+          <tr><td class="k">残っている支払い</td><td class="v">${yen(r.debt)}円</td></tr>
+          ${o.n ? `<tr><td class="k">未収</td><td class="v d-short">${o.n}回 ／ ${yen(o.yen)}円</td></tr>` : ''}
+          ${r.diff ? `<tr><td class="k">過不足</td><td class="v ${r.diff<0?'d-short':'d-over'}">${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}円</td></tr>` : ''}
+          ${r.bonus > 10 ? `<tr><td class="k">ボーナス見込み</td><td class="v b-exp">残り ${yen(r.bonus)}円（毎月額の${bonusRatio(r).toFixed(1)}回分）</td></tr>` : ''}
+        </table>
+      </div>
+
+      <div class="card-sec">
+        <h4>支払いのようす（この12ヶ月）</h4>
+        <div class="mini">${mini}</div>
+        <div class="card-rec">
+          <span>払った <b>${c.paid}</b>/${c.months}回</span>
+          <span class="${c.late?'rec-late':''}">遅れ <b>${c.late}</b></span>
+          <span class="${c.unpaid?'rec-unpaid':''}">未収 <b>${c.unpaid}</b></span>
+          <span class="${c.maxRun>1?'rec-unpaid':''}">連続で滞った <b>${c.maxRun}</b>ヶ月</span>
+          <span class="${c.part?'rec-part':''}">金額ちがい <b>${c.part}</b></span>
+          <span class="${c.broken?'rec-unpaid':''}">約束を破った <b>${c.broken}</b></span>
+        </div>
+        <div class="card-do">
+          ${r.paid ? '<span class="hint">今回の分は入金ありとして記録済みです。</span>'
+                   : `<button class="btn-pay" data-cardpay="${r.id}">入金を記録する</button>`}
+          ${!r.paid && !r.kaishu ? `<button class="btn btn-weak" data-promise="${r.id}">後日の約束</button>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <div class="card-sec" style="margin-top:22px">
+      <h4>これまでの記録（新しい順・書き換えできません）</h4>
+      <div class="log">${log.map(e => `<div class="log-i">
+          <span class="when">${e.when}</span>
+          <span><span class="kind ${KIND_CLASS[e.kind]||'k-plain'}">${e.kind}</span>${e.text}
+            ${e.memo ? `<span class="log-memo">${e.memo}</span>` : ''}</span>
+          <span class="who">${e.who}</span></div>`).join('') ||
+        '<div class="log-i"><span class="when"></span><span>まだ記録はありません。</span><span class="who"></span></div>'}</div>
+    </div>
+  </div>`;
+}
+
 function render(){ renderTabs(); renderTotals(); renderRows(); renderUnmatched();
-                   renderDash(); renderPend(); renderMatrix(); }
+                   renderDash(); renderPend(); renderMatrix(); renderCard(); }
 
 function go(view){
   document.getElementById('viewDash').hidden = (view !== 'dash');
+  document.getElementById('viewCard').hidden = (view !== 'card');
   document.getElementById('viewPend').hidden = (view !== 'pend');
   document.getElementById('viewLedger').hidden = (view !== 'ledger');
   document.getElementById('viewMatrix').hidden = (view !== 'matrix');
@@ -1420,8 +1614,29 @@ document.addEventListener('click', e => {
     showUndo(`${r.name}さん の記録にメモを残しました`, () => {});
     return; }
 
+  // お名前を押したら、その人の全部を1画面で出す
+  const cardBtn = t.closest('[data-card]');
+  if(cardBtn){
+    const el = document.getElementById('findInput');
+    findQ = ''; if(el) el.value = '';
+    openCard(+cardBtn.dataset.card);
+    return;
+  }
+  // カードから入金の記録へ(台帳のその人を開く)
+  const cardpay = t.closest('[data-cardpay]');
+  if(cardpay){
+    const id = +cardpay.dataset.cardpay;
+    filter = 'all'; openId = id; resetPanel(state.find(x => x.id === id)); go('ledger');
+    return;
+  }
+
   const vnav = t.closest('.vn[data-view]');
-  if(vnav){ go(vnav.dataset.view); return; }
+  if(vnav){
+    if(vnav.dataset.view === 'card'){ cardId = null; findQ = ''; const el = document.getElementById('findInput'); if(el) el.value = ''; }
+    go(vnav.dataset.view);
+    if(vnav.dataset.view === 'card'){ const el = document.getElementById('findInput'); if(el) el.focus(); }
+    return;
+  }
 
   const srt = t.closest('[data-sort]');
   if(srt){ mtxSort = srt.dataset.sort;
@@ -1848,6 +2063,9 @@ function addCustomer(){
 
 document.getElementById('btnImport').addEventListener('click', openImport);
 document.getElementById('btnNew').addEventListener('click', openNewCustomer);
+document.getElementById('findInput').addEventListener('input', e => {
+  findQ = e.target.value; if(findQ) cardId = null; renderCard();
+});
 
 render();
 </script>
