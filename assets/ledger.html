@@ -854,8 +854,6 @@ const FILTERS = [
   {key:'overdue', label:'遅れ',    test:r => statusOf(r)==='overdue'},
   {key:'hold',    label:'約束した方', test:r => !r.paid && PROMISES.some(p => p.id === r.id), hidden:true},
   {key:'up',      label:'次回',    test:r => statusOf(r)==='up'},
-  {key:'kaishu',  label:'回収',     test:r => r.kaishu, auto:true},
-  {key:'bonus',   label:'ボーナス依存', test:heavyBonus, auto:true},
   {key:'diff',    label:'金額ちがい', test:bigDiff},
   {key:'settle',  label:'完済前',   test:needSettle, hidden:true},
   {key:'all',     label:'すべて',  test:() => true}
