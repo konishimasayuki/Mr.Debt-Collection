@@ -600,6 +600,8 @@
   .log-memo{display:block;font-size:12.5px;color:var(--ink-2);margin-top:1px;}
   .card-do{margin-top:18px;padding-top:14px;border-top:1px solid var(--rule-strong);
     display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .yomi-note{font-size:12px;color:var(--today);background:var(--today-bg);
+    border-left:3px solid var(--today);padding:7px 11px;margin:8px 0 0;line-height:1.6;}
   .nmlink{cursor:pointer;text-decoration:underline;text-decoration-color:var(--rule-strong);
     text-underline-offset:3px;}
   .nmlink:hover{text-decoration-color:var(--indigo);color:var(--indigo);}
@@ -694,6 +696,7 @@
       <span class="col-mt">回次</span>
       <span>記録</span>
     </div>
+    <p class="yomi-note" id="yomiNote"></p>
     <div id="rows"></div>
   </div>
   </section>
@@ -712,7 +715,7 @@
       <div class="mtx-sum" id="mtxSum"></div>
       <div class="mtx-sort">
         <button class="vn on" data-sort="late">滞りの多い順</button>
-        <button class="vn" data-sort="name">契約の順</button>
+        <button class="vn" data-sort="name">あいうえお順</button>
       </div>
     </div>
     <div class="mtx-wrap"><table class="mtx" id="mtxTable"></table></div>
@@ -1133,8 +1136,17 @@ function focusOther(){
 }
 
 function renderRows(){
-  const list = state.filter(FILTERS.find(f => f.key===filter).test);
+  const list = state.filter(FILTERS.find(f => f.key===filter).test).slice().sort(byKana);
   const el = document.getElementById('rows');
+  // 並びが中途半端に見える理由を隠さない。よみが入るほど正しい順になる。
+  const noYomi = list.filter(r => !hasYomi(r)).length;
+  const note = document.getElementById('yomiNote');
+  if(note){
+    note.style.display = noYomi ? '' : 'none';
+    note.innerHTML = noYomi
+      ? `あいうえお順に並べています。よみ（カナ）が未登録の方が ${noYomi}名 いて、その方々はお名前の文字の順で後ろに並びます。お名前を押した先で「よみ」を登録すると正しい位置に入ります。`
+      : '';
+  }
   if(!list.length){ el.innerHTML = '<div class="empty">この区分に該当する方はいません。</div>'; return; }
   el.innerHTML = list.map(r => {
     const st = statusOf(r);
@@ -1297,7 +1309,7 @@ function renderMatrix(){
     return {r, cells, late, owed:late * r.amount};
   });
   const sorted = rows.slice().sort((a, b) =>
-    mtxSort === 'late' ? (b.late - a.late) || (b.owed - a.owed) : a.r.id - b.r.id);
+    mtxSort === 'late' ? (b.late - a.late) || (b.owed - a.owed) : byKana(a.r, b.r));
 
   const owedAll = rows.reduce((s, x) => s + x.owed, 0);
   const people = rows.filter(x => x.late).length;
@@ -1342,6 +1354,16 @@ function renderMatrix(){
 }
 
 // ─── お客さんカード:電話を受けながら1画面で答えられるようにする ─────────
+// あいうえお順:漢字だけでは正しい五十音順にならないため、契約ごとに「よみ(カナ)」を持つ。
+// よみが入っている人はよみで、まだの人は漢字で並べる(入れるほど正確になる)。
+const KANA_SEED = {};
+SEED.forEach(s => { if(s.target) KANA_SEED[s.target] = s.payer; });   // 振込依頼人名(実カナ)から拾える分
+const yomiOf = r => normKana(r.kana || KANA_SEED[r.id] || '');
+const hasYomi = r => !!yomiOf(r);
+const jaOrder = new Intl.Collator('ja');
+const sortKey = r => yomiOf(r) || r.name;
+const byKana = (a, b) => jaOrder.compare(sortKey(a), sortKey(b)) || (a.id - b.id);
+
 let cardId = null, findQ = '';
 
 // この人の未収(12ヶ月のうち「未」の回数×毎月額)
@@ -1379,7 +1401,9 @@ function renderCard(){
   // 探している最中は候補を出す(電話中に名前で引けること)
   if(findQ){
     const q = findQ.trim();
-    const hits = state.filter(r => r.name.includes(q) || r.ct.includes(q) || normKana(r.name).includes(normKana(q)));
+    const hits = state.filter(r => r.name.includes(q) || r.ct.includes(q)
+        || normKana(r.name).includes(normKana(q)) || yomiOf(r).includes(normKana(q)))
+      .slice().sort(byKana);
     box.innerHTML = hits.length
       ? `<div class="find-hits">${hits.map(r => { const s = statusOf(r); return `
           <button class="hit" data-card="${r.id}">
@@ -1401,7 +1425,10 @@ function renderCard(){
     <div class="card-head">
       <div>
         <div class="card-name">${r.name}${testTag(r)}</div>
-        <div class="card-ct">${r.ct}　${r.no}回目 / 全48回　支払日 ${r.due.slice(3)}日　${r.method}</div>
+        <div class="card-ct">${hasYomi(r) ? yomiOf(r) + '　' : ''}${r.ct}　${r.no}回目 / 全48回　支払日 ${r.due.slice(3)}日　${r.method}</div>
+        ${hasYomi(r) ? '' : `<div class="card-ct"><input class="cmp-input" id="yomiInput" style="max-width:200px;font-size:14px;padding:4px 8px" placeholder="よみ（カナ）を登録">
+          <button class="btn" data-yomi="${r.id}">よみを登録</button>
+          <span class="nc-hint">あいうえお順に正しく並びます</span></div>`}
       </div>
       <div class="card-actions">
         <a class="card-tel" href="tel:${tel.replace(/-/g,'')}">${tel} に電話</a>
@@ -1622,6 +1649,21 @@ document.addEventListener('click', e => {
     openCard(+cardBtn.dataset.card);
     return;
   }
+  // よみ(カナ)を登録する
+  const yomiBtn = t.closest('[data-yomi]');
+  if(yomiBtn){
+    const r = state.find(x => x.id === +yomiBtn.dataset.yomi);
+    const el = document.getElementById('yomiInput');
+    const v = (el && el.value || '').trim();
+    if(!v){ alert('よみ（カナ）を入れてください。'); return; }
+    const before = r.kana;
+    r.kana = v;
+    logEvent(r, 'メモ', `よみを「${v}」として登録した`, '');
+    render();
+    showUndo(`${r.name}さん のよみを登録しました`, () => { r.kana = before; EVENTS.pop(); });
+    return;
+  }
+
   // カードから入金の記録へ(台帳のその人を開く)
   const cardpay = t.closest('[data-cardpay]');
   if(cardpay){
@@ -1982,6 +2024,7 @@ function closeNewCustomer(){ document.getElementById('newModal').hidden = true; 
 function renderNewCustomer(){
   document.getElementById('newBody').innerHTML = `
     <div class="cmp-line"><span class="cmp-k">お名前</span><input class="cmp-input" id="ncName" autocomplete="off"></div>
+    <div class="cmp-line"><span class="cmp-k">よみ</span><input class="cmp-input" id="ncKana" autocomplete="off" placeholder="カナ（あいうえお順に並べるため）"></div>
     <div class="cmp-line"><span class="cmp-k">車両</span><input class="cmp-input" id="ncCar" autocomplete="off"></div>
     <div class="cmp-line"><span class="cmp-k">毎月の額</span><input class="cmp-input nc-num" id="ncMonthly" inputmode="numeric" autocomplete="off" placeholder="0"><span class="nc-unit">円</span></div>
     <div class="cmp-line"><span class="cmp-k">車の代金</span><input class="cmp-input nc-num" id="ncPrice" inputmode="numeric" autocomplete="off" placeholder="任意（確認用）"><span class="nc-unit">円</span></div>
@@ -2049,6 +2092,7 @@ function addCustomer(){
     parts: [['元本相当', moto], ['手数料相当', fee]], n: '1/48',
     paid0: false, paid: false, paidWith: null, kaishu: false, diff: 0,
     no: 1, rest: 47, si, debt: amount*48 + bonusTotal, bonus: bonusTotal, bonusPaid: 0,
+    kana: (document.getElementById('ncKana').value||'').trim(),
     contact: (document.getElementById('ncContact').value||'').trim() };
   HIST[id] = MONTHS.map((_, i) => i < si ? 'none' : 'pending');
   state.push(row);
