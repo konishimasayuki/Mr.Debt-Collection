@@ -665,6 +665,10 @@
   .bonus-k{font-size:12px;color:var(--ink-2);letter-spacing:.06em;width:78px;flex:0 0 78px;}
   .bonus-v{font-variant-numeric:tabular-nums;font-weight:700;}
 
+  .prom{margin-top:14px;padding:12px 14px;border:1px solid var(--rule);background:#FFFDF6;max-width:520px;}
+  .prom-h{font-size:12px;letter-spacing:.06em;color:var(--ink-2);font-weight:600;margin-bottom:10px;}
+  .prom .pay-row{min-height:0;margin-bottom:8px;}
+  .prom .pay-row.commit{margin:10px 0 0;}
   .prom-date{font-family:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--rule-strong);
     border-radius:2px;background:#fff;color:var(--ink);}
   .prom-date:focus{outline:2px solid var(--indigo);outline-offset:1px;border-color:var(--indigo);}
@@ -1125,10 +1129,18 @@ function payBox(r){
       <input class="memo-input" id="memoInput" autocomplete="off" placeholder="必要なら書いてください（任意）"></div>
     <div class="pay-row commit"><span class="pay-label"></span>
       <button class="btn-pay" data-commit="${r.id}">${label}</button></div>
-    ${r.kaishu ? '' : `<div class="pay-row alt"><span class="pay-label"></span>
-      <span class="alt-label">入金がなかったときは</span>
-      <input class="prom-date" id="promDate" type="date" min="${isoToday()}" value="">
-      <button class="btn btn-weak" data-promise="${r.id}">この日に払う約束にする</button></div>`}`;
+    ${r.kaishu ? '' : `
+    <div class="prom">
+      <div class="prom-h">入金がなかったときは — 後日の約束</div>
+      <div class="pay-row"><span class="pay-label">いつ払う</span>
+        <input class="prom-date" id="promDate" type="date" min="${isoToday()}"></div>
+      <div class="pay-row"><span class="pay-label">いくら払う</span>
+        <input class="imp-input pay-input" id="promAmt" inputmode="numeric" autocomplete="off" placeholder="0"><span>円</span></div>
+      <div class="pay-row"><span class="pay-label">メモ</span>
+        <input class="memo-input" id="promMemo" autocomplete="off" placeholder="言われたこと（給料日後、家族が払う など）"></div>
+      <div class="pay-row commit"><span class="pay-label"></span>
+        <button class="btn-pay" data-promise="${r.id}">この約束を記録する</button></div>
+    </div>`}`;
 }
 
 function panelHtml(r){
@@ -1429,7 +1441,7 @@ function sayOf(r){
   if(st === 'today') return {tone:'today', main:`今日が期日です。${money} をお預かりします。`,
     sub:`受け取り方は ${r.method}。${r.note || ''}`};
   if(st === 'hold') return {tone:'today',
-    main:`${pr ? jpDate(pr.day) : '後日'} に支払う約束です。${money}。`,
+    main:`${pr ? jpDate(pr.day) : '後日'} に ${pr && pr.amount ? yen(pr.amount) : yen(r.amount)}円 を支払う約束です。`,
     sub:`${pr && pr.memo ? pr.memo : ''}${o.n ? ` 未収は通算 ${o.n}回。` : ''}`};
   return {tone:'ok', main:`遅れはありません。次は ${jpDate(r.due)}、${money} です。`,
     sub:`${o.n ? `過去に未収が ${o.n}回 あります。` : 'これまで遅れたことはありません。'}${r.note || ''}`};
@@ -1795,13 +1807,19 @@ document.addEventListener('click', e => {
     if(!iso){ alert('いつ払うと約束したか、日付を入れてください。'); if(dEl) dEl.focus(); return; }
     const day = iso.slice(5);                      // MM-DD
     if(day < TODAY){ alert('過ぎた日付は入れられません。'); return; }
+    const aEl = document.getElementById('promAmt');
+    const amt = +((aEl && aEl.value || '').replace(/[^0-9]/g, ''));
+    if(!amt){ alert('いくら払うと約束したか、金額を入れてください。'); if(aEl) aEl.focus(); return; }
+    const mEl = document.getElementById('promMemo');
+    const pmemo = (mEl && mEl.value || '').trim();
+    if(!pmemo){ alert('約束のときに言われたことをメモに残してください。'); if(mEl) mEl.focus(); return; }
     const beforeHold = r.hold, beforeNote = r.note;
-    r.hold = true; r.note = `${jpDate(day)}に支払う約束`;
-    PROMISES.push({id:r.id, day, heard:TODAY, memo});
+    r.hold = true; r.note = `${jpDate(day)}に ${yen(amt)}円 の約束`;
+    PROMISES.push({id:r.id, day, heard:TODAY, memo:pmemo, amount:amt});
     openId = null;
-    logAt(r, r.no, '約束', `${jpDate(day)}に支払うと約束`, memo);
+    logAt(r, r.no, '約束', `${jpDate(day)}に ${yen(amt)}円 を支払うと約束`, pmemo);
     render();
-    showUndo(`${r.name}さん を ${jpDate(day)}の約束にしました`,
+    showUndo(`${r.name}さん を ${jpDate(day)}・${yen(amt)}円 の約束にしました`,
       () => { r.hold = beforeHold; r.note = beforeNote;
               PROMISES.splice(PROMISES.findIndex(p => p.id===r.id && p.day===day), 1); EVENTS.pop(); });
     return;
