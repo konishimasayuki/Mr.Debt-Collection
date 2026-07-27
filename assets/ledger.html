@@ -848,7 +848,7 @@ const daysLate = due => Math.round((asDate(TODAY) - asDate(due)) / 86400000);
 const FILTERS = [
   {key:'today',   label:'入金待ち', test:r => statusOf(r)==='today'},
   {key:'overdue', label:'遅れ',    test:r => statusOf(r)==='overdue'},
-  {key:'hold',    label:'保留',    test:r => statusOf(r)==='hold'},
+  {key:'hold',    label:'約束した方', test:r => !r.paid && PROMISES.some(p => p.id === r.id), hidden:true},
   {key:'up',      label:'次回',    test:r => statusOf(r)==='up'},
   {key:'kaishu',  label:'回収',     test:r => r.kaishu, auto:true},
   {key:'bonus',   label:'ボーナス依存', test:heavyBonus, auto:true},
@@ -1031,7 +1031,8 @@ function dunningBody(r){
 }
 // 連絡欄は「追いかける相手」(遅れ・約束の相手)のときだけ出す。出番のないものは置かない。
 function contactBlock(r){
-  if(!['overdue','hold'].includes(statusOf(r))) return '';
+  const promised = PROMISES.some(p => p.id === r.id);
+  if(statusOf(r) !== 'overdue' && !promised) return '';
   const tel = dummyTel(r);
   return `<div class="contact">
     <h4>連絡する</h4>
@@ -1067,6 +1068,41 @@ function openContact(id){
   document.getElementById('contactModal').hidden = false;
 }
 function closeContact(){ document.getElementById('contactModal').hidden = true; }
+
+// 入金を記録する欄。台帳の行内でも、お客さんカードでも同じものを使う。
+function payBox(r){
+  const need = r.amount - r.diff;
+  const way = ['振込','現金','その他'].map(m =>
+    `<button class="${m===r.method?'on':''}" data-m="${m}" data-id="${r.id}">${m}</button>`).join('');
+  const money = [['plan', `${yen(r.amount)}円`]]
+    .concat(r.diff ? [['need', `${yen(need)}円`]] : [])
+    .concat([['other','ちがう金額']])
+    .map(([k,l]) => `<button class="${payChoice===k?'on':''}" data-choice="${k}">${l}</button>`).join('');
+  const hintText = payChoice==='need' ? '過不足をふくめた金額です'
+                 : payChoice==='plan' && r.diff ? '過不足はそのまま繰り越します' : '';
+  const hint = hintText ? `<div class="pay-row tight"><span class="pay-label"></span>
+                           <span class="hint">${hintText}</span></div>` : '';
+  const other = payChoice !== 'other' ? '' : `
+    <div class="pay-row"><span class="pay-label">入った金額</span>
+      <input class="imp-input pay-input" id="otherInput" inputmode="numeric" autocomplete="off" placeholder="0"><span>円</span></div>
+    <div class="pay-row"><span class="pay-label">差額は</span>
+      <span class="seg">
+        <button class="${diffMode==='carry'?'on':''}" data-dmode="carry">次へ繰り越す</button>
+        <button class="${diffMode==='settle'?'on':''}" data-dmode="settle">精算して0にする</button>
+        ${r.bonus > 10 ? `<button class="${diffMode==='bonus'?'on':''}" data-dmode="bonus">ボーナス分に充てる</button>` : ''}
+      </span></div>`;
+  const label = payChoice==='other' ? '入れた金額で記録する'
+              : `${yen(payChoice==='need' ? need : r.amount)}円 を記録する`;
+  return `
+    <div class="pay-row"><span class="pay-label">受け取り方</span><span class="seg">${way}</span></div>
+    <div class="pay-row"><span class="pay-label">金額</span><span class="seg">${money}</span></div>
+    ${hint}
+    ${other}
+    <div class="pay-row"><span class="pay-label">メモ</span>
+      <input class="memo-input" id="memoInput" autocomplete="off" placeholder="必要なら書いてください（任意）"></div>
+    <div class="pay-row commit"><span class="pay-label"></span>
+      <button class="btn-pay" data-commit="${r.id}">${label}</button></div>`;
+}
 
 function panelHtml(r){
   const rows = r.parts.map(p => `<tr><td class="k">${p[0]}</td><td class="v">${yen(p[1])}</td></tr>`).join('');
@@ -1133,19 +1169,7 @@ function panelHtml(r){
         <button class="linky" data-hist="${r.id}">すべての記録を見る →</button>
       </div>
       <div class="pay">
-        <div class="pay-row"><span class="pay-label">受け取り方</span><span class="seg">${way}</span></div>
-        <div class="pay-row"><span class="pay-label">金額</span><span class="seg">${money}</span></div>
-        ${hint}
-        ${other}
-        <div class="pay-row"><span class="pay-label">メモ</span>
-          <input class="memo-input" id="memoInput" autocomplete="off" placeholder="必要なら書いてください（任意）"></div>
-        <div class="pay-row commit"><span class="pay-label"></span>
-          <button class="btn-pay" data-commit="${r.id}">${label}</button></div>
-        <div class="pay-row alt"><span class="pay-label"></span>
-          <span class="alt-label">入金がなかったときは</span>
-          <button class="btn btn-weak" data-promise="${r.id}">後日の約束</button>
-          <button class="btn btn-weak" data-hold="${r.id}">保留にする</button>
-        </div>
+        ${payBox(r)}
         ${contactBlock(r)}
         ${diffBox}
         ${r.note ? `<div class="memo">${r.note}</div>` : ''}
@@ -1408,7 +1432,11 @@ function logAt(r, no, kind, text, memo){
   EVENTS.push({cid:r.id, no, when:stamp(), who:'管理者', kind, text, memo:memo || ''});
 }
 
-function openCard(id){ cardId = id; openNo = null; go('card'); }
+function openCard(id){
+  cardId = id; openNo = null; bonusOpen = false;
+  resetPanel(state.find(x => x.id === id));   // 前の方の選択を持ち越さない
+  go('card');
+}
 
 // 全42回をツリーで。回を開くと、その回のやり取りとメモ欄が出る。
 function termRows(r){
@@ -1514,11 +1542,15 @@ function renderCard(){
           <span class="${c.part?'rec-part':''}">金額ちがい <b>${c.part}</b></span>
           <span class="${c.broken?'rec-unpaid':''}">約束を破った <b>${c.broken}</b></span>
         </div>
-        <div class="card-do">
-          ${r.paid ? '<span class="hint">今回の分は入金ありとして記録済みです。</span>'
-                   : `<button class="btn-pay" data-cardpay="${r.id}">入金を記録する</button>`}
-          ${!r.paid && !r.kaishu ? `<button class="btn btn-weak" data-promise="${r.id}">後日の約束</button>` : ''}
-        </div>
+      </div>
+
+      <div class="card-sec">
+        <h4>入金を記録する</h4>
+        ${r.paid
+          ? `<div class="card-do"><span class="hint">今回の分（${yen(r.amount)}円）は入金ありとして記録済みです。取り消すときは台帳の行を押してください。</span></div>`
+          : (r.kaishu
+            ? '<div class="card-do"><span class="hint">回収済みのため、日々の入金記録の対象外です。</span></div>'
+            : `<div class="pay">${payBox(r)}</div>`)}
         ${r.bonus > 10 ? `
         <div class="bonus-box">
           <button class="disclose" data-bonusopen="1">${bonusOpen?'▾':'▸'} ボーナスの入金を記録する</button>
@@ -1658,6 +1690,7 @@ document.addEventListener('click', e => {
       showUndo(`${r.name}さん ${yen(r.amount)}円 を入金ありにしました`,
         () => { r.paid=false; r.paidWith=null; });
     }
+    render();   // 記録を足したあとに描き直す(pay内の描画は記録より前のため)
     return;
   }
 
@@ -1830,25 +1863,6 @@ document.addEventListener('click', e => {
   const payBtn = t.closest('[data-pay]');
   if(payBtn){ const r = state.find(x => x.id === +payBtn.dataset.pay), memo = takeMemo();
     pay(r.id); logEvent(r, '入金', `${yen(r.amount)}円 を受け取ったとして記録`, memo); return; }
-
-  const promise = t.closest('[data-promise]');
-  if(promise){
-    const r = state.find(x => x.id === +promise.dataset.promise), memo = takeMemo();
-    r.hold = true; r.note = '後日入金の約束(本日確認)';
-    openId = null; render();
-    logEvent(r, '約束', '後日支払うと約束', memo);
-    showUndo(`${r.name}さん を後日の約束にしました`, () => { r.hold=false; });
-    return;
-  }
-
-  const hold = t.closest('[data-hold]');
-  if(hold){
-    const r = state.find(x => x.id === +hold.dataset.hold), memo = takeMemo();
-    r.hold = true; openId = null; render();
-    logEvent(r, '保留', '保留にした', memo);
-    showUndo(`${r.name}さん を保留にしました`, () => { r.hold=false; });
-    return;
-  }
 
   // 電話の結果を記録(電話そのものは tel: リンクが発信する)
   const callrec = t.closest('[data-callrec]');
