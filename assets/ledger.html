@@ -665,6 +665,9 @@
   .bonus-k{font-size:12px;color:var(--ink-2);letter-spacing:.06em;width:78px;flex:0 0 78px;}
   .bonus-v{font-variant-numeric:tabular-nums;font-weight:700;}
 
+  .prom-date{font-family:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--rule-strong);
+    border-radius:2px;background:#fff;color:var(--ink);}
+  .prom-date:focus{outline:2px solid var(--indigo);outline-offset:1px;border-color:var(--indigo);}
   .yomi-note{font-size:12px;color:var(--today);background:var(--today-bg);
     border-left:3px solid var(--today);padding:7px 11px;margin:8px 0 0;line-height:1.6;}
   .nmlink{cursor:pointer;text-decoration:underline;text-decoration-color:var(--rule-strong);
@@ -1124,7 +1127,8 @@ function payBox(r){
       <button class="btn-pay" data-commit="${r.id}">${label}</button></div>
     ${r.kaishu ? '' : `<div class="pay-row alt"><span class="pay-label"></span>
       <span class="alt-label">入金がなかったときは</span>
-      <button class="btn btn-weak" data-promise="${r.id}">後日の約束</button></div>`}`;
+      <input class="prom-date" id="promDate" type="date" min="${isoToday()}" value="">
+      <button class="btn btn-weak" data-promise="${r.id}">この日に払う約束にする</button></div>`}`;
 }
 
 function panelHtml(r){
@@ -1410,6 +1414,7 @@ function owedOf(r){
 }
 // 「06月27日」ではなく「6月27日」と読めるように
 const jpDate = md => `${+md.slice(0,2)}月${+md.slice(3,5)}日`;
+const isoToday = () => `${YEAR}-${TODAY}`;
 // いちばん上に出す「いま伝えること」
 function sayOf(r){
   const st = statusOf(r), o = owedOf(r), pr = PROMISES.find(p => p.id === r.id);
@@ -1785,13 +1790,20 @@ document.addEventListener('click', e => {
   const promise = t.closest('[data-promise]');
   if(promise){
     const r = state.find(x => x.id === +promise.dataset.promise), memo = takeMemo();
+    const dEl = document.getElementById('promDate');
+    const iso = dEl && dEl.value;
+    if(!iso){ alert('いつ払うと約束したか、日付を入れてください。'); if(dEl) dEl.focus(); return; }
+    const day = iso.slice(5);                      // MM-DD
+    if(day < TODAY){ alert('過ぎた日付は入れられません。'); return; }
     const beforeHold = r.hold, beforeNote = r.note;
-    r.hold = true; r.note = '後日入金の約束(本日確認)';
+    r.hold = true; r.note = `${jpDate(day)}に支払う約束`;
+    PROMISES.push({id:r.id, day, heard:TODAY, memo});
     openId = null;
-    logAt(r, r.no, '約束', '後日支払うと約束', memo);
+    logAt(r, r.no, '約束', `${jpDate(day)}に支払うと約束`, memo);
     render();
-    showUndo(`${r.name}さん を後日の約束にしました`,
-      () => { r.hold = beforeHold; r.note = beforeNote; EVENTS.pop(); });
+    showUndo(`${r.name}さん を ${jpDate(day)}の約束にしました`,
+      () => { r.hold = beforeHold; r.note = beforeNote;
+              PROMISES.splice(PROMISES.findIndex(p => p.id===r.id && p.day===day), 1); EVENTS.pop(); });
     return;
   }
 
