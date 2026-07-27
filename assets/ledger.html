@@ -848,7 +848,7 @@ const daysLate = due => Math.round((asDate(TODAY) - asDate(due)) / 86400000);
 const FILTERS = [
   {key:'today',   label:'入金待ち', test:r => statusOf(r)==='today'},
   {key:'overdue', label:'遅れ',    test:r => statusOf(r)==='overdue'},
-  {key:'hold',    label:'保留',    test:r => statusOf(r)==='hold', auto:true},
+  {key:'hold',    label:'約束した方', test:r => !r.paid && PROMISES.some(p => p.id === r.id), hidden:true},
   {key:'up',      label:'次回',    test:r => statusOf(r)==='up'},
   {key:'kaishu',  label:'回収',     test:r => r.kaishu, auto:true},
   {key:'bonus',   label:'ボーナス依存', test:heavyBonus, auto:true},
@@ -1031,7 +1031,8 @@ function dunningBody(r){
 }
 // 連絡欄は「追いかける相手」(遅れ・約束の相手)のときだけ出す。出番のないものは置かない。
 function contactBlock(r){
-  if(!['overdue','hold'].includes(statusOf(r))) return '';
+  const promised = PROMISES.some(p => p.id === r.id);
+  if(statusOf(r) !== 'overdue' && !promised) return '';
   const tel = dummyTel(r);
   return `<div class="contact">
     <h4>連絡する</h4>
