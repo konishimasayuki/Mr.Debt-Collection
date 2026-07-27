@@ -1426,7 +1426,7 @@ function sayOf(r){
     sub:`${o.n ? `過去に未収が ${o.n}回 あります。` : 'これまで遅れたことはありません。'}${r.note || ''}`};
 }
 
-const TERM = 42;                 // 基本の支払い回数
+const TERM = 48;                 // 基本の支払い回数(48回=4年)
 const termOf = r => r.term || TERM;
 let openNo = null;               // 開いている回次
 
