@@ -665,6 +665,11 @@
   .bonus-k{font-size:12px;color:var(--ink-2);letter-spacing:.06em;width:78px;flex:0 0 78px;}
   .bonus-v{font-variant-numeric:tabular-nums;font-weight:700;}
 
+  .pay-tabs{display:flex;gap:2px;margin-bottom:12px;border-bottom:1px solid var(--rule);}
+  .pay-tab{font-family:inherit;font-size:13px;background:none;border:0;padding:7px 13px;
+    cursor:pointer;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .pay-tab:hover{color:var(--ink);}
+  .pay-tab.on{color:var(--ink);font-weight:700;border-bottom-color:var(--indigo);}
   .prom{margin-top:14px;padding:12px 14px;border:1px solid var(--rule);background:#FFFDF6;max-width:520px;}
   .prom-h{font-size:12px;letter-spacing:.06em;color:var(--ink-2);font-weight:600;margin-bottom:10px;}
   .prom .pay-row{min-height:0;margin-bottom:8px;}
@@ -975,7 +980,7 @@ function pastEvents(r){
     if(c === 'unpaid') out.push({cid:r.id, no, when, who:'—', kind:'未収', text:'入金の確認が取れないまま', memo:''});
   });
   PROMISES.filter(pr => pr.id === r.id).forEach(pr => {
-    out.push({cid:r.id, no:r.no, when:`2026/${pr.heard.replace('-','/')}`, who:'管理者', kind:'約束',
+    if(!pr.live) out.push({cid:r.id, no:r.no, when:`2026/${pr.heard.replace('-','/')}`, who:'管理者', kind:'約束',
               text:`${pr.day.replace('-','/')}に支払うと約束`, memo:pr.memo});
     if(pr.day < TODAY) out.push({cid:r.id, no:r.no, when:`2026/${pr.day.replace('-','/')}`, who:'—',
               kind:'不履行', text:'約束の日を過ぎても入金なし', memo:''});
@@ -1013,13 +1018,14 @@ function renderHist(){
 
 let otherId = null;
 
+let payTab = 'pay';
 let payKind = 'monthly';
 let payChoice = 'plan';   // plan（今回分） / need（過不足こみ） / other（ちがう金額）
 let diffMode  = 'carry';  // carry（繰り越す） / settle（精算する）
 let planOpen  = false;
 
 function resetPanel(r){
-  payKind = 'monthly'; payChoice = 'plan'; diffMode = 'carry';
+  payTab = 'pay'; payKind = 'monthly'; payChoice = 'plan'; diffMode = 'carry';
   planOpen = !!(r && r.diff && r.rest <= NOTICE_REMAIN);
 }
 
@@ -1080,8 +1086,31 @@ function openContact(id){
 function closeContact(){ document.getElementById('contactModal').hidden = true; }
 
 // 入金を記録する欄。台帳の行内でも、お客さんカードでも同じものを使う。
+// 入金 / 後日の約束 の小さな切り替え
+function payTabs(r){
+  if(r.kaishu) return '';
+  return `<div class="pay-tabs">
+    <button class="pay-tab ${payTab==='pay'?'on':''}" data-paytab="pay">入金を記録</button>
+    <button class="pay-tab ${payTab==='promise'?'on':''}" data-paytab="promise">後日の約束</button>
+  </div>`;
+}
+
 function payBox(r){
   const need = r.amount - r.diff;
+  // 後日の約束(日付・金額・メモ)。メモ欄は入金と共通。
+  if(payTab === 'promise' && !r.kaishu){
+    return `${payTabs(r)}
+      <div class="pay-row"><span class="pay-label">いつ払う</span>
+        <input class="prom-date" id="promDate" type="date" min="${isoToday()}"></div>
+      <div class="pay-row"><span class="pay-label">いくら払う</span>
+        <input class="imp-input pay-input" id="promAmt" inputmode="numeric" autocomplete="off" placeholder="0"><span>円</span></div>
+      <div class="pay-row"><span class="pay-label">メモ</span>
+        <input class="memo-input" id="memoInput" autocomplete="off" placeholder="言われたこと（給料日後、家族が払う など）"></div>
+      <div class="pay-row tight"><span class="pay-label"></span>
+        <span class="hint">約束すると、期日がその日に変わります。</span></div>
+      <div class="pay-row commit"><span class="pay-label"></span>
+        <button class="btn-pay" data-promise="${r.id}">この約束を記録する</button></div>`;
+  }
   // 毎月分とボーナスを1つの欄でまとめて扱う
   const kinds = r.bonus > 10
     ? `<div class="pay-row"><span class="pay-label">何の入金</span><span class="seg">
@@ -1120,7 +1149,7 @@ function payBox(r){
       </span></div>`;
   const label = payChoice==='other' ? '入れた金額で記録する'
               : `${yen(payChoice==='need' ? need : r.amount)}円 を記録する`;
-  return `${kinds}
+  return `${payTabs(r)}${kinds}
     <div class="pay-row"><span class="pay-label">受け取り方</span><span class="seg">${way}</span></div>
     <div class="pay-row"><span class="pay-label">金額</span><span class="seg">${money}</span></div>
     ${hint}
@@ -1129,18 +1158,7 @@ function payBox(r){
       <input class="memo-input" id="memoInput" autocomplete="off" placeholder="必要なら書いてください（任意）"></div>
     <div class="pay-row commit"><span class="pay-label"></span>
       <button class="btn-pay" data-commit="${r.id}">${label}</button></div>
-    ${r.kaishu ? '' : `
-    <div class="prom">
-      <div class="prom-h">入金がなかったときは — 後日の約束</div>
-      <div class="pay-row"><span class="pay-label">いつ払う</span>
-        <input class="prom-date" id="promDate" type="date" min="${isoToday()}"></div>
-      <div class="pay-row"><span class="pay-label">いくら払う</span>
-        <input class="imp-input pay-input" id="promAmt" inputmode="numeric" autocomplete="off" placeholder="0"><span>円</span></div>
-      <div class="pay-row"><span class="pay-label">メモ</span>
-        <input class="memo-input" id="promMemo" autocomplete="off" placeholder="言われたこと（給料日後、家族が払う など）"></div>
-      <div class="pay-row commit"><span class="pay-label"></span>
-        <button class="btn-pay" data-promise="${r.id}">この約束を記録する</button></div>
-    </div>`}`;
+`;
 }
 
 function panelHtml(r){
@@ -1435,6 +1453,14 @@ function sayOf(r){
     sub:'この方には督促をしません。残債の扱いは決まっていません。'};
   if(r.paid) return {tone:'ok', main:`今回の分（${money}）は入金を確認しています。`,
     sub:`次は ${jpDate(r.due)}ごろ。${o.n ? `過去に未収が ${o.n}回 あります。` : 'これまで遅れはありません。'}`};
+  // 約束がある人は、状態より先に「約束」を伝える
+  const live = PROMISES.filter(p => p.id === r.id).slice(-1)[0];
+  if(live && live.day >= TODAY) return {tone:'today',
+    main:`${jpDate(live.day)} に ${yen(live.amount || r.amount)}円 を支払う約束です。`,
+    sub:`${live.memo ? live.memo + ' ' : ''}${live.wasDue ? `もとの期日は ${jpDate(live.wasDue)}。` : ''}${o.n ? `未収は通算 ${o.n}回。` : ''}`};
+  if(live && live.day < TODAY) return {tone:'overdue',
+    main:`${jpDate(live.day)} に ${yen(live.amount || r.amount)}円 を払う約束でしたが、入金がありません。`,
+    sub:`約束から ${daysLate(live.day)}日 過ぎています。${live.memo || ''}`};
   if(st === 'overdue') return {tone:'overdue',
     main:`${daysLate(r.due)}日 遅れています。${jpDate(r.due)}が期日の ${money} が未入金です。`,
     sub:`${o.n ? `未収は通算 ${o.n}回（${yen(o.yen)}円）。` : ''}${pr ? `${jpDate(pr.day)}に支払う約束があります。` : ''}${r.note || ''}`};
@@ -1502,7 +1528,8 @@ function termRows(r){
     const ev = past.concat(EVENTS.filter(e => e.cid === r.id)).filter(e => e.no === k);
     // メモは畳まない。各回の下に新しい順で3件まで出す。
     const memos = ev.filter(e => e.kind === 'メモ' || e.memo)
-                    .map(e => ({when:e.when, who:e.who, text: e.kind === 'メモ' ? e.text : e.memo}));
+                    .map(e => ({when:e.when, who:e.who, kind:e.kind,
+                                text: e.kind === 'メモ' ? e.text : `${e.text}　${e.memo}`}));
     const shown = memos.slice(-3).reverse();
     const open = openNo === k;
     out.push(`<button class="term-r ${open?'on':''}" data-term="${r.id}:${k}">
@@ -1517,7 +1544,7 @@ function termRows(r){
       out.push(`<div class="term-memos">
         ${shown.map(m => `<div class="term-m">
             <span class="when">${m.when}</span>
-            <span class="mtxt">${m.text}</span>
+            <span class="mtxt"><span class="kind ${KIND_CLASS[m.kind]||'k-plain'}">${m.kind}</span>${m.text}</span>
             <span class="who">${m.who}</span></div>`).join('')}
         ${memos.length > 3 ? `<div class="term-m more">ほか ${memos.length - 3}件（回を押すとすべて出ます）</div>` : ''}
       </div>`);
@@ -1810,20 +1837,24 @@ document.addEventListener('click', e => {
     const aEl = document.getElementById('promAmt');
     const amt = +((aEl && aEl.value || '').replace(/[^0-9]/g, ''));
     if(!amt){ alert('いくら払うと約束したか、金額を入れてください。'); if(aEl) aEl.focus(); return; }
-    const mEl = document.getElementById('promMemo');
-    const pmemo = (mEl && mEl.value || '').trim();
-    if(!pmemo){ alert('約束のときに言われたことをメモに残してください。'); if(mEl) mEl.focus(); return; }
-    const beforeHold = r.hold, beforeNote = r.note;
-    r.hold = true; r.note = `${jpDate(day)}に ${yen(amt)}円 の約束`;
-    PROMISES.push({id:r.id, day, heard:TODAY, memo:pmemo, amount:amt});
-    openId = null;
-    logAt(r, r.no, '約束', `${jpDate(day)}に ${yen(amt)}円 を支払うと約束`, pmemo);
+    if(!memo){ alert('約束のときに言われたことをメモに残してください。'); 
+               const mi = document.getElementById('memoInput'); if(mi) mi.focus(); return; }
+    const beforeHold = r.hold, beforeNote = r.note, beforeDue = r.due;
+    // 約束した日を新しい期日にする。元の期日は記録に残す。
+    r.hold = false; r.due = day; r.note = `${jpDate(day)}に ${yen(amt)}円 の約束`;
+    PROMISES.push({id:r.id, day, heard:TODAY, memo, amount:amt, live:true, wasDue:beforeDue});
+    openId = null; payTab = 'pay';
+    logAt(r, r.no, '約束', `${jpDate(day)}に ${yen(amt)}円 を支払うと約束（期日を ${jpDate(beforeDue)} から ${jpDate(day)} に変更）`, memo);
     render();
-    showUndo(`${r.name}さん を ${jpDate(day)}・${yen(amt)}円 の約束にしました`,
-      () => { r.hold = beforeHold; r.note = beforeNote;
+    showUndo(`${r.name}さん を ${jpDate(day)}・${yen(amt)}円 の約束にしました（期日も更新）`,
+      () => { r.hold = beforeHold; r.note = beforeNote; r.due = beforeDue;
               PROMISES.splice(PROMISES.findIndex(p => p.id===r.id && p.day===day), 1); EVENTS.pop(); });
     return;
   }
+
+  // 入金 / 後日の約束 の切り替え
+  const ptab = t.closest('[data-paytab]');
+  if(ptab){ payTab = ptab.dataset.paytab; render(); return; }
 
   // 何の入金か(毎月の分 / ボーナス)の切り替え
   const pk = t.closest('[data-pkind]');
