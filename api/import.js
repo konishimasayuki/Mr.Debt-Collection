@@ -125,23 +125,36 @@ module.exports = async (req, res) => {
       : [];
     const already = new Set(done);
 
+    // 読みは苗字だけの登録でも当たるようにする。
+    // 銀行の振込依頼人名は「ｷﾑﾗ ﾕｳｽｹ」のように下の名前まで入ることが多いので、
+    // ぴったり一致しなければ「登録した読みで始まるか」で見る(長い読みを優先)。
+    const 迷い = '同じお名前が複数。確かめてください';
+    const 候補 = (k) => {
+      if (byKana[k]) return { cand: byKana[k], why: 'お名前が一致' };
+      let best = null;
+      Object.keys(byKana).forEach((key) => {
+        if (key.length >= 2 && k.startsWith(key) && (!best || key.length > best.length)) best = key;
+      });
+      return best ? { cand: byKana[best], why: `苗字の読み「${best}」で一致` } : { cand: [], why: '' };
+    };
+
     const rows = deposits.map((d) => {
       const k = normKana(d.payer);
       let contract_id = byAlias[k] || null, why = contract_id ? '前に紐付けたお名前' : '';
-      if (!contract_id && byKana[k]) {
-        const cand = byKana[k];
-        if (cand.length === 1) { contract_id = cand[0].id; why = 'お名前が一致'; }
-        else {
+      if (!contract_id) {
+        const m = 候補(k);
+        if (m.cand.length === 1) { contract_id = m.cand[0].id; why = m.why; }
+        else if (m.cand.length > 1) {
           // 同姓が実在する。金額で判断し、決めきれないものは人に回す
-          const fit = cand.filter((c) => c.monthly_amount === d.amount);
-          if (fit.length === 1) { contract_id = fit[0].id; why = '同姓が複数。金額で判断'; }
-          else why = '同じお名前が複数。確かめてください';
+          const fit = m.cand.filter((c) => c.monthly_amount === d.amount);
+          if (fit.length === 1) { contract_id = fit[0].id; why = m.why + '。同姓が複数のため金額で判断'; }
+          else why = 迷い;
         }
       }
       const c = contract_id ? contracts.find((x) => x.id === contract_id) : null;
       return { ...d, contract_id, name: c ? c.name : null, why,
                取込済み: already.has(d.import_key),
-               auto: !!contract_id && why !== '同じお名前が複数。確かめてください' };
+               auto: !!contract_id && why !== 迷い };
     });
 
     const sum = rows.reduce((s, r) => s + r.amount, 0);

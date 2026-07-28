@@ -1249,7 +1249,9 @@ function renderRows(){
   if(note){
     note.style.display = noYomi ? '' : 'none';
     note.innerHTML = noYomi
-      ? `あいうえお順に並べています。よみ（カナ）が未登録の方が ${noYomi}名 いて、その方々はお名前の文字の順で後ろに並びます。お名前を押した先で「よみ」を登録すると正しい位置に入ります。`
+      ? `あいうえお順に並べています。よみ（カナ）が未登録の方が ${noYomi}名 いて、その方々はお名前の文字の順で後ろに並びます。`
+        + `よみは銀行明細の突き合わせにも使います。`
+        + `<a href="/api/yomi" style="color:inherit">よみをまとめて入れる →</a>`
       : '';
   }
   if(!list.length){ el.innerHTML = '<div class="empty">この区分に該当する方はいません。</div>'; return; }
