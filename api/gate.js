@@ -11,14 +11,7 @@
 //    本運用の前に、パスワードを環境変数へ、またはVercelのDeployment Protectionへ移行すること。
 const fs = require('fs');
 const path = require('path');
-
-const USER = 'a';
-const PASS = 'a';
-
-// セッションCookieの名前と値。値は固定(暫定)。本運用では環境変数の秘密鍵でHMAC署名にする。
-const COOKIE_NAME = 'nyukin_session';
-const SESSION_TOKEN = 'ok.v1.8f3c1a9e5b2d47';
-const MAX_AGE = 60 * 60 * 8; // 8時間
+const { USER, PASS, COOKIE_NAME, SESSION_TOKEN, MAX_AGE, hasSession } = require('./_auth');
 
 let cached = null;
 function loadHtml() {
@@ -33,14 +26,6 @@ function loadHtml() {
   }
   if (!cached) throw new Error('assets/ledger.html が見つかりません');
   return cached;
-}
-
-function hasSession(req) {
-  const raw = req.headers['cookie'] || '';
-  return raw.split(';').some((c) => {
-    const [k, v] = c.trim().split('=');
-    return k === COOKIE_NAME && v === SESSION_TOKEN;
-  });
 }
 
 // POSTボディ(application/x-www-form-urlencoded)を取り出す。

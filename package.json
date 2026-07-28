@@ -1,6 +1,9 @@
 {
-  "name": "nyukin-daicho-mock",
-  "version": "0.0.1",
+  "name": "nyukin-daicho",
+  "version": "0.1.0",
   "private": true,
-  "description": "入金管理台帳モックの認証つき配信(Vercel)"
+  "description": "入金管理台帳(認証つき配信 + データ保存)",
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  }
 }

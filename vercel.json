@@ -5,9 +5,11 @@
       "src": "api/gate.js",
       "use": "@vercel/node",
       "config": { "includeFiles": ["assets/ledger.html"] }
-    }
+    },
+    { "src": "api/setup.js", "use": "@vercel/node" }
   ],
   "routes": [
+    { "src": "/api/setup", "dest": "/api/setup.js" },
     { "src": "/.*", "dest": "/api/gate.js" }
   ]
 }
