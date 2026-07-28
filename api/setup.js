@@ -9,15 +9,15 @@ module.exports = async (req, res) => {
   try {
     const sql = db();
     for (const stmt of STATEMENTS) {
-      await sql.query(stmt);
+      await sql(stmt);
     }
     // 何ができたかを返す
-    const tables = await sql.query(
+    const tables = await sql(
       `SELECT table_name FROM information_schema.tables
         WHERE table_schema='public' ORDER BY table_name`);
     const counts = {};
     for (const t of tables.map(r => r.table_name)) {
-      const c = await sql.query(`SELECT count(*)::int AS n FROM "${t}"`);
+      const c = await sql(`SELECT count(*)::int AS n FROM "${t}"`);
       counts[t] = c[0].n;
     }
     ok(res, { done: true, 実行した文: STATEMENTS.length, テーブル: counts });

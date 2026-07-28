@@ -12,13 +12,19 @@ function db() {
   return sql;
 }
 
-// エラーの中身は画面に出さない(接続情報が混ざりうるため)。記録には残す。
+// 原因が分からないと直せないので、ログイン済みの相手には理由を返す。
+// 接続情報は含めない(メッセージと符号だけを渡す)。
 function fail(res, e, where) {
   console.error(`[${where}]`, e);
   res.statusCode = 500;
   res.setHeader('Content-Type', 'application/json; charset=UTF-8');
   res.setHeader('Cache-Control', 'no-store');
-  res.end(JSON.stringify({ error: 'データベースの処理に失敗しました。' }));
+  res.end(JSON.stringify({
+    error: 'データベースの処理に失敗しました。',
+    どこで: where,
+    理由: e && e.message ? String(e.message).slice(0, 300) : '不明',
+    符号: (e && e.code) || null,
+  }));
 }
 
 function ok(res, body) {
