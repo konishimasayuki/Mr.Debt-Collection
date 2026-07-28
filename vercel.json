@@ -26,6 +26,10 @@
     {
       "src": "api/opening.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/contracts.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
@@ -40,6 +44,10 @@
     {
       "src": "/api/opening",
       "dest": "/api/opening.js"
+    },
+    {
+      "src": "/api/contracts",
+      "dest": "/api/contracts.js"
     },
     {
       "src": "/.*",
