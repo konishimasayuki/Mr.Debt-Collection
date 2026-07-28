@@ -1692,55 +1692,23 @@ document.addEventListener('click', e => {
   const cm = t.closest('[data-commit]');
   if(cm){
     const r = state.find(x => x.id === +cm.dataset.commit), memo = takeMemo();
-    // ボーナスの入金は見込みから差し引く(毎月分の請求とは別勘定)
     if(payKind === 'bonus' && r.bonus > 10){
       const v = +((document.getElementById('otherInput') || {}).value || '').replace(/[^0-9]/g,'');
       if(!v){ alert('入った金額を入れてください。'); return; }
-      const bBefore = r.bonus, pBefore = r.bonusPaid;
-      r.bonus = Math.max(0, r.bonus - v); r.bonusPaid++;
-      logAt(r, r.no, 'ボーナス', `ボーナス入金 ${yen(v)}円 を受け取り（見込みの残り ${yen(r.bonus)}円）`, memo);
-      payKind = 'monthly';
-      render();
-      showUndo(`${r.name}さん のボーナス入金 ${yen(v)}円 を記録しました`,
-        () => { r.bonus = bBefore; r.bonusPaid = pBefore; EVENTS.pop(); });
+      save({種類:'ボーナス', id:r.id, amount:v, memo})
+        .then(o => { if(o){ payKind='monthly'; showUndo(`${r.name}さん のボーナス入金 ${yen(v)}円 を記録しました`,
+          () => save({種類:'取消', id:r.id})); } });
       return;
     }
-    const before = r.diff;
+    let v = r.amount, mode = null;
     if(payChoice === 'other'){
-      const v = +(document.getElementById('otherInput').value || '').replace(/[^0-9]/g,'');
+      v = +(document.getElementById('otherInput').value || '').replace(/[^0-9]/g,'');
       if(!v){ alert('入った金額を入れてください。'); return; }
-      const d = v - r.amount, bBefore = r.bonus;
-      let tail;
-      if(diffMode === 'bonus' && d > 0){
-        const use = Math.min(d, r.bonus);
-        r.bonus -= use; r.bonusPaid++;
-        r.diff = before + (d - use);
-        tail = `${yen(use)}円 をボーナス分に充てました（見込みの残り ${yen(r.bonus)}円）`;
-      } else {
-        r.diff = diffMode === 'carry' ? before + d : 0;
-        tail = diffMode === 'settle' ? '差額を精算しました'
-          : (r.diff === 0 ? '過不足はなくなりました'
-             : `過不足は ${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}円 になりました`);
-      }
-      pay(r.id, true);
-      logEvent(r, diffMode === 'bonus' ? 'ボーナス' : '差額',
-        `${yen(v)}円 を受け取り（請求 ${yen(r.amount)}円）。${tail}`, memo);
-      showUndo(`${r.name}さん ${yen(v)}円 を記録。${tail}`,
-        () => { r.paid=false; r.paidWith=null; r.diff=before;
-                if(r.bonus !== bBefore){ r.bonus = bBefore; r.bonusPaid--; } });
-    } else if(payChoice === 'need'){
-      const v = r.amount - before;
-      r.diff = 0; pay(r.id, true);
-      logEvent(r, '入金', `${yen(v)}円 を受け取り、過不足を0にした`, memo);
-      showUndo(`${r.name}さん ${yen(v)}円 を記録し、過不足を0にしました`,
-        () => { r.paid=false; r.paidWith=null; r.diff=before; });
-    } else {
-      pay(r.id, true);
-      logEvent(r, '入金', `${yen(r.amount)}円 を受け取ったとして記録`, memo);
-      showUndo(`${r.name}さん ${yen(r.amount)}円 を入金ありにしました`,
-        () => { r.paid=false; r.paidWith=null; });
-    }
-    render();   // 記録を足したあとに描き直す(pay内の描画は記録より前のため)
+      mode = diffMode === 'settle' ? '精算' : null;
+    } else if(payChoice === 'need'){ v = r.amount - r.diff; mode = '精算'; }
+    save({種類:'入金', id:r.id, amount:v, method:r.method, 差額:mode, memo})
+      .then(o => { if(o) showUndo(`${r.name}さん ${yen(v)}円 を記録しました`,
+        () => save({種類:'取消', id:r.id})); });
     return;
   }
 
@@ -1799,26 +1767,14 @@ document.addEventListener('click', e => {
   const promise = t.closest('[data-promise]');
   if(promise){
     const r = state.find(x => x.id === +promise.dataset.promise), memo = takeMemo();
-    const dEl = document.getElementById('promDate');
-    const iso = dEl && dEl.value;
-    if(!iso){ alert('いつ払うと約束したか、日付を入れてください。'); if(dEl) dEl.focus(); return; }
-    const day = iso.slice(5);                      // MM-DD
-    if(day < TODAY){ alert('過ぎた日付は入れられません。'); return; }
-    const aEl = document.getElementById('promAmt');
-    const amt = +((aEl && aEl.value || '').replace(/[^0-9]/g, ''));
-    if(!amt){ alert('いくら払うと約束したか、金額を入れてください。'); if(aEl) aEl.focus(); return; }
-    if(!memo){ alert('約束のときに言われたことをメモに残してください。'); 
-               const mi = document.getElementById('memoInput'); if(mi) mi.focus(); return; }
-    const beforeHold = r.hold, beforeNote = r.note, beforeDue = r.due;
-    // 約束した日を新しい期日にする。元の期日は記録に残す。
-    r.hold = false; r.due = day; r.note = `${jpDate(day)}に ${yen(amt)}円 の約束`;
-    PROMISES.push({id:r.id, day, heard:TODAY, memo, amount:amt, live:true, wasDue:beforeDue});
-    openId = null; payTab = 'pay';
-    logAt(r, r.no, '約束', `${jpDate(day)}に ${yen(amt)}円 を支払うと約束（期日を ${jpDate(beforeDue)} から ${jpDate(day)} に変更）`, memo);
-    render();
-    showUndo(`${r.name}さん を ${jpDate(day)}・${yen(amt)}円 の約束にしました（期日も更新）`,
-      () => { r.hold = beforeHold; r.note = beforeNote; r.due = beforeDue;
-              PROMISES.splice(PROMISES.findIndex(p => p.id===r.id && p.day===day), 1); EVENTS.pop(); });
+    const iso = (document.getElementById('promDate') || {}).value;
+    const amt = +(((document.getElementById('promAmt') || {}).value) || '').replace(/[^0-9]/g,'');
+    if(!iso){ alert('いつ払うと約束したか、日付を入れてください。'); return; }
+    if(!amt){ alert('いくら払うと約束したか、金額を入れてください。'); return; }
+    if(!memo){ alert('約束のときに言われたことをメモに残してください。'); return; }
+    save({種類:'約束', id:r.id, day:iso, amount:amt, memo})
+      .then(o => { if(o){ payTab='pay'; openId=null;
+        showUndo(`${r.name}さん を ${iso} ・${yen(amt)}円 の約束にしました`, null); } });
     return;
   }
 
@@ -1845,40 +1801,27 @@ document.addEventListener('click', e => {
   const termAdd = t.closest('[data-termadd]');
   if(termAdd){
     const [id, k] = termAdd.dataset.termadd.split(':').map(Number);
-    const r = state.find(x => x.id === id);
     const el = document.getElementById('termMemo');
     const v = (el && el.value || '').trim();
     if(!v){ alert('メモを入れてください。'); return; }
-    logAt(r, k, 'メモ', v, '');
-    renderCard();
-    showUndo(`${r.name}さん ${k}回目 にメモを残しました`, () => { EVENTS.pop(); renderCard(); });
+    save({種類:'メモ', id, no:k, memo:v});
     return;
   }
   // この方についてのメモ(書き直せる欄)
   const cmemo = t.closest('[data-custmemo]');
   if(cmemo){
-    const r = state.find(x => x.id === +cmemo.dataset.custmemo);
     const el = document.getElementById('custMemo');
-    const before = r.memo || '';
-    r.memo = (el && el.value || '').trim();
-    logAt(r, r.no, 'メモ', 'この方についてのメモを更新した', '');
-    renderCard();
-    showUndo(`${r.name}さん のメモを保存しました`, () => { r.memo = before; EVENTS.pop(); renderCard(); });
+    save({種類:'人メモ', id:+cmemo.dataset.custmemo, memo:(el && el.value || '')});
     return;
   }
 
   // よみ(カナ)を登録する
   const yomiBtn = t.closest('[data-yomi]');
   if(yomiBtn){
-    const r = state.find(x => x.id === +yomiBtn.dataset.yomi);
     const el = document.getElementById('yomiInput');
     const v = (el && el.value || '').trim();
     if(!v){ alert('よみ（カナ）を入れてください。'); return; }
-    const before = r.kana;
-    r.kana = v;
-    logEvent(r, 'メモ', `よみを「${v}」として登録した`, '');
-    render();
-    showUndo(`${r.name}さん のよみを登録しました`, () => { r.kana = before; EVENTS.pop(); });
+    save({種類:'よみ', id:+yomiBtn.dataset.yomi, kana:v});
     return;
   }
 
@@ -2299,6 +2242,36 @@ function addCustomer(){
 
 document.getElementById('btnImport').addEventListener('click', openImport);
 document.getElementById('btnNew').addEventListener('click', openNewCustomer);
+
+// ── 保存:記録はすべてサーバーへ ─────────────────────────
+// 保存できたら、必ずサーバーから読み直して画面と中身を合わせる。
+let saving = false;
+async function save(payload){
+  if(saving) return false;
+  saving = true;
+  try{
+    const r = await fetch('/api/record', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const d = await r.json();
+    if(d.error){ alert('保存できませんでした。\n' + (d.理由 || d.error)); return false; }
+    await reload();
+    return true;
+  }catch(e){
+    alert('保存できませんでした。通信を確認してください。\n' + (e.message || e));
+    return false;
+  }finally{ saving = false; }
+}
+
+// サーバーから読み直す(画面の見ている場所は保つ)
+async function reload(){
+  const r = await fetch('/api/contracts', {headers:{'Accept':'application/json'}});
+  const d = await r.json();
+  if(d.error) throw new Error(d.理由 || d.error);
+  DATA = d.DATA; HIST = d.HIST; MONTHS = d.MONTHS; PROMISES = d.PROMISES;
+  EVENTS.length = 0; (d.EVENTS || []).forEach(e => EVENTS.push(e));
+  state = DATA.map(x => ({...x, paid: !!x.paid0, paidWith: x.paid0 ? x.method : null}));
+  render();
+}
 
 // ── 起動:サーバーから読み込んでから描く ─────────────────
 function bootMessage(html){
