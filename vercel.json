@@ -4,12 +4,38 @@
     {
       "src": "api/gate.js",
       "use": "@vercel/node",
-      "config": { "includeFiles": ["assets/ledger.html"] }
+      "config": {
+        "includeFiles": [
+          "assets/ledger.html"
+        ]
+      }
     },
-    { "src": "api/setup.js", "use": "@vercel/node" }
+    {
+      "src": "api/setup.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/seed.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "api/data/**"
+        ]
+      }
+    }
   ],
   "routes": [
-    { "src": "/api/setup", "dest": "/api/setup.js" },
-    { "src": "/.*", "dest": "/api/gate.js" }
+    {
+      "src": "/api/setup",
+      "dest": "/api/setup.js"
+    },
+    {
+      "src": "/api/seed",
+      "dest": "/api/seed.js"
+    },
+    {
+      "src": "/.*",
+      "dest": "/api/gate.js"
+    }
   ]
 }
