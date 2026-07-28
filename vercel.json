@@ -30,6 +30,10 @@
     {
       "src": "api/contracts.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/record.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
@@ -48,6 +52,10 @@
     {
       "src": "/api/contracts",
       "dest": "/api/contracts.js"
+    },
+    {
+      "src": "/api/record",
+      "dest": "/api/record.js"
     },
     {
       "src": "/.*",
