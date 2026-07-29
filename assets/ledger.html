@@ -107,6 +107,27 @@
   .um-amount{font-variant-numeric:tabular-nums;font-weight:600;width:92px;text-align:right;}
   .um-payer{font-family:var(--mono);font-size:13px;background:var(--paper-2);padding:2px 7px;border:1px solid var(--rule);}
   .um-arrow{color:var(--ink-3);}
+  /* ── 電話帳ふうの索引 ───────────────── */
+  .kana-index{
+    display:flex;gap:4px;flex-wrap:wrap;padding:8px 20px;background:var(--paper);
+    position:sticky;top:0;z-index:4;border-bottom:1px solid var(--rule);
+  }
+  .kana-index:empty{display:none;}
+  .kx{
+    font:inherit;font-size:13px;padding:5px 10px;cursor:pointer;
+    background:var(--paper-2);border:1px solid var(--rule-strong);color:var(--ink);
+    display:flex;align-items:center;gap:5px;
+  }
+  .kx:hover{background:#EFE9DA;}
+  .kx.off{opacity:.35;cursor:default;}
+  .kx .kn{font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums;}
+  .gyo-h{
+    padding:7px 20px;background:var(--paper-2);border-top:1px solid var(--rule-strong);
+    border-bottom:1px solid var(--rule);font-size:13px;font-weight:700;letter-spacing:.1em;
+    color:var(--ink-2);display:flex;gap:10px;align-items:baseline;scroll-margin-top:52px;
+  }
+  .gyo-h .gyo-n{font-size:11.5px;font-weight:400;color:var(--ink-3);}
+
   .um-guess{font-size:13.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .um-guess .sub{color:var(--ink-2);font-size:12.5px;}
   .um-pick{
@@ -581,7 +602,62 @@
   .say-sub{font-size:13.5px;color:var(--ink-2);margin-top:5px;line-height:1.7;}
 
   /* 左=お金・ようす・メモ / 右=支払いの記録(全48回) */
-  .card-cols{display:grid;grid-template-columns:minmax(280px,1fr) minmax(400px,1.25fr);
+  /* ── お金のこと(横一列の帯)───────────── */
+  .money-strip{
+    display:flex;flex-wrap:wrap;gap:0;margin:0 0 18px;border:1px solid var(--rule);
+    background:var(--paper-2);
+  }
+  .money-strip .ms{
+    display:flex;flex-direction:column;gap:2px;padding:9px 14px;min-width:120px;
+    border-right:1px solid var(--rule);
+  }
+  .money-strip .ms:last-child{border-right:0;}
+  .money-strip .ms b{font-size:15px;font-variant-numeric:tabular-nums;}
+  .money-strip .ms i{font-style:normal;font-size:11.5px;color:var(--ink-2);}
+  .money-strip .ms-rec{flex:1;}
+  .money-strip .ms-rec b{font-size:13px;font-weight:400;}
+
+  /* ── 入金カレンダー ───────────────── */
+  .cal{border:1px solid var(--rule-strong);background:var(--paper);overflow-x:auto;}
+  .cal-row{display:grid;grid-template-columns:54px repeat(12,minmax(38px,1fr));
+    border-bottom:1px solid var(--rule);}
+  .cal-row:last-child{border-bottom:0;}
+  .cal-head{background:var(--paper-2);border-bottom:1px solid var(--rule-strong);}
+  .cal-head .cal-c{font-size:11.5px;color:var(--ink-2);padding:5px 0;text-align:center;
+    border-right:1px solid var(--rule);}
+  .cal-y{display:flex;align-items:center;justify-content:center;font-size:12px;
+    color:var(--ink-2);background:var(--paper-2);border-right:1px solid var(--rule-strong);
+    font-variant-numeric:tabular-nums;}
+  .cal-c{
+    position:relative;font:inherit;padding:8px 2px 12px;border:0;border-right:1px solid var(--rule);
+    background:transparent;cursor:pointer;text-align:center;min-height:46px;
+  }
+  .cal-c:last-child{border-right:0;}
+  .cal-none{background:repeating-linear-gradient(45deg,transparent,transparent 4px,#F0EDE5 4px,#F0EDE5 8px);cursor:default;}
+  .cal-d{font-size:15px;font-variant-numeric:tabular-nums;}
+  .cal-no{position:absolute;right:3px;bottom:2px;font-size:9.5px;color:var(--ink-3);}
+  .cal-paid{background:#DFEBE3;color:var(--paid);}
+  .cal-unpaid{background:#F2DAD5;color:var(--overdue);font-weight:700;}
+  .cal-due{background:var(--today-bg);color:var(--today);font-weight:700;}
+  .cal-pending{background:var(--paper);color:var(--ink-2);}
+  .cal-c.is-now::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;
+    background:var(--indigo);}
+  .cal-c.is-now .cal-d{font-weight:700;}
+  .cal-c.on{outline:2px solid var(--indigo);outline-offset:-2px;}
+  .cal-c:hover:not(.cal-none){filter:brightness(.96);}
+  .cal-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:8px 2px;
+    font-size:12px;color:var(--ink-2);}
+  .cal-legend .lg{display:inline-block;width:11px;height:11px;margin-right:4px;
+    vertical-align:-1px;border:1px solid var(--rule-strong);}
+  .lg-paid{background:#DFEBE3;} .lg-unpaid{background:#F2DAD5;}
+  .lg-due{background:var(--today-bg);} .lg-pending{background:var(--paper);}
+  .lg-now{background:var(--paper);border-bottom:3px solid var(--indigo);}
+  .cal-edit{border:1px solid var(--indigo);background:var(--paper);padding:12px 14px;margin-top:12px;}
+  .cal-edit-h{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;
+    padding-bottom:8px;border-bottom:1px solid var(--rule);}
+  .cal-x{margin-left:auto;}
+
+  .card-cols{display:grid;grid-template-columns:7fr 3fr;
     gap:30px;margin-top:20px;align-items:start;}
   .card-left{display:flex;flex-direction:column;gap:22px;min-width:0;}
   .card-right{min-width:0;}
@@ -589,6 +665,8 @@
   @media (max-width:900px){
     .card-cols{grid-template-columns:1fr;gap:22px;}
     .card-right .terms{max-height:none;}
+    .cal-row{grid-template-columns:44px repeat(12,minmax(30px,1fr));}
+    .cal-d{font-size:13px;}
   }
   .card-sec h4{margin:0 0 8px;font-size:12px;letter-spacing:.1em;color:var(--ink-2);font-weight:600;
     border-bottom:1px solid var(--rule-strong);padding-bottom:6px;}
@@ -757,6 +835,7 @@
           <span>記録</span>
         </div>
         <p class="yomi-note" id="yomiNote"></p>
+        <div class="kana-index" id="kanaIndex"></div>
         <div id="rows"></div>
       </div>
     </div>
@@ -1291,8 +1370,14 @@ function renderRows(){
         + `<a href="/api/yomi" style="color:inherit">よみをまとめて入れる →</a>`
       : '';
   }
-  if(!list.length){ el.innerHTML = '<div class="empty">この区分に該当する方はいません。</div>'; return; }
-  el.innerHTML = list.map(r => {
+  const idx = document.getElementById('kanaIndex');
+  if(!list.length){
+    el.innerHTML = '<div class="empty">この区分に該当する方はいません。' + otherTabsHint() + '</div>';
+    if(idx) idx.innerHTML = '';
+    return;
+  }
+
+  const rowHtml = r => {
     const st = statusOf(r);
     const rec = r.paid ? `入金 ${TODAY.replace('-','/')} ${r.paidWith}`
               : (st==='kaishu' ? '回収済み'
@@ -1306,7 +1391,43 @@ function renderRows(){
         <span class="rc">${heavyBonus(r) ? `<span class="bonus-tag">ボ ${Math.round(bonusRatio(r))}回分</span>` : rec}</span>
         <span class="strike"></span>
       </button>` + (openId===r.id && !r.paid ? panelHtml(r) : '');
+  };
+
+  // 遅れは日数の長い順に見たいので、電話帳ふうの索引は付けない
+  if(filter === 'overdue'){
+    if(idx) idx.innerHTML = '';
+    el.innerHTML = list.map(rowHtml).join('');
+    return;
+  }
+
+  // 電話帳ふう:あ行・か行…でまとめ、上に索引を出す
+  const groups = [];
+  list.forEach(r => {
+    const g = gyoOf(r);
+    const last = groups[groups.length-1];
+    if(last && last.key === g) last.rows.push(r);
+    else groups.push({key:g, rows:[r]});
+  });
+  if(idx) idx.innerHTML = GYO.map(g => {
+    const hit = groups.find(x => x.key === g.key);
+    return `<button class="kx ${hit?'':'off'}" data-gyo="${g.key}"${hit?'':' disabled'}>${g.label}<span class="kn">${hit?hit.rows.length:0}</span></button>`;
   }).join('');
+  el.innerHTML = groups.map(g => {
+    const label = (GYO.find(x => x.key === g.key) || {label:g.key}).label;
+    return `<div class="gyo-h" id="gyo-${g.key}">${label}<span class="gyo-n">${g.rows.length}名</span></div>`
+         + g.rows.map(rowHtml).join('');
+  }).join('');
+}
+
+// 空の区分に来てしまったとき、どこに人がいるかを出す(行き止まりにしない)
+function otherTabsHint(){
+  const other = FILTERS.filter(f => f.key !== filter && !f.hidden && f.key !== 'all')
+    .map(f => ({f, n: state.filter(r => f.test(r) && !r.paid).length}))
+    .filter(x => x.n);
+  if(!other.length) return '';
+  return '<div class="nc-hint" style="margin-top:10px">'
+    + other.map(x => `<button class="linky" data-f2="${x.f.key}">${x.f.label} に ${x.n}名 います →</button>`).join('　')
+    + '</div>';
 }
 
 function renderUnmatched(){
@@ -1346,6 +1467,7 @@ function renderUnmatched(){
 }
 
 let HIST = {};
+let SCHED = {};     // 回ごとの本当の期日 [回次, 期日, 入金済みか]
 let MONTHS = [];
 let pendOpen = null;
 
@@ -1461,6 +1583,31 @@ function renderSummary(){
 // よみが入っている人はよみで、まだの人は漢字で並べる(入れるほど正確になる)。
 const yomiOf = r => normKana(r.kana || '');
 const hasYomi = r => !!yomiOf(r);
+
+// 電話帳ふうの索引。よみの1文字目から「あ行・か行…」を決める。
+// 濁点・半濁点・小書き(ァィゥ…)も同じ行に入れる。よみが無い方は「よみ未登録」。
+const GYO = [
+  {key:'a',  label:'あ行', head:'アイウエオ'},
+  {key:'ka', label:'か行', head:'カキクケコガギグゲゴ'},
+  {key:'sa', label:'さ行', head:'サシスセソザジズゼゾ'},
+  {key:'ta', label:'た行', head:'タチツテトダヂヅデド'},
+  {key:'na', label:'な行', head:'ナニヌネノ'},
+  {key:'ha', label:'は行', head:'ハヒフヘホバビブベボパピプペポ'},
+  {key:'ma', label:'ま行', head:'マミムメモ'},
+  {key:'ya', label:'や行', head:'ヤユヨ'},
+  {key:'ra', label:'ら行', head:'ラリルレロ'},
+  {key:'wa', label:'わ行', head:'ワヲン'},
+  {key:'x',  label:'よみ未登録', head:''},
+];
+const SMALL = {'ァ':'ア','ィ':'イ','ゥ':'ウ','ェ':'エ','ォ':'オ','ッ':'ツ',
+               'ャ':'ヤ','ュ':'ユ','ョ':'ヨ','ヮ':'ワ','ヵ':'カ','ヶ':'ケ'};
+function gyoOf(r){
+  const y = yomiOf(r);
+  if(!y) return 'x';
+  const c = SMALL[y[0]] || y[0];
+  const g = GYO.find(x => x.head.includes(c));
+  return g ? g.key : 'x';
+}
 const jaOrder = new Intl.Collator('ja');
 const sortKey = r => yomiOf(r) || r.name;
 const byKana = (a, b) => jaOrder.compare(sortKey(a), sortKey(b)) || (a.id - b.id);
@@ -1509,19 +1656,111 @@ const termOf = r => r.term || TERM;
 let openNo = null;               // 開いている回次
 
 // 回次kの支払期日
+// 回ごとの期日。サーバーが持っている本当の期日を使う(期日を変えた回があるため)。
+// まだ読み込めていないときだけ、開始月からの計算で埋める。
+function schedOf(r){ return (SCHED && SCHED[r.id]) || null; }
+function schedRow(r, k){
+  const p = schedOf(r);
+  if(!p) return null;
+  return p.find(x => x[0] === k) || null;
+}
 function dueOfNo(r, k){
+  const row = schedRow(r, k);
+  if(row){
+    const [y, m, d] = row[1].split('-').map(Number);
+    return {y, m, d, iso: row[1]};
+  }
   const st = MONTHS[r.si] || MONTHS[0];
   const t = st.y * 12 + (st.m - 1) + (k - 1);
-  return {y: Math.floor(t / 12), m: t % 12 + 1, d: +r.due.slice(3)};
+  const y = Math.floor(t / 12), m = t % 12 + 1, d = +r.due.slice(3);
+  return {y, m, d, iso: `${y}-${pad(m)}-${pad(d)}`};
 }
 // 回次kのようす
 function stateOfNo(r, k){
+  const row = schedRow(r, k);
+  if(row){
+    if(row[2]) return 'paid';
+    const d = row[1];
+    return d < isoToday() ? 'unpaid' : (d === isoToday() ? 'due' : 'pending');
+  }
   const mi = r.si + (k - 1);
   if(mi >= MONTHS.length) return 'pending';
   return cellState(r, mi);
 }
 const ST_LABEL = {paid:'入金', late:'遅れて入金', unpaid:'未収', part:'金額ちがい',
                   due:'期日', pending:'これから', none:'—'};
+
+// ─── 入金カレンダー ────────────────────────────────
+// 全48回を「年 × 12ヶ月」の升目に置く。カレンダーとして一目で追え、
+// 升目を押すとその回の期日を変えられる。
+let calOpen = null;      // いま開いている回次
+
+const CAL_LABEL = {paid:'入金済み', unpaid:'未入金', due:'今日が期日', pending:'これから'};
+
+function calendarHtml(r){
+  const term = termOf(r);
+  const cells = {};                     // "年-月" → {no, d, st}
+  let y0 = null, y1 = null;
+  for(let k = 1; k <= term; k++){
+    const d = dueOfNo(r, k), st = stateOfNo(r, k);
+    cells[`${d.y}-${d.m}`] = {no:k, d, st};
+    if(y0 === null || d.y < y0) y0 = d.y;
+    if(y1 === null || d.y > y1) y1 = d.y;
+  }
+  if(y0 === null) return '<div class="empty">支払予定がまだありません。</div>';
+
+  const nowY = NOW.getFullYear(), nowM = NOW.getMonth()+1;
+  const years = [];
+  for(let y = y0; y <= y1; y++) years.push(y);
+
+  const head = `<div class="cal-row cal-head"><span class="cal-y"></span>${
+    [...Array(12)].map((_, i) => `<span class="cal-c">${i+1}月</span>`).join('')}</div>`;
+
+  const body = years.map(y => `<div class="cal-row"><span class="cal-y">${y}</span>${
+    [...Array(12)].map((_, i) => {
+      const c = cells[`${y}-${i+1}`];
+      if(!c) return '<span class="cal-c cal-none"></span>';
+      const today = (y === nowY && i+1 === nowM);
+      return `<button class="cal-c cal-${c.st} ${calOpen===c.no?'on':''} ${today?'is-now':''}"
+        data-cal="${c.no}" title="${c.no}回目 ${y}年${i+1}月${c.d.d}日 ${CAL_LABEL[c.st]||''}">
+        <span class="cal-d">${c.d.d}</span>
+        <span class="cal-no">${c.no}</span>
+      </button>`;
+    }).join('')}</div>`).join('');
+
+  return `<div class="cal">${head}${body}</div>
+    <div class="cal-legend">
+      <span><i class="lg lg-paid"></i>入金済み</span>
+      <span><i class="lg lg-unpaid"></i>未入金</span>
+      <span><i class="lg lg-due"></i>今日が期日</span>
+      <span><i class="lg lg-pending"></i>これから</span>
+      <span><i class="lg lg-now"></i>今月</span>
+      <span class="nc-hint">升目の数字は支払日、右下の小さい数字は回数です。押すと期日を変えられます。</span>
+    </div>
+    ${calOpen ? calEditor(r, calOpen) : ''}`;
+}
+
+// 升目を押したときに出る、その回の操作
+function calEditor(r, k){
+  const d = dueOfNo(r, k), st = stateOfNo(r, k);
+  const paid = st === 'paid';
+  return `<div class="cal-edit">
+    <div class="cal-edit-h"><b>${k}回目</b>　${d.y}年${d.m}月${d.d}日　${yen(r.amount)}円
+      <span class="st-tag t-${st}">${CAL_LABEL[st]||''}</span>
+      <button class="btn cal-x" data-calclose="1">閉じる</button></div>
+    ${paid
+      ? '<p class="nc-hint">この回は入金済みです。期日を変えるときは、先に入金を取り消してください。</p>'
+      : `<div class="pay-row"><span class="pay-label">この回の期日</span>
+           <input class="prom-date" id="calDate" type="date" value="${d.iso}"></div>
+         <div class="pay-row"><span class="pay-label">理由・メモ</span>
+           <input class="memo-input" id="calMemo" autocomplete="off" placeholder="給料日が変わった、など（任意）"></div>
+         <div class="pay-row commit"><span class="pay-label"></span>
+           <button class="btn-pay" data-calsave="${r.id}:${k}">この回の期日を変える</button>
+           <button class="btn" data-calpromise="${r.id}:${k}">別に入金の約束を足す</button></div>
+         <p class="nc-hint">期日を変えると、一覧の並びと「遅れ」の数え方もその日付で見ます。
+           もとの期日は記録に残ります。</p>`}
+  </div>`;
+}
 
 // 回次を指定して記録を足す(追記のみ)
 function logAt(r, no, kind, text, memo){
@@ -1618,31 +1857,22 @@ function renderCard(){
       ${say.sub ? `<div class="say-sub">${say.sub}</div>` : ''}
     </div>
 
+    <div class="money-strip">
+      <span class="ms"><b>${yen(r.amount)}円</b><i>毎月</i></span>
+      <span class="ms"><b>${jpDate(r.due)}</b><i>次の期日</i></span>
+      <span class="ms"><b>${c.paid}回 ／ ${yen(paidTotal)}円</b><i>これまでに払った</i></span>
+      <span class="ms"><b>${yen(r.debt)}円</b><i>残っている支払い</i></span>
+      ${o.n ? `<span class="ms d-short"><b>${o.n}回 ／ ${yen(o.yen)}円</b><i>未収</i></span>` : ''}
+      ${r.diff ? `<span class="ms ${r.diff<0?'d-short':'d-over'}"><b>${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}円</b><i>過不足</i></span>` : ''}
+      ${r.bonus > 10 ? `<span class="ms b-exp"><b>残り ${yen(r.bonus)}円</b><i>ボーナス見込み（毎月額の${bonusRatio(r).toFixed(1)}回分）</i></span>` : ''}
+      <span class="ms ms-rec"><b>遅れ ${c.late}・未収 ${c.unpaid}・連続 ${c.maxRun}ヶ月・金額ちがい ${c.part}・約束を破った ${c.broken}</b><i>支払いのようす</i></span>
+    </div>
+
     <div class="card-cols">
      <div class="card-left">
       <div class="card-sec">
-        <h4>お金のこと</h4>
-        <table class="kv">
-          <tr class="big"><td class="k">毎月の支払い</td><td class="v">${yen(r.amount)}円</td></tr>
-          <tr><td class="k">次の期日</td><td class="v">${jpDate(r.due)}</td></tr>
-          <tr><td class="k">これまでに払った</td><td class="v">${c.paid}回 ／ ${yen(paidTotal)}円</td></tr>
-          <tr><td class="k">残っている支払い</td><td class="v">${yen(r.debt)}円</td></tr>
-          ${o.n ? `<tr><td class="k">未収</td><td class="v d-short">${o.n}回 ／ ${yen(o.yen)}円</td></tr>` : ''}
-          ${r.diff ? `<tr><td class="k">過不足</td><td class="v ${r.diff<0?'d-short':'d-over'}">${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}円</td></tr>` : ''}
-          ${r.bonus > 10 ? `<tr><td class="k">ボーナス見込み</td><td class="v b-exp">残り ${yen(r.bonus)}円（毎月額の${bonusRatio(r).toFixed(1)}回分）</td></tr>` : ''}
-        </table>
-      </div>
-
-      <div class="card-sec">
-        <h4>支払いのようす</h4>
-        <div class="card-rec">
-          <span>払った <b>${c.paid}</b>/${c.months}回</span>
-          <span class="${c.late?'rec-late':''}">遅れ <b>${c.late}</b></span>
-          <span class="${c.unpaid?'rec-unpaid':''}">未収 <b>${c.unpaid}</b></span>
-          <span class="${c.maxRun>1?'rec-unpaid':''}">連続で滞った <b>${c.maxRun}</b>ヶ月</span>
-          <span class="${c.part?'rec-part':''}">金額ちがい <b>${c.part}</b></span>
-          <span class="${c.broken?'rec-unpaid':''}">約束を破った <b>${c.broken}</b></span>
-        </div>
+        <h4>入金カレンダー（全${termOf(r)}回）</h4>
+        ${calendarHtml(r)}
       </div>
 
       <div class="card-sec">
@@ -1665,7 +1895,8 @@ function renderCard(){
      </div>
 
      <div class="card-right card-sec">
-       <h4>支払いの記録（全${termOf(r)}回）　回を押すと、その回のやり取りとメモが出ます</h4>
+       <h4>支払いの記録（全${termOf(r)}回）</h4>
+       <p class="nc-hint" style="margin:-6px 0 8px">回を押すと、その回のやり取りとメモが出ます。</p>
        <div class="terms">${termRows(r)}</div>
      </div>
     </div>
@@ -1685,11 +1916,15 @@ function go(view){
   render();
 }
 
+// undoFn を渡さないときは、知らせるだけで「元に戻す」は出さない
+// (押せるのに何も起きないボタンを見せないため)
 function showUndo(text, undoFn){
-  history.push(undoFn);
+  const btn = document.getElementById('btnUndo');
+  if(undoFn) history.push(undoFn);
+  if(btn) btn.hidden = !undoFn;
   document.getElementById('undoText').textContent = text;
   document.getElementById('undoBar').classList.add('show');
-  document.getElementById('btnUndoTop').disabled = false;
+  document.getElementById('btnUndoTop').disabled = history.length === 0;
   clearTimeout(undoTimer);
   undoTimer = setTimeout(() => document.getElementById('undoBar').classList.remove('show'), 9000);
 }
@@ -1890,7 +2125,9 @@ document.addEventListener('click', e => {
 
   const vnav = t.closest('.vn[data-view]');
   if(vnav){
-    if(vnav.dataset.view === 'card'){ cardId = null; openNo = null; }
+    // 「お客さん」は名簿(電話帳)。区分をまたいだ全員をあいうえお順で出す。
+    // 以前は前の区分のままだったので、入金待ちが0件の日は空の画面に着いていた。
+    if(vnav.dataset.view === 'card'){ cardId = null; openNo = null; openId = null; filter = 'all'; }
     go(vnav.dataset.view);
     return;
   }
@@ -1917,6 +2154,57 @@ document.addEventListener('click', e => {
 
   const tab = t.closest('.tab');
   if(tab){ filter = tab.dataset.f; openId = null; render(); return; }
+
+  // 空の区分から、人がいる区分へ移る
+  const f2 = t.closest('[data-f2]');
+  if(f2){ filter = f2.dataset.f2; openId = null; render(); return; }
+
+  // ── 入金カレンダー ──────────────────────
+  const calBtn = t.closest('[data-cal]');
+  if(calBtn){
+    const k = +calBtn.dataset.cal;
+    calOpen = (calOpen === k ? null : k);
+    renderCard();
+    return;
+  }
+  if(t.closest('[data-calclose]')){ calOpen = null; renderCard(); return; }
+
+  const calSave = t.closest('[data-calsave]');
+  if(calSave){
+    const [id, k] = calSave.dataset.calsave.split(':').map(Number);
+    const day = (document.getElementById('calDate') || {}).value || '';
+    const memo = (document.getElementById('calMemo') || {}).value.trim() || '';
+    if(!day){ alert('日付を入れてください。'); return; }
+    save({種類:'期日変更', id, no:k, day, memo})
+      .then(o => { if(o){ calOpen = null; renderCard();
+        showUndo(`${k}回目の期日を ${day} にしました`,
+          o.もとの期日 ? () => save({種類:'期日変更', id, no:k, day:o.もとの期日, memo:'変更を取り消し'})
+                       : null); } });
+    return;
+  }
+
+  // その回とは別に、入金の約束を足す(期日は動かさない回のとき用)
+  const calProm = t.closest('[data-calpromise]');
+  if(calProm){
+    const [id, k] = calProm.dataset.calpromise.split(':').map(Number);
+    const r = state.find(x => x.id === id);
+    const day = (document.getElementById('calDate') || {}).value || '';
+    const memo = (document.getElementById('calMemo') || {}).value.trim() || '';
+    if(!day){ alert('日付を入れてください。'); return; }
+    if(!memo){ alert('約束のときに言われたことをメモに残してください。'); return; }
+    save({種類:'約束', id, day, amount:r.amount, memo})
+      .then(o => { if(o){ calOpen = null; renderCard();
+        showUndo(`${day} に ${yen(r.amount)}円 の約束を足しました`, null); } });
+    return;
+  }
+
+  // 索引(あ行・か行…)を押したら、そこまで送る
+  const gyo = t.closest('[data-gyo]');
+  if(gyo){
+    const h = document.getElementById('gyo-' + gyo.dataset.gyo);
+    if(h) h.scrollIntoView({block:'start'});
+    return;
+  }
 
   const seg = t.closest('.seg button');
   if(seg){
@@ -2286,7 +2574,7 @@ async function save(payload){
     const d = await r.json();
     if(d.error){ alert('保存できませんでした。\n' + (d.理由 || d.error)); return false; }
     await reload();
-    return true;
+    return d;                      // 返事の中身も使えるようにする(もとの期日など)
   }catch(e){
     alert('保存できませんでした。通信を確認してください。\n' + (e.message || e));
     return false;
@@ -2298,7 +2586,7 @@ async function reload(){
   const r = await fetch('/api/contracts', {headers:{'Accept':'application/json'}});
   const d = await r.json();
   if(d.error) throw new Error(d.理由 || d.error);
-  DATA = d.DATA; HIST = d.HIST; MONTHS = d.MONTHS; PROMISES = d.PROMISES;
+  DATA = d.DATA; HIST = d.HIST; SCHED = d.PLAN || {}; MONTHS = d.MONTHS; PROMISES = d.PROMISES;
   EVENTS.length = 0; (d.EVENTS || []).forEach(e => EVENTS.push(e));
   state = DATA.map(x => ({...x, paid: !!x.paid0, paidWith: x.paid0 ? x.method : null}));
   render();
@@ -2317,7 +2605,7 @@ async function boot(){
     if(!r.ok) throw new Error('サーバーが ' + r.status + ' を返しました');
     const d = await r.json();
     if(d.error) throw new Error(d.理由 || d.error);
-    DATA = d.DATA; HIST = d.HIST; MONTHS = d.MONTHS; PROMISES = d.PROMISES;
+    DATA = d.DATA; HIST = d.HIST; SCHED = d.PLAN || {}; MONTHS = d.MONTHS; PROMISES = d.PROMISES;
     EVENTS.length = 0; (d.EVENTS || []).forEach(e => EVENTS.push(e));
     state = DATA.map(r => ({...r, paid: !!r.paid0, paidWith: r.paid0 ? r.method : null}));
     render();

@@ -85,8 +85,19 @@ module.exports = async (req, res) => {
       });
     }
 
+    // 入金カレンダー用。回ごとの本当の期日を渡す。
+    // 画面が「開始月＋回数」から計算していると、期日を変えた回がずれるため。
+    // 場所を取らないよう [回次, 期日, 状態] の配列にする。
+    const PLAN = {};
+    for (const c of contracts) {
+      PLAN[c.id] = (byContract[c.id] || []).map((s) => [
+        s.no, new Date(s.due_date).toISOString().slice(0, 10),
+        s.state === '入金済み' ? 1 : 0,
+      ]);
+    }
+
     ok(res, {
-      DATA, HIST,
+      DATA, HIST, PLAN,
       MONTHS: MONTHS.map((m) => ({ y: m.y, m: m.m })),
       PROMISES: promises.map((p) => ({
         id: p.contract_id,
