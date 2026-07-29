@@ -995,9 +995,12 @@ function renderTabs(){
 }
 
 function renderTotals(){
+  // 今月ぶんの請求と入金。開始時の入金実績を入れた分もここに出る。
+  // 今月に回が無い方(完済・来月開始)は数えない。
   const live = state.filter(r => !r.kaishu);
-  const plan = live.reduce((s,r) => s + r.amount, 0);
-  const paid = live.filter(r => r.paid).reduce((s,r) => s + r.amount, 0);
+  const plan = live.reduce((s,r) => s + (r.今月請求 != null ? r.今月請求 : r.amount), 0);
+  const paid = live.reduce((s,r) => s + (r.今月入金 != null ? r.今月入金
+                                       : (r.paid ? r.amount : 0)), 0);
   const kk = state.filter(r => r.kaishu);
   document.querySelectorAll('.total-kaishu').forEach(el => {
     el.innerHTML = kk.length
@@ -1436,7 +1439,9 @@ function renderRows(){
 
   const rowHtml = r => {
     const st = statusOf(r);
-    const rec = r.paid ? `入金 ${TODAY.replace('-','/')} ${r.paidWith}`
+    // 実際に入った日を出す。開始時の入金実績で入れた分は日付が無いので「済み」とだけ書く
+    const rec = r.paid ? (r.今月入金日 ? `入金 ${r.今月入金日.slice(5).replace('-','/')} ${r.paidWith || '振込'}`
+                                       : '今月ぶん 済み')
               : (st==='kaishu' ? '回収済み'
               : (st==='overdue' ? `${daysLate(r.due)}日 遅れ` : (st==='hold' ? '保留中' : '')));
     return `<button class="lrow s-${st} ${r.paid?'paid':''}" data-row="${r.id}">
