@@ -25,7 +25,9 @@ module.exports = async (req, res) => {
 
     const contracts = await sql(`SELECT * FROM contract ORDER BY id`);
     const schedules = await sql(
-      `SELECT contract_id, no, due_date, planned_amount, state FROM schedule ORDER BY contract_id, no`);
+      `SELECT id, contract_id, no, due_date, planned_amount, state FROM schedule ORDER BY contract_id, no`);
+    const payments  = await sql(
+      `SELECT contract_id, paid_on, amount, method FROM payment ORDER BY paid_on, id`);
     const promises  = await sql(
       `SELECT contract_id, heard_on, promised_on, amount, memo FROM promise ORDER BY id`);
     const events    = await sql(
@@ -34,6 +36,14 @@ module.exports = async (req, res) => {
 
     const byContract = {};
     schedules.forEach((s) => (byContract[s.contract_id] = byContract[s.contract_id] || []).push(s));
+
+    // 回ごとに、いくら入っているか(分割入金のため。ボーナス分は請求と関係しないので除く)
+    const paidRows = await sql(
+      `SELECT schedule_id, COALESCE(sum(amount),0)::int AS n FROM allocation
+        WHERE schedule_id IS NOT NULL AND kind IN ('元本','手数料')
+        GROUP BY schedule_id`);
+    const paidBy = {};
+    paidRows.forEach((r) => (paidBy[r.schedule_id] = r.n));
 
     const DATA = [], HIST = {};
 
@@ -72,6 +82,9 @@ module.exports = async (req, res) => {
         bonus: c.bonus_remaining,
         bonusPaid: 0,
         term: c.term_count,
+        // いま追いかけている回の残り(分割入金の途中は請求額より少ない)
+        入った: current ? (paidBy[current.id] || 0) : 0,
+        残り: current ? Math.max(0, current.planned_amount - (paidBy[current.id] || 0)) : 0,
       });
 
       // 12ヶ月ぶんの状態。予定の実際の期日で並べる
@@ -79,29 +92,40 @@ module.exports = async (req, res) => {
         const s = rows.find((r) => ym(new Date(r.due_date)) === mo.t);
         if (!s) return 'none';                                  // 契約前 / 完済後
         if (s.state === '入金済み') return 'paid';
+        if (s.state === '一部入金') return 'part';              // 分割の途中
         if (mo.t === MONTHS[5].t) return 'live';                // 今月は画面側で判定
         if (ym(new Date(s.due_date)) < MONTHS[5].t) return 'unpaid';
         return 'pending';
       });
     }
 
-    // 入金カレンダー用。回ごとの本当の期日を渡す。
+    // 入金カレンダー用。回ごとの本当の期日と、そこにいくら入っているかを渡す。
     // 画面が「開始月＋回数」から計算していると、期日を変えた回がずれるため。
-    // 場所を取らないよう [回次, 期日, 状態] の配列にする。
+    // 場所を取らないよう [回次, 期日, 入金済みか, 請求額, 入金済み額] の配列にする。
     const PLAN = {};
     for (const c of contracts) {
       PLAN[c.id] = (byContract[c.id] || []).map((s) => [
         s.no, new Date(s.due_date).toISOString().slice(0, 10),
         s.state === '入金済み' ? 1 : 0,
+        s.planned_amount, paidBy[s.id] || 0,
       ]);
     }
 
+    // 実際に入った日と金額(カレンダーに置く)
+    const PAID = {};
+    payments.forEach((p) => {
+      (PAID[p.contract_id] = PAID[p.contract_id] || []).push([
+        new Date(p.paid_on).toISOString().slice(0, 10), p.amount, p.method,
+      ]);
+    });
+
     ok(res, {
-      DATA, HIST, PLAN,
+      DATA, HIST, PLAN, PAID,
       MONTHS: MONTHS.map((m) => ({ y: m.y, m: m.m })),
       PROMISES: promises.map((p) => ({
         id: p.contract_id,
         day: md(new Date(p.promised_on)),
+        iso: new Date(p.promised_on).toISOString().slice(0, 10),
         heard: md(new Date(p.heard_on)),
         amount: p.amount, memo: p.memo || '',
       })),

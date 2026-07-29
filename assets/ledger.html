@@ -617,44 +617,52 @@
   .money-strip .ms-rec{flex:1;}
   .money-strip .ms-rec b{font-size:13px;font-weight:400;}
 
-  /* ── 入金カレンダー ───────────────── */
-  .cal{border:1px solid var(--rule-strong);background:var(--paper);overflow-x:auto;}
-  .cal-row{display:grid;grid-template-columns:54px repeat(12,minmax(38px,1fr));
-    border-bottom:1px solid var(--rule);}
-  .cal-row:last-child{border-bottom:0;}
-  .cal-head{background:var(--paper-2);border-bottom:1px solid var(--rule-strong);}
-  .cal-head .cal-c{font-size:11.5px;color:var(--ink-2);padding:5px 0;text-align:center;
+  /* ── 入金カレンダー(月表示)───────────── */
+  .cal-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+  .cal-title{font-size:16px;letter-spacing:.06em;min-width:110px;text-align:center;}
+  .cal-rest{margin-left:auto;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:13.5px;}
+  .cal-rest .sub{font-size:12px;color:var(--ink-2);}
+  .cal-rest .ok{color:var(--paid);}
+
+  .mcal{border:1px solid var(--rule-strong);background:var(--paper);}
+  .mcal-row{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--rule);}
+  .mcal-row:last-child{border-bottom:0;}
+  .mcal-head{background:var(--paper-2);border-bottom:1px solid var(--rule-strong);}
+  .mcal-w{padding:5px 0;text-align:center;font-size:12px;color:var(--ink-2);
     border-right:1px solid var(--rule);}
-  .cal-y{display:flex;align-items:center;justify-content:center;font-size:12px;
-    color:var(--ink-2);background:var(--paper-2);border-right:1px solid var(--rule-strong);
-    font-variant-numeric:tabular-nums;}
-  .cal-c{
-    position:relative;font:inherit;padding:8px 2px 12px;border:0;border-right:1px solid var(--rule);
-    background:transparent;cursor:pointer;text-align:center;min-height:46px;
+  .mcal-w:last-child{border-right:0;}
+  .mcal-c{
+    font:inherit;text-align:left;background:transparent;border:0;border-right:1px solid var(--rule);
+    padding:4px 5px 6px;min-height:74px;cursor:pointer;display:flex;flex-direction:column;gap:3px;
+    align-items:stretch;
   }
-  .cal-c:last-child{border-right:0;}
-  .cal-none{background:repeating-linear-gradient(45deg,transparent,transparent 4px,#F0EDE5 4px,#F0EDE5 8px);cursor:default;}
-  .cal-d{font-size:15px;font-variant-numeric:tabular-nums;}
-  .cal-no{position:absolute;right:3px;bottom:2px;font-size:9.5px;color:var(--ink-3);}
-  .cal-paid{background:#DFEBE3;color:var(--paid);}
-  .cal-unpaid{background:#F2DAD5;color:var(--overdue);font-weight:700;}
-  .cal-due{background:var(--today-bg);color:var(--today);font-weight:700;}
-  .cal-pending{background:var(--paper);color:var(--ink-2);}
-  .cal-c.is-now::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;
-    background:var(--indigo);}
-  .cal-c.is-now .cal-d{font-weight:700;}
-  .cal-c.on{outline:2px solid var(--indigo);outline-offset:-2px;}
-  .cal-c:hover:not(.cal-none){filter:brightness(.96);}
+  .mcal-c:last-child{border-right:0;}
+  .mcal-out{background:repeating-linear-gradient(45deg,transparent,transparent 4px,#F2EFE8 4px,#F2EFE8 8px);
+    cursor:default;border-right:1px solid var(--rule);}
+  .mcal-d{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums;}
+  .mcal-c.sun .mcal-d,.mcal-w.sun{color:var(--overdue);}
+  .mcal-c.sat .mcal-d,.mcal-w.sat{color:var(--indigo);}
+  .mcal-c.is-today{background:var(--today-bg);}
+  .mcal-c.is-today .mcal-d{font-weight:700;color:var(--today);}
+  .mcal-c.on{outline:2px solid var(--indigo);outline-offset:-2px;}
+  .mcal-c.has-late{background:#FBF1EF;}
+  .mcal-c:hover:not(.mcal-out){filter:brightness(.97);}
+  .chip{
+    display:block;font-size:11px;line-height:1.5;padding:1px 4px;border:1px solid;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .c-due{background:#F2DAD5;border-color:#D9B3AB;color:var(--overdue);}
+  .c-due.is-done{background:#DFEBE3;border-color:#AFC9B8;color:var(--paid);}
+  .c-prom{background:#FBF4DF;border-color:#DCC98C;color:#8A6D1F;}
+  .c-paid{background:#DFEBE3;border-color:#AFC9B8;color:var(--paid);}
   .cal-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:8px 2px;
     font-size:12px;color:var(--ink-2);}
   .cal-legend .lg{display:inline-block;width:11px;height:11px;margin-right:4px;
     vertical-align:-1px;border:1px solid var(--rule-strong);}
-  .lg-paid{background:#DFEBE3;} .lg-unpaid{background:#F2DAD5;}
-  .lg-due{background:var(--today-bg);} .lg-pending{background:var(--paper);}
-  .lg-now{background:var(--paper);border-bottom:3px solid var(--indigo);}
   .cal-edit{border:1px solid var(--indigo);background:var(--paper);padding:12px 14px;margin-top:12px;}
-  .cal-edit-h{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;
+  .cal-edit-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;
     padding-bottom:8px;border-bottom:1px solid var(--rule);}
+  .cal-edit-h .chip{display:inline-block;}
   .cal-x{margin-left:auto;}
 
   .card-cols{display:grid;grid-template-columns:7fr 3fr;
@@ -665,8 +673,8 @@
   @media (max-width:900px){
     .card-cols{grid-template-columns:1fr;gap:22px;}
     .card-right .terms{max-height:none;}
-    .cal-row{grid-template-columns:44px repeat(12,minmax(30px,1fr));}
-    .cal-d{font-size:13px;}
+    .mcal-c{min-height:60px;padding:3px 3px 5px;}
+    .chip{font-size:10px;}
   }
   .card-sec h4{margin:0 0 8px;font-size:12px;letter-spacing:.1em;color:var(--ink-2);font-weight:600;
     border-bottom:1px solid var(--rule-strong);padding-bottom:6px;}
@@ -1338,6 +1346,15 @@ function takeMemo(){
   return el ? el.value.trim() : '';
 }
 
+function bindAmt(el){
+  if(!el || el.dataset.bound) return;
+  el.dataset.bound = '1';
+  el.addEventListener('input', () => {
+    const n = el.value.replace(/[^0-9]/g, '');
+    el.value = n ? Number(n).toLocaleString('ja-JP') : '';
+  });
+}
+
 function focusOther(){
   // 金額欄はどれも3桁区切りで見せ、打つたびに内訳を出し直す
   ['otherInput','bonusPart'].forEach(id => {
@@ -1386,7 +1403,9 @@ function renderRows(){
         <span class="bar"></span>
         <span class="due">${r.due.replace('-','/')}</span>
         <span class="nm"><span class="nmlink" data-card="${r.id}">${r.name}</span>${testTag(r)}</span>
-        <span class="am"><span>${yen(r.amount)}</span>${r.diff ? `<span class="am-diff ${r.diff<0?'d-short':'d-over'}">${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}</span>` : ''}</span>
+        <span class="am"><span>${yen(r.amount)}</span>${
+          r.入った ? `<span class="am-diff d-short">残り ${yen(r.残り)}</span>`
+          : (r.diff ? `<span class="am-diff ${r.diff<0?'d-short':'d-over'}">${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}</span>` : '')}</span>
         <span class="mt">${r.n}</span>
         <span class="rc">${heavyBonus(r) ? `<span class="bonus-tag">ボ ${Math.round(bonusRatio(r))}回分</span>` : rec}</span>
         <span class="strike"></span>
@@ -1467,7 +1486,8 @@ function renderUnmatched(){
 }
 
 let HIST = {};
-let SCHED = {};     // 回ごとの本当の期日 [回次, 期日, 入金済みか]
+let SCHED = {};     // 回ごとの予定 [回次, 期日, 入金済みか, 請求額, 入金済み額]
+let PAID = {};      // 実際に入った日 [日付, 金額, 受け取り方]
 let MONTHS = [];
 let pendOpen = null;
 
@@ -1693,74 +1713,145 @@ const ST_LABEL = {paid:'入金', late:'遅れて入金', unpaid:'未収', part:'
 // ─── 入金カレンダー ────────────────────────────────
 // 全48回を「年 × 12ヶ月」の升目に置く。カレンダーとして一目で追え、
 // 升目を押すとその回の期日を変えられる。
-let calOpen = null;      // いま開いている回次
 
-const CAL_LABEL = {paid:'入金済み', unpaid:'未入金', due:'今日が期日', pending:'これから'};
+// ── 月のカレンダー ────────────────────────────────
+// 電話を受けながら使う。今月を出し、◀▶で前後の月へ。
+// 期日・約束(分割ぶんも全部)・実際に入った日を、その日の升に置く。
+let calMonth = null;             // {y, m}。null なら今月
+let calDay = null;               // 開いている日 'YYYY-MM-DD'
+
+const calYM = () => calMonth || {y: NOW.getFullYear(), m: NOW.getMonth()+1};
+const isoOf = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+
+// その回の請求・入金済み・残り
+function termMoney(r, k){
+  const row = schedRow(r, k);
+  const planned = row && row[3] != null ? row[3] : r.amount;
+  const paid = row && row[4] != null ? row[4] : 0;
+  return {planned, paid, rest: Math.max(0, planned - paid)};
+}
+
+// いま追いかけている回(未入金でいちばん古い回)
+function currentNo(r){
+  const p = schedOf(r);
+  if(!p) return r.no;
+  const row = p.find(x => !x[2]);
+  return row ? row[0] : (p.length ? p[p.length-1][0] : r.no);
+}
+
+// この方の、これから来る約束(分割ぶんも全部)
+function promisesOf(r){
+  return PROMISES.filter(p => p.id === r.id && p.iso)
+    .slice().sort((a,b) => a.iso.localeCompare(b.iso));
+}
+
+// カレンダーに置くもの:期日・約束・入金
+function calMarks(r){
+  const m = {};
+  const put = (iso, o) => { if(iso) (m[iso] = m[iso] || []).push(o); };
+  (schedOf(r) || []).forEach(row => {
+    const mo = termMoney(r, row[0]);
+    put(row[1], {t:'due', no:row[0], amount:mo.rest || mo.planned, done:!!row[2], rest:mo.rest});
+  });
+  promisesOf(r).forEach(p => put(p.iso, {t:'promise', amount:p.amount, memo:p.memo}));
+  ((PAID && PAID[r.id]) || []).forEach(x => put(x[0], {t:'paid', amount:x[1], method:x[2]}));
+  return m;
+}
 
 function calendarHtml(r){
-  const term = termOf(r);
-  const cells = {};                     // "年-月" → {no, d, st}
-  let y0 = null, y1 = null;
-  for(let k = 1; k <= term; k++){
-    const d = dueOfNo(r, k), st = stateOfNo(r, k);
-    cells[`${d.y}-${d.m}`] = {no:k, d, st};
-    if(y0 === null || d.y < y0) y0 = d.y;
-    if(y1 === null || d.y > y1) y1 = d.y;
-  }
-  if(y0 === null) return '<div class="empty">支払予定がまだありません。</div>';
+  const {y, m} = calYM();
+  const marks = calMarks(r);
+  const first = new Date(y, m-1, 1), lead = first.getDay();
+  const last = new Date(y, m, 0).getDate();
+  const todayIso = isoToday();
+  const cells = [];
+  for(let i = 0; i < lead; i++) cells.push(null);
+  for(let d = 1; d <= last; d++) cells.push(d);
+  while(cells.length % 7) cells.push(null);
 
-  const nowY = NOW.getFullYear(), nowM = NOW.getMonth()+1;
-  const years = [];
-  for(let y = y0; y <= y1; y++) years.push(y);
+  const week = ['日','月','火','水','木','金','土'];
+  const no = currentNo(r), mo = termMoney(r, no);
+  const prom = promisesOf(r).filter(p => p.iso >= todayIso);
+  const promSum = prom.reduce((s,p) => s + p.amount, 0);
 
-  const head = `<div class="cal-row cal-head"><span class="cal-y"></span>${
-    [...Array(12)].map((_, i) => `<span class="cal-c">${i+1}月</span>`).join('')}</div>`;
-
-  const body = years.map(y => `<div class="cal-row"><span class="cal-y">${y}</span>${
-    [...Array(12)].map((_, i) => {
-      const c = cells[`${y}-${i+1}`];
-      if(!c) return '<span class="cal-c cal-none"></span>';
-      const today = (y === nowY && i+1 === nowM);
-      return `<button class="cal-c cal-${c.st} ${calOpen===c.no?'on':''} ${today?'is-now':''}"
-        data-cal="${c.no}" title="${c.no}回目 ${y}年${i+1}月${c.d.d}日 ${CAL_LABEL[c.st]||''}">
-        <span class="cal-d">${c.d.d}</span>
-        <span class="cal-no">${c.no}</span>
-      </button>`;
-    }).join('')}</div>`).join('');
-
-  return `<div class="cal">${head}${body}</div>
-    <div class="cal-legend">
-      <span><i class="lg lg-paid"></i>入金済み</span>
-      <span><i class="lg lg-unpaid"></i>未入金</span>
-      <span><i class="lg lg-due"></i>今日が期日</span>
-      <span><i class="lg lg-pending"></i>これから</span>
-      <span><i class="lg lg-now"></i>今月</span>
-      <span class="nc-hint">升目の数字は支払日、右下の小さい数字は回数です。押すと期日を変えられます。</span>
+  return `<div class="cal-bar">
+      <button class="btn" data-calmove="-1">◀ 前の月</button>
+      <b class="cal-title">${y}年${m}月</b>
+      <button class="btn" data-calmove="1">次の月 ▶</button>
+      <button class="btn" data-calmove="0">今月</button>
+      <span class="cal-rest">
+        <b>${no}回目</b>の残り <b class="${mo.rest ? 'd-short' : 'ok'}">${yen(mo.rest)}円</b>
+        <span class="sub">（請求 ${yen(mo.planned)}円 ／ 入金済み ${yen(mo.paid)}円）</span>
+        ${prom.length ? `<span class="sub">約束 ${prom.length}件 ${yen(promSum)}円</span>` : ''}
+      </span>
     </div>
-    ${calOpen ? calEditor(r, calOpen) : ''}`;
+    <div class="mcal">
+      <div class="mcal-row mcal-head">${week.map((w,i) =>
+        `<span class="mcal-w ${i===0?'sun':''}${i===6?'sat':''}">${w}</span>`).join('')}</div>
+      ${[...Array(cells.length/7)].map((_, wi) => `<div class="mcal-row">${
+        cells.slice(wi*7, wi*7+7).map((d, di) => {
+          if(!d) return '<span class="mcal-c mcal-out"></span>';
+          const iso = isoOf(y, m, d), ev = marks[iso] || [];
+          const cls = [
+            'mcal-c', di===0?'sun':'', di===6?'sat':'',
+            iso === todayIso ? 'is-today' : '',
+            calDay === iso ? 'on' : '',
+            ev.some(e => e.t==='due' && !e.done && iso < todayIso) ? 'has-late' : '',
+          ].filter(Boolean).join(' ');
+          return `<button class="${cls}" data-calday="${iso}">
+            <span class="mcal-d">${d}</span>
+            ${ev.map(e => e.t === 'due'
+                ? `<span class="chip c-due ${e.done?'is-done':''}">${e.no}回目 ${e.done ? '済' : yen(e.rest)}</span>`
+                : e.t === 'promise'
+                ? `<span class="chip c-prom">約束 ${yen(e.amount)}</span>`
+                : `<span class="chip c-paid">入金 ${yen(e.amount)}</span>`).join('')}
+          </button>`;
+        }).join('')}</div>`).join('')}
+    </div>
+    <div class="cal-legend">
+      <span><i class="lg c-due"></i>期日</span>
+      <span><i class="lg c-prom"></i>約束</span>
+      <span><i class="lg c-paid"></i>入金</span>
+      <span class="nc-hint">日を押すと、その日に約束を足したり、期日を動かしたりできます。</span>
+    </div>
+    ${calDay ? calDayBox(r, calDay) : ''}`;
 }
 
-// 升目を押したときに出る、その回の操作
-function calEditor(r, k){
-  const d = dueOfNo(r, k), st = stateOfNo(r, k);
-  const paid = st === 'paid';
+// 日を押したときに出る操作
+function calDayBox(r, iso){
+  const [y, m, d] = iso.split('-').map(Number);
+  const marks = calMarks(r)[iso] || [];
+  const no = currentNo(r), mo = termMoney(r, no);
+  const past = iso < isoToday();
+  const dueHere = marks.find(x => x.t === 'due');
+
   return `<div class="cal-edit">
-    <div class="cal-edit-h"><b>${k}回目</b>　${d.y}年${d.m}月${d.d}日　${yen(r.amount)}円
-      <span class="st-tag t-${st}">${CAL_LABEL[st]||''}</span>
+    <div class="cal-edit-h"><b>${y}年${m}月${d}日</b>
+      ${marks.map(e => e.t === 'due' ? `<span class="chip c-due">${e.no}回目の期日</span>`
+        : e.t === 'promise' ? `<span class="chip c-prom">約束 ${yen(e.amount)}円</span>`
+        : `<span class="chip c-paid">入金 ${yen(e.amount)}円</span>`).join('')}
       <button class="btn cal-x" data-calclose="1">閉じる</button></div>
-    ${paid
-      ? '<p class="nc-hint">この回は入金済みです。期日を変えるときは、先に入金を取り消してください。</p>'
-      : `<div class="pay-row"><span class="pay-label">この回の期日</span>
-           <input class="prom-date" id="calDate" type="date" value="${d.iso}"></div>
-         <div class="pay-row"><span class="pay-label">理由・メモ</span>
-           <input class="memo-input" id="calMemo" autocomplete="off" placeholder="給料日が変わった、など（任意）"></div>
-         <div class="pay-row commit"><span class="pay-label"></span>
-           <button class="btn-pay" data-calsave="${r.id}:${k}">この回の期日を変える</button>
-           <button class="btn" data-calpromise="${r.id}:${k}">別に入金の約束を足す</button></div>
-         <p class="nc-hint">期日を変えると、一覧の並びと「遅れ」の数え方もその日付で見ます。
-           もとの期日は記録に残ります。</p>`}
+
+    <div class="pay-row tight"><span class="pay-label"></span>
+      <span class="hint"><b>${no}回目</b>の残り <b>${yen(mo.rest)}円</b>
+        （請求 ${yen(mo.planned)}円 ／ 入金済み ${yen(mo.paid)}円）</span></div>
+
+    <div class="pay-row"><span class="pay-label">この日に払う額</span>
+      <input class="imp-input pay-input" id="calAmt" inputmode="numeric" autocomplete="off"
+        value="${mo.rest ? Number(mo.rest).toLocaleString('ja-JP') : ''}" placeholder="0"><span>円</span>
+      ${mo.rest ? `<button class="btn" data-calhalf="${r.id}">半分にする</button>` : ''}</div>
+    <div class="pay-row"><span class="pay-label">メモ</span>
+      <input class="memo-input" id="calMemo" autocomplete="off" placeholder="言われたこと（給料日後、家族が払う など）"></div>
+    <div class="pay-row commit"><span class="pay-label"></span>
+      ${past ? '<span class="hint">過ぎた日には約束を足せません。</span>'
+             : `<button class="btn-pay" data-calprom="${r.id}:${iso}">この日に払う約束にする</button>`}
+      ${dueHere && !dueHere.done ? '' :
+        `<button class="btn" data-caldue="${r.id}:${iso}">${no}回目の期日をこの日にする</button>`}
+    </div>
+    <p class="nc-hint">分割のときは、日を変えて何回でも足せます。期日は「いちばん早い約束の日」に合わせます。</p>
   </div>`;
 }
+
 
 // 回次を指定して記録を足す(追記のみ)
 function logAt(r, no, kind, text, memo){
@@ -1860,6 +1951,7 @@ function renderCard(){
     <div class="money-strip">
       <span class="ms"><b>${yen(r.amount)}円</b><i>毎月</i></span>
       <span class="ms"><b>${jpDate(r.due)}</b><i>次の期日</i></span>
+      ${r.入った ? `<span class="ms d-short"><b>${yen(r.残り)}円</b><i>この回の残り（請求 ${yen(r.amount)}円 のうち ${yen(r.入った)}円 入金済み）</i></span>` : ''}
       <span class="ms"><b>${c.paid}回 ／ ${yen(paidTotal)}円</b><i>これまでに払った</i></span>
       <span class="ms"><b>${yen(r.debt)}円</b><i>残っている支払い</i></span>
       ${o.n ? `<span class="ms d-short"><b>${o.n}回 ／ ${yen(o.yen)}円</b><i>未収</i></span>` : ''}
@@ -1871,7 +1963,7 @@ function renderCard(){
     <div class="card-cols">
      <div class="card-left">
       <div class="card-sec">
-        <h4>入金カレンダー（全${termOf(r)}回）</h4>
+        <h4>入金カレンダー</h4>
         ${calendarHtml(r)}
       </div>
 
@@ -2160,41 +2252,64 @@ document.addEventListener('click', e => {
   if(f2){ filter = f2.dataset.f2; openId = null; render(); return; }
 
   // ── 入金カレンダー ──────────────────────
-  const calBtn = t.closest('[data-cal]');
-  if(calBtn){
-    const k = +calBtn.dataset.cal;
-    calOpen = (calOpen === k ? null : k);
+  const calMove = t.closest('[data-calmove]');
+  if(calMove){
+    const n = +calMove.dataset.calmove;
+    if(!n) calMonth = null;
+    else { const {y, m} = calYM(); const d = new Date(y, m-1+n, 1);
+           calMonth = {y:d.getFullYear(), m:d.getMonth()+1}; }
+    calDay = null; renderCard(); return;
+  }
+  const calDayBtn = t.closest('[data-calday]');
+  if(calDayBtn){
+    const iso = calDayBtn.dataset.calday;
+    calDay = (calDay === iso ? null : iso);
     renderCard();
+    if(calDay){ const el = document.getElementById('calAmt');
+                if(el) bindAmt(el), el.focus(), el.select(); }
     return;
   }
-  if(t.closest('[data-calclose]')){ calOpen = null; renderCard(); return; }
+  if(t.closest('[data-calclose]')){ calDay = null; renderCard(); return; }
 
-  const calSave = t.closest('[data-calsave]');
-  if(calSave){
-    const [id, k] = calSave.dataset.calsave.split(':').map(Number);
-    const day = (document.getElementById('calDate') || {}).value || '';
-    const memo = (document.getElementById('calMemo') || {}).value.trim() || '';
-    if(!day){ alert('日付を入れてください。'); return; }
-    save({種類:'期日変更', id, no:k, day, memo})
-      .then(o => { if(o){ calOpen = null; renderCard();
-        showUndo(`${k}回目の期日を ${day} にしました`,
+  // 残りの半分を入れる(3日後に半分・5日後に半分、が多いため)
+  const calHalf = t.closest('[data-calhalf]');
+  if(calHalf){
+    const r = state.find(x => x.id === +calHalf.dataset.calhalf);
+    const mo = termMoney(r, currentNo(r));
+    const el = document.getElementById('calAmt');
+    if(el){ el.value = Number(Math.ceil(mo.rest / 2)).toLocaleString('ja-JP'); el.focus(); }
+    return;
+  }
+
+  // その日に払う約束にする(分割ぶんも何件でも足せる)
+  const calProm = t.closest('[data-calprom]');
+  if(calProm){
+    const [ids, iso] = calProm.dataset.calprom.split(':');
+    const id = +ids;
+    const amount = +((document.getElementById('calAmt') || {}).value || '').replace(/[^0-9]/g,'');
+    const memo = ((document.getElementById('calMemo') || {}).value || '').trim();
+    if(!amount){ alert('この日に払う額を入れてください。'); return; }
+    if(!memo){ alert('約束のときに言われたことをメモに残してください。'); return; }
+    save({種類:'約束', id, day:iso, amount, memo})
+      .then(o => { if(o){ calDay = null; renderCard();
+        showUndo(`${iso} に ${yen(amount)}円 の約束を足しました`
+          + (o.この回の残り != null ? `（この回の残り ${yen(o.この回の残り)}円）` : ''), null); } });
+    return;
+  }
+
+  // いま追いかけている回の期日を、その日にする
+  const calDue = t.closest('[data-caldue]');
+  if(calDue){
+    const [ids, iso] = calDue.dataset.caldue.split(':');
+    const id = +ids;
+    const r = state.find(x => x.id === id);
+    const k = currentNo(r);
+    const memo = ((document.getElementById('calMemo') || {}).value || '').trim();
+    save({種類:'期日変更', id, no:k, day:iso, memo})
+      .then(o => { if(o){ calDay = null; renderCard();
+        showUndo(`${k}回目の期日を ${iso} にしました`,
           o.もとの期日 ? () => save({種類:'期日変更', id, no:k, day:o.もとの期日, memo:'変更を取り消し'})
                        : null); } });
-    return;
-  }
-
-  // その回とは別に、入金の約束を足す(期日は動かさない回のとき用)
-  const calProm = t.closest('[data-calpromise]');
-  if(calProm){
-    const [id, k] = calProm.dataset.calpromise.split(':').map(Number);
-    const r = state.find(x => x.id === id);
-    const day = (document.getElementById('calDate') || {}).value || '';
-    const memo = (document.getElementById('calMemo') || {}).value.trim() || '';
-    if(!day){ alert('日付を入れてください。'); return; }
-    if(!memo){ alert('約束のときに言われたことをメモに残してください。'); return; }
-    save({種類:'約束', id, day, amount:r.amount, memo})
-      .then(o => { if(o){ calOpen = null; renderCard();
-        showUndo(`${day} に ${yen(r.amount)}円 の約束を足しました`, null); } });
     return;
   }
 
@@ -2586,7 +2701,7 @@ async function reload(){
   const r = await fetch('/api/contracts', {headers:{'Accept':'application/json'}});
   const d = await r.json();
   if(d.error) throw new Error(d.理由 || d.error);
-  DATA = d.DATA; HIST = d.HIST; SCHED = d.PLAN || {}; MONTHS = d.MONTHS; PROMISES = d.PROMISES;
+  DATA = d.DATA; HIST = d.HIST; SCHED = d.PLAN || {}; PAID = d.PAID || {}; MONTHS = d.MONTHS; PROMISES = d.PROMISES;
   EVENTS.length = 0; (d.EVENTS || []).forEach(e => EVENTS.push(e));
   state = DATA.map(x => ({...x, paid: !!x.paid0, paidWith: x.paid0 ? x.method : null}));
   render();
@@ -2605,7 +2720,7 @@ async function boot(){
     if(!r.ok) throw new Error('サーバーが ' + r.status + ' を返しました');
     const d = await r.json();
     if(d.error) throw new Error(d.理由 || d.error);
-    DATA = d.DATA; HIST = d.HIST; SCHED = d.PLAN || {}; MONTHS = d.MONTHS; PROMISES = d.PROMISES;
+    DATA = d.DATA; HIST = d.HIST; SCHED = d.PLAN || {}; PAID = d.PAID || {}; MONTHS = d.MONTHS; PROMISES = d.PROMISES;
     EVENTS.length = 0; (d.EVENTS || []).forEach(e => EVENTS.push(e));
     state = DATA.map(r => ({...r, paid: !!r.paid0, paidWith: r.paid0 ? r.method : null}));
     render();
