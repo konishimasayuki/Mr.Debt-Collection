@@ -42,6 +42,10 @@
     {
       "src": "api/yomi.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/customer.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
@@ -72,6 +76,10 @@
     {
       "src": "/api/yomi",
       "dest": "/api/yomi.js"
+    },
+    {
+      "src": "/api/customer",
+      "dest": "/api/customer.js"
     },
     {
       "src": "/.*",
