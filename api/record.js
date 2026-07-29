@@ -203,6 +203,86 @@ module.exports = async (req, res) => {
                          この回の残り: 残り, 約束の合計: 約束合計 });
       }
 
+      // ── 約束を動かす。日付・金額・メモを入れ直す ──────────────
+      // 「やっぱり5日にして」「1万にして」が電話で普通に来る。
+      // 消さずに書き換え、動かしたことを記録に残す。
+      case '約束変更': {
+        const pid = Number(b.約束id);
+        const day = String(b.day || '');
+        const amount = Number(b.amount);
+        if (!pid) return bad(res, 'どの約束かを指定してください。');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return bad(res, '約束の日付を入れてください。');
+        if (!amount || amount <= 0) return bad(res, '約束の金額を入れてください。');
+
+        const pr = (await sql(
+          `SELECT * FROM promise WHERE id=$1 AND contract_id=$2`, [pid, id]))[0];
+        if (!pr) return bad(res, 'その約束が見つかりません。');
+        const 前の日 = new Date(pr.promised_on).toISOString().slice(0, 10);
+        const 前の額 = pr.amount;
+        if (前の日 === day && 前の額 === amount && !memo)
+          return ok(res, { done: true, 変更なし: true });
+
+        await sql(`UPDATE promise SET promised_on=$1, amount=$2, memo=$3 WHERE id=$4`,
+          [day, amount, memo || pr.memo, pid]);
+
+        // 期日は、これから来る約束のうちいちばん早い日にそろえ直す
+        const target = (await sql(
+          `SELECT id, no, planned_amount FROM schedule
+            WHERE contract_id=$1 AND state <> '入金済み' ORDER BY no LIMIT 1`, [id]))[0];
+        let 新期日 = null;
+        if (target) {
+          const f = (await sql(
+            `SELECT min(promised_on) AS d FROM promise
+              WHERE contract_id=$1 AND promised_on >= current_date`, [id]))[0];
+          if (f && f.d) {
+            新期日 = new Date(f.d).toISOString().slice(0, 10);
+            await sql(`UPDATE schedule SET due_date=$1 WHERE id=$2`, [新期日, target.id]);
+          }
+        }
+        const 残り = target
+          ? Math.max(0, target.planned_amount - (await paidOn(sql, target.id))) : 0;
+
+        const 変更 = [];
+        if (前の日 !== day) 変更.push(`日を ${前の日} から ${day} へ`);
+        if (前の額 !== amount) 変更.push(`金額を ${yen(前の額)}円 から ${yen(amount)}円 へ`);
+        await sql(`INSERT INTO event (contract_id,no,recorded_by,kind,text,memo)
+                   VALUES ($1,$2,$3,'約束',$4,$5)`,
+          [id, target ? target.no : null, who,
+           `約束を動かした（${変更.length ? 変更.join('、') : 'メモだけ更新'}）`
+           + (target ? `。この回の残り ${yen(残り)}円` : ''), memo]);
+        return ok(res, { done: true, 約束の日: day, 金額: amount,
+                         期日: 新期日, この回の残り: 残り,
+                         もとの日: 前の日, もとの金額: 前の額 });
+      }
+
+      // ── 督促をとめる / 再開する ────────────────────
+      // 事情のある方に催促を続けないための欄。理由は必ず書いてもらう。
+      case '督促とめ': {
+        if (!memo) return bad(res, 'とめる理由を書いてください。',
+          '（例：入院中、弁護士が入った、社長が直接話す など）');
+        const until = String(b.until || '');
+        if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until))
+          return bad(res, 'いつまでの日付が読めません。');
+        await sql(`UPDATE contract SET dunning_reason=$1, dunning_by=$2,
+                     dunning_at=now(), dunning_until=$3, updated_at=now() WHERE id=$4`,
+          [memo, who, until || null, id]);
+        await sql(`INSERT INTO event (contract_id,no,recorded_by,kind,text,memo)
+                   VALUES ($1,NULL,$2,'メモ',$3,$4)`,
+          [id, who, `督促をとめた${until ? `（${until} まで）` : '（期限なし）'}`, memo]);
+        return ok(res, { done: true, 督促: 'とめた', 理由: memo, いつまで: until || null });
+      }
+
+      case '督促再開': {
+        if (!c.dunning_reason) return bad(res, 'この方の督促はとまっていません。');
+        const 前の理由 = c.dunning_reason;
+        await sql(`UPDATE contract SET dunning_reason=NULL, dunning_by=NULL,
+                     dunning_at=NULL, dunning_until=NULL, updated_at=now() WHERE id=$1`, [id]);
+        await sql(`INSERT INTO event (contract_id,no,recorded_by,kind,text,memo)
+                   VALUES ($1,NULL,$2,'メモ',$3,$4)`,
+          [id, who, `督促を再開した（とめていた理由：${前の理由}）`, memo]);
+        return ok(res, { done: true, 督促: '再開', もとの理由: 前の理由 });
+      }
+
       // ── 回ごとの期日の変更(入金カレンダーから)──────────────
       // もとの期日は記録に残す。入金済みの回は変えない(記録が食い違うため)。
       case '期日変更': {

@@ -33,6 +33,14 @@ const STATEMENTS = [
    )`,
   `CREATE INDEX IF NOT EXISTS contract_kana_idx ON contract (kana)`,
 
+  // 督促をとめる。事情のある方に催促を続けないための欄。
+  // 理由と、とめた人と、いつまでを必ず残す(黙って消さない)。
+  // 既に動いているデータベースにも足せるよう、後から列を追加する形にする。
+  `ALTER TABLE contract ADD COLUMN IF NOT EXISTS dunning_reason text`,
+  `ALTER TABLE contract ADD COLUMN IF NOT EXISTS dunning_by     text`,
+  `ALTER TABLE contract ADD COLUMN IF NOT EXISTS dunning_at     timestamptz`,
+  `ALTER TABLE contract ADD COLUMN IF NOT EXISTS dunning_until  date`,
+
   // ── 2. 支払予定 ─────────────────────────────
   // 予定額は毎月額のみ。ボーナス加算は含めない(ADR-002)
   `CREATE TABLE IF NOT EXISTS schedule (
