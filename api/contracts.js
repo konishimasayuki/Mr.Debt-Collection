@@ -46,11 +46,15 @@ module.exports = async (req, res) => {
 
     // 回ごとに、いくら入っているか(分割入金のため。ボーナス分は請求と関係しないので除く)
     const paidRows = await sql(
-      `SELECT schedule_id, COALESCE(sum(amount),0)::int AS n FROM allocation
-        WHERE schedule_id IS NOT NULL AND kind IN ('元本','手数料')
-        GROUP BY schedule_id`);
-    const paidBy = {};
-    paidRows.forEach((r) => (paidBy[r.schedule_id] = r.n));
+      `SELECT a.schedule_id, COALESCE(sum(a.amount),0)::int AS n, max(p.paid_on) AS last_on
+         FROM allocation a JOIN payment p ON p.id = a.payment_id
+        WHERE a.schedule_id IS NOT NULL AND a.kind IN ('元本','手数料')
+        GROUP BY a.schedule_id`);
+    const paidBy = {}, paidOnBy = {};
+    paidRows.forEach((r) => {
+      paidBy[r.schedule_id] = r.n;
+      if (r.last_on) paidOnBy[r.schedule_id] = new Date(r.last_on).toISOString().slice(0, 10);
+    });
 
     const DATA = [], HIST = {};
 
@@ -61,6 +65,13 @@ module.exports = async (req, res) => {
       const current = rows.find((s) => s.state !== '入金済み') || rows[rows.length - 1];
       const no = current ? current.no : c.term_count;
       const due = current ? md(new Date(current.due_date)) : todayMd;
+
+      // 今月ぶんの回。開始時の入金実績(/api/opening)もここに出る
+      const thisMonth = rows.find((s) => ym(new Date(s.due_date)) === MONTHS[5].t);
+      // 実績入力は充当を作らずに状態だけ入金済みにするため、済みなら請求額を入った額とみなす
+      const 今月入金 = thisMonth
+        ? (thisMonth.state === '入金済み' ? thisMonth.planned_amount : (paidBy[thisMonth.id] || 0))
+        : 0;
 
       const moto = Math.round(c.monthly_amount * 0.75);
       const fee  = c.monthly_amount - moto;
@@ -79,7 +90,12 @@ module.exports = async (req, res) => {
         memo: c.memo || '',
         parts: [['元本相当', moto], ['手数料相当', fee]],
         n: `${no}/${c.term_count}`,
-        paid0: false,                       // 今回ぶんの入金はこれから記録する
+        // 今月ぶんが済んでいるか。開始時の入金実績を入れた分もここに反映される
+        paid0: !!thisMonth && thisMonth.state === '入金済み',
+        今月請求: thisMonth ? thisMonth.planned_amount : 0,
+        今月入金,
+        // 実際に入った日。開始時の入金実績で入れた分は入金の記録が無いので null
+        今月入金日: thisMonth ? (paidOnBy[thisMonth.id] || null) : null,
         kaishu: c.status === '回収',
         diff: c.balance_diff,
         no,
