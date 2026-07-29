@@ -1903,7 +1903,9 @@ document.addEventListener('click', e => {
     if(key === 'cash'){ alert('銀行へ入れる手続きの画面(モックでは省略)'); return; }
     if(key === 'import'){ openImport(); return; }
     filter = (key === 'unmatched') ? 'all' : key;
-    openId = null;
+    // 開いていたカードは閉じる。閉じないと、その区分の一覧ではなく
+    // 前に見ていたお客さんのカードが出てしまう
+    openId = null; cardId = null; openNo = null;
     go('card');
     if(key === 'unmatched'){
       const list = document.getElementById('umList');
@@ -2223,39 +2225,50 @@ function ncPreview(){
     ${rec}`;
 }
 
+// 登録はサーバーへ。保存できたら読み直して、その方のカードを開く。
+let ncSaving = false;
 function addCustomer(){
+  if(ncSaving) return;
   const name = (document.getElementById('ncName').value||'').trim();
   const car  = (document.getElementById('ncCar').value||'').trim();
   const amount = ncDigits('ncMonthly');
   if(!name){ alert('お名前を入れてください。'); return; }
   if(!amount){ alert('毎月の額を入れてください。'); return; }
-  const day = ncPayDay();
-  const bm = ncMonths('ncBonusMonths'), be = ncDigits('ncBonusEach');
-  const bonusTotal = be * bm.length * 4;
-  const moto = Math.round(amount*0.75), fee = amount - moto;
-  const fd = ncFirstDate(), fy = fd.getFullYear(), fm = fd.getMonth()+1;
-  const due = `${pad(fm)}-${pad(fd.getDate())}`;
-  let si = MONTHS.findIndex(mo => mo.y===fy && mo.m===fm); if(si < 0) si = MONTHS.length;
-  const id = Math.max(0, ...state.map(r => r.id)) + 1;
-  const row = { id, due, name,
-    ct: `${car || '車両未記入'}（${NOW.getMonth()+1}月契約）`,
-    dt: `元本 ${yen(moto)} / 手数料 ${yen(fee)}`, amount, method: '振込', note: '',
-    parts: [['元本相当', moto], ['手数料相当', fee]], n: '1/48',
-    paid0: false, paid: false, paidWith: null, kaishu: false, diff: 0,
-    no: 1, rest: 47, si, debt: amount*48 + bonusTotal, bonus: bonusTotal, bonusPaid: 0,
+  const st = document.getElementById('ncStart');
+  const start = (st && st.value) || ncDefaultMonth();
+  const contact = (document.getElementById('ncContact').value||'').trim();
+  const payload = {
+    name, car, monthly: amount,
     kana: (document.getElementById('ncKana').value||'').trim(),
-    contact: (document.getElementById('ncContact').value||'').trim() };
-  HIST[id] = MONTHS.map((_, i) => i < si ? 'none' : 'pending');
-  state.push(row);
-  logEvent(row, 'メモ',
-    `新しいお客さん（${name}／${car || '車両未記入'}）を登録した`
-    + `：毎月 ${yen(amount)}円、${fy}年${fm}月${fd.getDate()}日から全48回`, '');
-  closeNewCustomer();
-  filter = 'up'; openId = id; cardId = null; resetPanel(row); go('card');
-  showUndo(`${name}さん を新しく登録しました`, () => {
-    const i = state.findIndex(x => x.id === id); if(i >= 0) state.splice(i, 1);
-    delete HIST[id]; EVENTS.pop(); openId = null;
-  });
+    price: ncDigits('ncPrice'),
+    pay_day: ncPayDay(),
+    start,
+    bonus_months: ncMonths('ncBonusMonths'),
+    bonus_each: ncDigits('ncBonusEach'),
+    // 連絡先は1つの欄。@があればメール、なければ電話として預ける
+    tel: contact.includes('@') ? '' : contact,
+    email: contact.includes('@') ? contact : '',
+  };
+  const btn = document.querySelector('[data-ncadd]');
+  ncSaving = true; if(btn){ btn.disabled = true; btn.textContent = '登録しています…'; }
+  fetch('/api/customer', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)})
+    .then(r => r.json())
+    .then(async d => {
+      if(d.error){ alert('登録できませんでした。\n' + (d.理由 ? d.error + '\n' + d.理由 : d.error)); return; }
+      closeNewCustomer();
+      await reload();
+      let msg = `${d.name}さん を登録しました（毎月 ${yen(amount)}円、${d.初回} から全48回）`;
+      if(d.検算 && !d.検算.一致)
+        msg += `\n\n※ 車の代金 ${yen(d.検算.車の代金)}円 と、毎月額から計算した元本 ${yen(d.検算.計算した元本)}円 が`
+             + ` ${yen(Math.abs(d.検算.差))}円 ちがいます。記録に残してあります。`;
+      if(d.同姓同名) msg += `\n\n※ 同じお名前の方が ${d.同姓同名}名 になりました。ご確認ください。`;
+      alert(msg);
+      filter = 'up'; openId = null; openCard(d.id);
+    })
+    .catch(e => alert('登録できませんでした。通信を確認してください。\n' + (e.message || e)))
+    .finally(() => { ncSaving = false;
+      if(btn){ btn.disabled = false; btn.textContent = '登録する'; } });
 }
 
 document.getElementById('btnImport').addEventListener('click', openImport);
