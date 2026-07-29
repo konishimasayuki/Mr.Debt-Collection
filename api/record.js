@@ -14,10 +14,10 @@ function readBody(req) {
     req.on('error', () => resolve({}));
   });
 }
-const bad = (res, msg) => {
+const bad = (res, msg, why) => {
   res.statusCode = 400;
   res.setHeader('Content-Type', 'application/json; charset=UTF-8');
-  res.end(JSON.stringify({ error: msg }));
+  res.end(JSON.stringify(why ? { error: msg, 理由: why } : { error: msg }));
 };
 const yen = (n) => Number(n).toLocaleString('ja-JP');
 
@@ -144,6 +144,30 @@ module.exports = async (req, res) => {
            `${day} に ${yen(amount)}円 を支払うと約束`
            + (prev ? `（期日を ${new Date(prev).toISOString().slice(0,10)} から変更）` : ''), memo]);
         return ok(res, { done: true, 約束の日: day });
+      }
+
+      // ── 回ごとの期日の変更(入金カレンダーから)──────────────
+      // もとの期日は記録に残す。入金済みの回は変えない(記録が食い違うため)。
+      case '期日変更': {
+        const no = Number(b.no);
+        const day = String(b.day || '');
+        if (!no) return bad(res, '何回目かを指定してください。');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return bad(res, '日付を入れてください。');
+        const s = (await sql(
+          `SELECT id, no, due_date, state FROM schedule WHERE contract_id=$1 AND no=$2`,
+          [id, no]))[0];
+        if (!s) return bad(res, 'その回が見つかりません。');
+        if (s.state === '入金済み')
+          return bad(res, '入金済みの回は期日を変えられません。',
+            '取り消してから入れ直してください。');
+        const prev = new Date(s.due_date).toISOString().slice(0, 10);
+        if (prev === day) return ok(res, { done: true, 変更なし: true, 回次: no, 期日: day });
+
+        await sql(`UPDATE schedule SET due_date=$1 WHERE id=$2`, [day, s.id]);
+        await sql(`INSERT INTO event (contract_id,no,recorded_by,kind,text,memo)
+                   VALUES ($1,$2,$3,'約束',$4,$5)`,
+          [id, no, who, `${no}回目の期日を ${prev} から ${day} に変更`, memo]);
+        return ok(res, { done: true, 回次: no, 期日: day, もとの期日: prev });
       }
 
       // ── その回のメモ(追記のみ)────────────────────
