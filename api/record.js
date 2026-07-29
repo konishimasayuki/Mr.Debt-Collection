@@ -21,6 +21,23 @@ const bad = (res, msg, why) => {
 };
 const yen = (n) => Number(n).toLocaleString('ja-JP');
 
+// その回にこれまでいくら入っているか(ボーナス分は請求と関係しないので数えない)
+async function paidOn(sql, scheduleId) {
+  const r = await sql(
+    `SELECT COALESCE(sum(amount),0)::int AS n FROM allocation
+      WHERE schedule_id=$1 AND kind IN ('元本','手数料')`, [scheduleId]);
+  return r[0].n;
+}
+
+// 充当を消したあと、その回の状態を入金額から決め直す
+async function restate(sql, scheduleId) {
+  const s = (await sql(`SELECT planned_amount FROM schedule WHERE id=$1`, [scheduleId]))[0];
+  if (!s) return;
+  const n = await paidOn(sql, scheduleId);
+  const state = n <= 0 ? '未入金' : (n >= s.planned_amount ? '入金済み' : '一部入金');
+  await sql(`UPDATE schedule SET state=$1 WHERE id=$2`, [state, scheduleId]);
+}
+
 module.exports = async (req, res) => {
   if (!requireSession(req, res)) return;
   if ((req.method || '').toUpperCase() !== 'POST') return bad(res, 'POSTで送ってください。');
@@ -75,32 +92,49 @@ module.exports = async (req, res) => {
                      VALUES ($1, NULL, $2, 'ボーナス')`, [pay.id, bonus]);
         }
 
-        if (target) await sql(`UPDATE schedule SET state='入金済み' WHERE id=$1`, [target.id]);
-
-        // 差額は毎月分だけで見る(ボーナス分は請求と関係しない)
+        // 分割入金に対応する。その回にいくら入っているかを数え、
+        // 足りていなければ「一部入金」のままにして残りを持つ。
+        // 満額に届いたときだけ消し込み、そこではじめて過不足を見る。
         const planned = target ? target.planned_amount : c.monthly_amount;
-        const d = monthly - planned;
+        // paidOn は今いれた充当も含む(この行より前で充当を書いているため)
+        const after = target ? await paidOn(sql, target.id) : 0;
+        const 残り = Math.max(0, planned - after);
+        const 完了 = target ? after >= planned : false;
+
+        if (target) {
+          await sql(`UPDATE schedule SET state=$1 WHERE id=$2`,
+            [完了 ? '入金済み' : '一部入金', target.id]);
+        }
+
+        // 差額は「その回が終わったとき」だけ動かす(途中の不足は残りとして持つ)
         let diff = c.balance_diff, tail = '';
         if (b.差額 === '精算') { diff = 0; tail = '差額を精算した'; }
-        else if (monthly > 0 && d !== 0) { diff = c.balance_diff + d;
-          tail = `過不足は ${d < 0 ? '不足' : '余り'} ${yen(Math.abs(diff))}円 になった`; }
+        else if (完了) {
+          const d = after - planned;
+          if (d !== 0) { diff = c.balance_diff + d;
+            tail = `過不足は ${d < 0 ? '不足' : '余り'} ${yen(Math.abs(diff))}円 になった`; }
+        }
         const left = Math.max(0, c.bonus_remaining - bonus);
         await sql(`UPDATE contract SET balance_diff=$1, bonus_remaining=$2, updated_at=now()
                     WHERE id=$3`, [diff, left, id]);
 
+        // 満額に届いていないときは、残りをはっきり書く(電話で聞かれるため)
+        const 内訳 = 完了 || !target ? ''
+          : `。この回の残り ${yen(残り)}円（請求 ${yen(planned)}円 のうち ${yen(after)}円 入金済み）`;
         const text = bonus > 0
           ? (monthly > 0
               ? `${yen(amount)}円 を受け取り（毎月分 ${yen(monthly)}円／請求 ${yen(planned)}円、`
-                + `ボーナス分 ${yen(bonus)}円／見込みの残り ${yen(left)}円）${tail ? '。' + tail : ''}`
+                + `ボーナス分 ${yen(bonus)}円／見込みの残り ${yen(left)}円）${tail ? '。' + tail : ''}${内訳}`
               : `ボーナス入金 ${yen(bonus)}円 を受け取り（見込みの残り ${yen(left)}円）`)
-          : `${yen(amount)}円 を受け取り（請求 ${yen(planned)}円）${tail ? '。' + tail : ''}`;
+          : `${yen(amount)}円 を受け取り（請求 ${yen(planned)}円）${tail ? '。' + tail : ''}${内訳}`;
         await sql(`INSERT INTO event (contract_id,no,recorded_by,kind,text,memo)
                    VALUES ($1,$2,$3,$4,$5,$6)`,
           [id, target ? target.no : null, who,
            monthly > 0 ? '入金' : 'ボーナス', text, memo]);
 
         return ok(res, { done: true, 回次: target ? target.no : null,
-                         過不足: diff, 毎月分: monthly, ボーナス分: bonus, ボーナス見込み: left });
+                         過不足: diff, 毎月分: monthly, ボーナス分: bonus, ボーナス見込み: left,
+                         この回の残り: 残り, この回は完了: 完了 });
       }
 
       // ── ボーナス入金。見込みから差し引く ─────────────────
@@ -120,7 +154,9 @@ module.exports = async (req, res) => {
         return ok(res, { done: true, ボーナス見込み: left });
       }
 
-      // ── 後日の約束。期日も更新し、もとの期日を残す ───────────
+      // ── 後日の約束。分割(3日後に半分・5日後に半分)を何件でも受ける ────
+      // 期日は「いちばん早い、まだ果たされていない約束の日」に合わせる。
+      // 分割で何件足しても期日が跳ね回らないようにするため。
       case '約束': {
         const day = String(b.day || '');            // YYYY-MM-DD
         const amount = Number(b.amount);
@@ -129,21 +165,42 @@ module.exports = async (req, res) => {
         if (!memo) return bad(res, '約束のときに言われたことをメモに残してください。');
 
         const target = (await sql(
-          `SELECT id, no, due_date FROM schedule
+          `SELECT id, no, due_date, planned_amount FROM schedule
             WHERE contract_id=$1 AND state <> '入金済み' ORDER BY no LIMIT 1`, [id]))[0];
         const prev = target ? target.due_date : null;
 
         await sql(`INSERT INTO promise (contract_id, heard_on, promised_on, amount, heard_by, memo, prev_due_date)
                    VALUES ($1, current_date, $2, $3, $4, $5, $6)`,
           [id, day, amount, who, memo, prev]);
-        if (target) await sql(`UPDATE schedule SET due_date=$1 WHERE id=$2`, [day, target.id]);
+
+        // 期日は、これから来る約束のうちいちばん早い日にそろえる
+        let 新期日 = null;
+        if (target) {
+          const first = (await sql(
+            `SELECT min(promised_on) AS d FROM promise
+              WHERE contract_id=$1 AND promised_on >= current_date`, [id]))[0];
+          if (first && first.d) {
+            新期日 = new Date(first.d).toISOString().slice(0, 10);
+            await sql(`UPDATE schedule SET due_date=$1 WHERE id=$2`, [新期日, target.id]);
+          }
+        }
+
+        // その回の残りと、約束の合計を出す(電話で「あといくら」と聞かれるため)
+        const 残り = target
+          ? Math.max(0, target.planned_amount - (await paidOn(sql, target.id))) : 0;
+        const 約束合計 = target ? (await sql(
+          `SELECT COALESCE(sum(amount),0)::int AS n FROM promise
+            WHERE contract_id=$1 AND promised_on >= current_date`, [id]))[0].n : 0;
 
         await sql(`INSERT INTO event (contract_id,no,recorded_by,kind,text,memo)
                    VALUES ($1,$2,$3,'約束',$4,$5)`,
           [id, target ? target.no : null, who,
            `${day} に ${yen(amount)}円 を支払うと約束`
-           + (prev ? `（期日を ${new Date(prev).toISOString().slice(0,10)} から変更）` : ''), memo]);
-        return ok(res, { done: true, 約束の日: day });
+           + (target ? `（この回の残り ${yen(残り)}円 / 約束の合計 ${yen(約束合計)}円）` : '')
+           + (prev && 新期日 && new Date(prev).toISOString().slice(0,10) !== 新期日
+              ? `。期日を ${new Date(prev).toISOString().slice(0,10)} から ${新期日} に変更` : ''), memo]);
+        return ok(res, { done: true, 約束の日: day, 期日: 新期日,
+                         この回の残り: 残り, 約束の合計: 約束合計 });
       }
 
       // ── 回ごとの期日の変更(入金カレンダーから)──────────────
@@ -210,25 +267,28 @@ module.exports = async (req, res) => {
         const bonusAmt = sum('ボーナス');
         const monthlyAmt = sum('元本') + sum('手数料');
 
-        // 予定を未入金に戻す(その入金で消し込んだ回)
         const sc = (await sql(
           `SELECT schedule_id FROM allocation WHERE payment_id=$1 AND schedule_id IS NOT NULL LIMIT 1`,
           [last.id]))[0];
-        if (sc) await sql(`UPDATE schedule SET state='未入金' WHERE id=$1`, [sc.schedule_id]);
 
         if (bonusAmt > 0) {
           await sql(`UPDATE contract SET bonus_remaining = bonus_remaining + $1, updated_at=now()
                       WHERE id=$2`, [bonusAmt, id]);
         }
+        // 過不足はその回が終わったときだけ動かしているので、戻すのも終わっていた回だけ
         if (monthlyAmt > 0 && sc) {
-          const planned = (await sql(`SELECT planned_amount FROM schedule WHERE id=$1`,
+          const s = (await sql(`SELECT planned_amount, state FROM schedule WHERE id=$1`,
             [sc.schedule_id]))[0];
-          const d = monthlyAmt - (planned ? planned.planned_amount : c.monthly_amount);
-          if (d !== 0) await sql(`UPDATE contract SET balance_diff = balance_diff - $1, updated_at=now()
-                                   WHERE id=$2`, [d, id]);
+          if (s && s.state === '入金済み') {
+            const d = (await paidOn(sql, sc.schedule_id)) - s.planned_amount;
+            if (d !== 0) await sql(`UPDATE contract SET balance_diff = balance_diff - $1, updated_at=now()
+                                     WHERE id=$2`, [d, id]);
+          }
         }
         await sql(`DELETE FROM allocation WHERE payment_id=$1`, [last.id]);
         await sql(`DELETE FROM payment WHERE id=$1`, [last.id]);
+        // 分割入金があるので、残った充当から状態を決め直す(いつも未入金に戻すわけではない)
+        if (sc) await restate(sql, sc.schedule_id);
         const what = bonusAmt > 0
           ? (monthlyAmt > 0
               ? `入金（毎月分 ${yen(monthlyAmt)}円／ボーナス分 ${yen(bonusAmt)}円）`
