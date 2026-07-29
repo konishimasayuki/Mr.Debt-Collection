@@ -7,6 +7,13 @@ const pad = (n) => String(n).padStart(2, '0');
 const md  = (d) => `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 const ym  = (d) => d.getUTCFullYear() * 12 + d.getUTCMonth();
 
+// 督促をとめているか。期限を過ぎたら自動で戻す(黙って止まったままにしない)
+function dunningHeld(c) {
+  if (!c.dunning_reason) return false;
+  if (!c.dunning_until) return true;
+  return new Date(c.dunning_until).toISOString().slice(0, 10) >= new Date().toISOString().slice(0, 10);
+}
+
 // 画面と同じ12ヶ月の並び(今月を6番目に置く)
 function monthsAround(today) {
   const base = today.getUTCFullYear() * 12 + today.getUTCMonth() - 5;
@@ -29,7 +36,7 @@ module.exports = async (req, res) => {
     const payments  = await sql(
       `SELECT contract_id, paid_on, amount, method FROM payment ORDER BY paid_on, id`);
     const promises  = await sql(
-      `SELECT contract_id, heard_on, promised_on, amount, memo FROM promise ORDER BY id`);
+      `SELECT id, contract_id, heard_on, promised_on, amount, memo FROM promise ORDER BY id`);
     const events    = await sql(
       `SELECT contract_id, no, occurred_at, recorded_by, kind, text, memo
          FROM event ORDER BY id`);
@@ -85,6 +92,13 @@ module.exports = async (req, res) => {
         // いま追いかけている回の残り(分割入金の途中は請求額より少ない)
         入った: current ? (paidBy[current.id] || 0) : 0,
         残り: current ? Math.max(0, current.planned_amount - (paidBy[current.id] || 0)) : 0,
+        // 督促をとめているか。期限つきで、その日を過ぎていれば自動でとまらない
+        督促とめ: dunningHeld(c) ? {
+          理由: c.dunning_reason,
+          とめた人: c.dunning_by,
+          とめた日: c.dunning_at ? new Date(c.dunning_at).toISOString().slice(0, 10) : null,
+          いつまで: c.dunning_until ? new Date(c.dunning_until).toISOString().slice(0, 10) : null,
+        } : null,
       });
 
       // 12ヶ月ぶんの状態。予定の実際の期日で並べる
@@ -123,6 +137,7 @@ module.exports = async (req, res) => {
       DATA, HIST, PLAN, PAID,
       MONTHS: MONTHS.map((m) => ({ y: m.y, m: m.m })),
       PROMISES: promises.map((p) => ({
+        pid: p.id,
         id: p.contract_id,
         day: md(new Date(p.promised_on)),
         iso: new Date(p.promised_on).toISOString().slice(0, 10),

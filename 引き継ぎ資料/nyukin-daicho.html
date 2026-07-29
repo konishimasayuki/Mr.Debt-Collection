@@ -659,6 +659,22 @@
     font-size:12px;color:var(--ink-2);}
   .cal-legend .lg{display:inline-block;width:11px;height:11px;margin-right:4px;
     vertical-align:-1px;border:1px solid var(--rule-strong);}
+  .dun{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 16px;
+    padding:10px 14px;border:1px solid var(--rule);background:var(--paper-2);}
+  .dun .sub{font-size:12.5px;color:var(--ink-2);}
+  .dun .btn{margin-left:auto;}
+  .dun-on{border-left:3px solid var(--draft,#8A6D1F);background:#FBF4DF;flex-direction:column;
+    align-items:flex-start;gap:4px;}
+  .dun-on .dun-main{font-weight:700;color:#8A6D1F;}
+  .dun-on .dun-until{font-weight:400;font-size:12.5px;margin-left:8px;}
+  .dun-on .dun-why{font-size:13px;}
+  .dun-on .btn{margin-left:0;margin-top:6px;}
+  .dun-form{flex-direction:column;align-items:stretch;gap:0;}
+  .dun-form .btn,.dun-form .btn-pay{margin-left:0;}
+  .hold-tag{font-size:11.5px;padding:1px 6px;background:#FBF4DF;border:1px solid #DCC98C;color:#8A6D1F;}
+  .prom-edit{border:1px solid #DCC98C;background:#FDFAF1;padding:8px 10px;margin-bottom:10px;}
+  .prom-h{font-size:13px;color:#8A6D1F;font-weight:700;margin-bottom:4px;}
+
   .cal-edit{border:1px solid var(--indigo);background:var(--paper);padding:12px 14px;margin-top:12px;}
   .cal-edit-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;
     padding-bottom:8px;border-bottom:1px solid var(--rule);}
@@ -900,9 +916,15 @@ const YEAR = NOW.getFullYear();
 const TODAY = `${pad(NOW.getMonth()+1)}-${pad(NOW.getDate())}`;
 document.getElementById('headDate').textContent =
   `${YEAR}年${NOW.getMonth()+1}月${NOW.getDate()}日(${'日月火水木金土'[NOW.getDay()]})`;
-const THRESHOLD = 1000;    // これ未満の差額は督促の対象にしない
+// 差額は10円でも督促の対象。1円でもずれていれば人に見せる。
+const THRESHOLD = 1;
+// 督促をとめている方(理由つきで解除)。とめても一覧からは消さず、印を付ける。
+const held = r => !!r.督促とめ;
+// 督促の対象:期日を過ぎて残りがあるか、差額がある。ただし、とめている方は除く
+const needsDunning = r => !r.kaishu && !held(r) &&
+  ((statusOf(r) === 'overdue' && (r.入った ? r.残り > 0 : true)) || Math.abs(r.diff) >= THRESHOLD);
 const NOTICE_REMAIN = 12;  // 残り何回から完済前の精算を案内するか
-const bigDiff = r => Math.abs(r.diff) >= THRESHOLD;
+const bigDiff = r => Math.abs(r.diff) >= THRESHOLD && !held(r);
 const testTag = r => r.test ? '<span class="test-tag">テスト</span>' : '';
 const BONUS_RATIO = 10;   // 毎月額の何回分を超えたら重いとみなすか
 const bonusRatio = r => r.bonus > 10 ? r.bonus / r.amount : 0;
@@ -993,7 +1015,9 @@ function renderTotals(){
 function renderDash(){
   const unpaid = f => state.filter(r => !r.paid && f(r));
   const today = unpaid(r => statusOf(r)==='today');
-  const late  = unpaid(r => statusOf(r)==='overdue');
+  // 督促をとめている方は「連絡する」の数に入れない(一覧には残る)
+  const late  = unpaid(r => statusOf(r)==='overdue' && !held(r));
+  const heldN = state.filter(r => !r.paid && statusOf(r)==='overdue' && held(r)).length;
   const prom  = state.filter(r => !r.paid && (r.hold || PROMISES.some(p => p.id === r.id)));
   const cashSum = CASH.reduce((s,c) => s + c.amount, 0);
 
@@ -1001,7 +1025,10 @@ function renderDash(){
 
   const items = [
     {n:today.length, label:'本日の入金を確かめる', sub:byMethod(today) || 'すべて確認済みです', go:'today', tone:'today'},
-    {n:late.length,  label:'遅れている方に連絡する', sub:late.length ? `いちばん長い方で ${Math.max(...late.map(r => daysLate(r.due)))}日` : '遅れはありません', go:'overdue', tone:'overdue'},
+    {n:late.length,  label:'遅れている方に連絡する',
+     sub:(late.length ? `いちばん長い方で ${Math.max(...late.map(r => daysLate(r.due)))}日` : '遅れはありません')
+        + (heldN ? `　※ほかに督促をとめている方が ${heldN}名` : ''),
+     go:'overdue', tone:'overdue'},
     {n: unmatched.length,
      label: unmatched.length ? '誰の入金か分からないものを片づける' : '銀行明細を取り込む',
      sub: unmatched.length ? '振込人の名前から本人を探します'
@@ -1022,7 +1049,8 @@ function renderDash(){
   }).join('');
 
   document.getElementById('dashRule').textContent =
-    `いまの決めごと：差額は ${yen(THRESHOLD)}円 以上を督促の対象にする。`
+    `いまの決めごと：差額は ${yen(THRESHOLD)}円 でも督促の対象にする（10円のずれも見る）。`
+    + `事情のある方は、理由を書いて督促をとめられる。`
     + `完済前の精算は、金額にかかわらず残り${NOTICE_REMAIN}回から案内する`
     + `（該当が出るのは2029年2月ごろの見込み）。`
     + `ボーナス頼みは毎月額の${BONUS_RATIO}回分を超えたら見直す。`;
@@ -1407,7 +1435,8 @@ function renderRows(){
           r.入った ? `<span class="am-diff d-short">残り ${yen(r.残り)}</span>`
           : (r.diff ? `<span class="am-diff ${r.diff<0?'d-short':'d-over'}">${r.diff<0?'不足':'余り'} ${yen(Math.abs(r.diff))}</span>` : '')}</span>
         <span class="mt">${r.n}</span>
-        <span class="rc">${heavyBonus(r) ? `<span class="bonus-tag">ボ ${Math.round(bonusRatio(r))}回分</span>` : rec}</span>
+        <span class="rc">${held(r) ? '<span class="hold-tag">督促とめ中</span>'
+          : (heavyBonus(r) ? `<span class="bonus-tag">ボ ${Math.round(bonusRatio(r))}回分</span>` : rec)}</span>
         <span class="strike"></span>
       </button>` + (openId===r.id && !r.paid ? panelHtml(r) : '');
   };
@@ -1554,7 +1583,7 @@ function renderPend(){
 
   const dd = state.filter(r => bigDiff(r) && !r.kaishu);
   if(dd.length) g.push({k:'diff', t:'差額の扱いを決める', sum:dd.reduce((s,r) => s + Math.abs(r.diff), 0),
-    w:`${yen(THRESHOLD)}円 以上ずれている契約です。決めるまで毎回くり返します。`,
+    w:`${yen(THRESHOLD)}円 でもずれている契約です。決めるまで毎回くり返します。`,
     rows:dd.map(r => ({id:r.id, a:r.name, b:r.ct,
       c:r.plan ? `${PLAN[r.plan]} と決めています` : '扱いが未定です', n:r.diff}))});
 
@@ -1753,9 +1782,45 @@ function calMarks(r){
     const mo = termMoney(r, row[0]);
     put(row[1], {t:'due', no:row[0], amount:mo.rest || mo.planned, done:!!row[2], rest:mo.rest});
   });
-  promisesOf(r).forEach(p => put(p.iso, {t:'promise', amount:p.amount, memo:p.memo}));
+  promisesOf(r).forEach(p => put(p.iso, {t:'promise', pid:p.pid, amount:p.amount, memo:p.memo}));
   ((PAID && PAID[r.id]) || []).forEach(x => put(x[0], {t:'paid', amount:x[1], method:x[2]}));
   return m;
+}
+
+// ── 督促をとめる / 再開する ──────────────────────
+// 事情のある方(入院中・弁護士が入った・社長が直接話す など)に
+// 催促を続けないための欄。理由は必ず書いてもらい、記録に残す。
+let dunOpen = false;
+
+function dunningBox(r){
+  const h = r.督促とめ;
+  if(h){
+    return `<div class="dun dun-on">
+      <div class="dun-main">督促をとめています
+        ${h.いつまで ? `<span class="dun-until">${jpDate(h.いつまで.slice(5))} まで</span>`
+                     : '<span class="dun-until">期限なし</span>'}</div>
+      <div class="dun-why">理由：${h.理由}
+        <span class="sub">（${h.とめた人 || '—'}／${h.とめた日 || ''}）</span></div>
+      <button class="btn" data-dunoff="${r.id}">督促を再開する</button>
+    </div>`;
+  }
+  if(!dunOpen){
+    return `<div class="dun">
+      <span class="sub">事情があって催促をとめたいときは、理由を書いてとめられます。</span>
+      <button class="btn" data-dunopen="1">督促をとめる</button>
+    </div>`;
+  }
+  return `<div class="dun dun-form">
+    <div class="pay-row"><span class="pay-label">とめる理由</span>
+      <input class="memo-input" id="dunWhy" autocomplete="off"
+        placeholder="入院中、弁護士が入った、社長が直接話す など（必ず書いてください）"></div>
+    <div class="pay-row"><span class="pay-label">いつまで</span>
+      <input class="prom-date" id="dunUntil" type="date" min="${isoToday()}">
+      <span class="hint">空けておくと、再開するまでとまったままです。</span></div>
+    <div class="pay-row commit"><span class="pay-label"></span>
+      <button class="btn-pay" data-dunsave="${r.id}">この理由でとめる</button>
+      <button class="btn" data-dunclose="1">やめる</button></div>
+  </div>`;
 }
 
 function calendarHtml(r){
@@ -1835,6 +1900,21 @@ function calDayBox(r, iso){
     <div class="pay-row tight"><span class="pay-label"></span>
       <span class="hint"><b>${no}回目</b>の残り <b>${yen(mo.rest)}円</b>
         （請求 ${yen(mo.planned)}円 ／ 入金済み ${yen(mo.paid)}円）</span></div>
+
+    ${marks.filter(x => x.t === 'promise').map(x => `
+      <div class="prom-edit" data-promrow="${x.pid}">
+        <div class="prom-h">この日の約束 <b>${yen(x.amount)}円</b> を動かす</div>
+        <div class="pay-row"><span class="pay-label">日を</span>
+          <input class="prom-date" id="pe-d-${x.pid}" type="date" value="${iso}"></div>
+        <div class="pay-row"><span class="pay-label">金額を</span>
+          <input class="imp-input pay-input" id="pe-a-${x.pid}" inputmode="numeric"
+            autocomplete="off" value="${Number(x.amount).toLocaleString('ja-JP')}"><span>円</span></div>
+        <div class="pay-row"><span class="pay-label">メモ</span>
+          <input class="memo-input" id="pe-m-${x.pid}" autocomplete="off"
+            value="${(x.memo || '').replace(/"/g,'&quot;')}" placeholder="動かす理由（任意）"></div>
+        <div class="pay-row commit"><span class="pay-label"></span>
+          <button class="btn-pay" data-promsave="${r.id}:${x.pid}">この約束を動かす</button></div>
+      </div>`).join('')}
 
     <div class="pay-row"><span class="pay-label">この日に払う額</span>
       <input class="imp-input pay-input" id="calAmt" inputmode="numeric" autocomplete="off"
@@ -1947,6 +2027,8 @@ function renderCard(){
       <div class="say-main">${say.main}</div>
       ${say.sub ? `<div class="say-sub">${say.sub}</div>` : ''}
     </div>
+
+    ${dunningBox(r)}
 
     <div class="money-strip">
       <span class="ms"><b>${yen(r.amount)}円</b><i>毎月</i></span>
@@ -2251,6 +2333,48 @@ document.addEventListener('click', e => {
   const f2 = t.closest('[data-f2]');
   if(f2){ filter = f2.dataset.f2; openId = null; render(); return; }
 
+  // ── 督促をとめる / 再開する ────────────────
+  if(t.closest('[data-dunopen]')){ dunOpen = true; renderCard(); return; }
+  if(t.closest('[data-dunclose]')){ dunOpen = false; renderCard(); return; }
+
+  const dunSave = t.closest('[data-dunsave]');
+  if(dunSave){
+    const id = +dunSave.dataset.dunsave;
+    const memo = ((document.getElementById('dunWhy') || {}).value || '').trim();
+    const until = (document.getElementById('dunUntil') || {}).value || '';
+    if(!memo){ alert('とめる理由を書いてください。'); return; }
+    save({種類:'督促とめ', id, memo, until})
+      .then(o => { if(o){ dunOpen = false; renderCard();
+        showUndo(`督促をとめました（${memo}）`, () => save({種類:'督促再開', id, memo:'とめたのを取り消し'})); } });
+    return;
+  }
+
+  const dunOff = t.closest('[data-dunoff]');
+  if(dunOff){
+    const id = +dunOff.dataset.dunoff;
+    save({種類:'督促再開', id, memo:''})
+      .then(o => { if(o){ renderCard(); showUndo('督促を再開しました', null); } });
+    return;
+  }
+
+  // 追加した約束を動かす(日・金額・メモ)
+  const promSave = t.closest('[data-promsave]');
+  if(promSave){
+    const [ids, pid] = promSave.dataset.promsave.split(':').map(Number);
+    const day = (document.getElementById('pe-d-' + pid) || {}).value || '';
+    const amount = +((document.getElementById('pe-a-' + pid) || {}).value || '').replace(/[^0-9]/g,'');
+    const memo = ((document.getElementById('pe-m-' + pid) || {}).value || '').trim();
+    if(!day){ alert('日付を入れてください。'); return; }
+    if(!amount){ alert('金額を入れてください。'); return; }
+    save({種類:'約束変更', id:ids, 約束id:pid, day, amount, memo})
+      .then(o => { if(o){ calDay = null; renderCard();
+        showUndo(`約束を ${day} の ${yen(amount)}円 に動かしました`
+          + (o.この回の残り != null ? `（この回の残り ${yen(o.この回の残り)}円）` : ''),
+          o.もとの日 ? () => save({種類:'約束変更', id:ids, 約束id:pid,
+            day:o.もとの日, amount:o.もとの金額, memo:'動かしたのを取り消し'}) : null); } });
+    return;
+  }
+
   // ── 入金カレンダー ──────────────────────
   const calMove = t.closest('[data-calmove]');
   if(calMove){
@@ -2265,8 +2389,11 @@ document.addEventListener('click', e => {
     const iso = calDayBtn.dataset.calday;
     calDay = (calDay === iso ? null : iso);
     renderCard();
-    if(calDay){ const el = document.getElementById('calAmt');
-                if(el) bindAmt(el), el.focus(), el.select(); }
+    if(calDay){
+      const el = document.getElementById('calAmt');
+      if(el) bindAmt(el), el.focus(), el.select();
+      document.querySelectorAll('[id^="pe-a-"]').forEach(bindAmt);
+    }
     return;
   }
   if(t.closest('[data-calclose]')){ calDay = null; renderCard(); return; }
