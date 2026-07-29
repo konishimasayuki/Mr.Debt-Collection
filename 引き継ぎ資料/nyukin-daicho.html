@@ -1081,6 +1081,37 @@ function payTabs(r){
   </div>`;
 }
 
+// 1回の振込に毎月分とボーナス分が混ざっていることがある。
+// 通帳どおりの合計を入れてもらい、そのうちいくらがボーナス分かを分けて書く。
+function bonusSplit(r){
+  if(r.bonus <= 10) return '';
+  return `<div class="pay-row"><span class="pay-label">うち ボーナス分</span>
+      <input class="imp-input pay-input" id="bonusPart" inputmode="numeric" autocomplete="off" placeholder="0"><span>円</span></div>
+    <div class="pay-row tight"><span class="pay-label"></span>
+      <span class="hint" id="splitHint">ボーナスも一緒に入っていたときだけ、その分を入れてください。
+        ボーナス見込みの残り <b class="b-exp">${yen(r.bonus)}円</b></span></div>`;
+}
+
+// 「入った金額」と「うち ボーナス分」から内訳を出す(打っている最中に見せる)
+function splitOf(r){
+  const g = id => { const el = document.getElementById(id); return el ? +(el.value||'').replace(/[^0-9]/g,'') : 0; };
+  const total = payChoice === 'other' ? g('otherInput') : (payChoice === 'need' ? r.amount - r.diff : r.amount);
+  const bonus = Math.min(g('bonusPart'), total, r.bonus);
+  return {total, bonus, monthly: total - bonus};
+}
+
+function updateSplitHint(){
+  const r = state.find(x => x.id === (openId || cardId));
+  const el = document.getElementById('splitHint');
+  if(!r || !el) return;
+  const s = splitOf(r);
+  el.innerHTML = s.bonus > 0
+    ? `毎月分 <b>${yen(s.monthly)}円</b>（請求 ${yen(r.amount)}円）／ ボーナス分 <b>${yen(s.bonus)}円</b>`
+      + `　→ ボーナス見込みの残りは <b class="b-exp">${yen(r.bonus - s.bonus)}円</b> になります`
+    : `ボーナスも一緒に入っていたときだけ、その分を入れてください。`
+      + ` ボーナス見込みの残り <b class="b-exp">${yen(r.bonus)}円</b>`;
+}
+
 function payBox(r){
   const need = r.amount - r.diff;
   // 後日の約束(日付・金額・メモ)。メモ欄は入金と共通。
@@ -1127,11 +1158,11 @@ function payBox(r){
   const other = payChoice !== 'other' ? '' : `
     <div class="pay-row"><span class="pay-label">入った金額</span>
       <input class="imp-input pay-input" id="otherInput" inputmode="numeric" autocomplete="off" placeholder="0"><span>円</span></div>
+    ${bonusSplit(r)}
     <div class="pay-row"><span class="pay-label">差額は</span>
       <span class="seg">
         <button class="${diffMode==='carry'?'on':''}" data-dmode="carry">次へ繰り越す</button>
         <button class="${diffMode==='settle'?'on':''}" data-dmode="settle">精算して0にする</button>
-        ${r.bonus > 10 ? `<button class="${diffMode==='bonus'?'on':''}" data-dmode="bonus">ボーナス分に充てる</button>` : ''}
       </span></div>`;
   const label = payChoice==='other' ? '入れた金額で記録する'
               : `${yen(payChoice==='need' ? need : r.amount)}円 を記録する`;
@@ -1164,11 +1195,11 @@ function panelHtml(r){
   const other = payChoice !== 'other' ? '' : `
     <div class="pay-row"><span class="pay-label">入った金額</span>
       <input class="imp-input pay-input" id="otherInput" inputmode="numeric" autocomplete="off" placeholder="0"><span>円</span></div>
+    ${bonusSplit(r)}
     <div class="pay-row"><span class="pay-label">差額は</span>
       <span class="seg">
         <button class="${diffMode==='carry'?'on':''}" data-dmode="carry">次へ繰り越す</button>
         <button class="${diffMode==='settle'?'on':''}" data-dmode="settle">精算して0にする</button>
-        ${r.bonus > 10 ? `<button class="${diffMode==='bonus'?'on':''}" data-dmode="bonus">ボーナス分に充てる</button>` : ''}
       </span></div>`;
 
   const label = payChoice==='other' ? '入れた金額で記録する'
@@ -1229,13 +1260,19 @@ function takeMemo(){
 }
 
 function focusOther(){
-  const el = document.getElementById('otherInput');
-  if(!el) return;
-  el.focus();
-  el.addEventListener('input', () => {
-    const n = el.value.replace(/[^0-9]/g, '');
-    el.value = n ? Number(n).toLocaleString('ja-JP') : '';
+  // 金額欄はどれも3桁区切りで見せ、打つたびに内訳を出し直す
+  ['otherInput','bonusPart'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el || el.dataset.bound) return;
+    el.dataset.bound = '1';
+    el.addEventListener('input', () => {
+      const n = el.value.replace(/[^0-9]/g, '');
+      el.value = n ? Number(n).toLocaleString('ja-JP') : '';
+      updateSplitHint();
+    });
   });
+  const el = document.getElementById('otherInput');
+  if(el) el.focus();
 }
 
 function renderRows(){
@@ -1712,14 +1749,19 @@ document.addEventListener('click', e => {
           () => save({種類:'取消', id:r.id})); } });
       return;
     }
-    let v = r.amount, mode = null;
+    let v = r.amount, mode = null, bonusPart = 0;
     if(payChoice === 'other'){
       v = +(document.getElementById('otherInput').value || '').replace(/[^0-9]/g,'');
       if(!v){ alert('入った金額を入れてください。'); return; }
       mode = diffMode === 'settle' ? '精算' : null;
+      // 毎月分とボーナスが1回の振込に混ざっている場合
+      bonusPart = splitOf(r).bonus;
+      if(bonusPart > v){ alert('ボーナス分が入った金額を超えています。'); return; }
     } else if(payChoice === 'need'){ v = r.amount - r.diff; mode = '精算'; }
-    save({種類:'入金', id:r.id, amount:v, method:r.method, 差額:mode, memo})
-      .then(o => { if(o) showUndo(`${r.name}さん ${yen(v)}円 を記録しました`,
+    save({種類:'入金', id:r.id, amount:v, method:r.method, 差額:mode, ボーナス分:bonusPart, memo})
+      .then(o => { if(o) showUndo(
+        bonusPart ? `${r.name}さん ${yen(v)}円（毎月分 ${yen(v - bonusPart)}円／ボーナス分 ${yen(bonusPart)}円）を記録しました`
+                  : `${r.name}さん ${yen(v)}円 を記録しました`,
         () => save({種類:'取消', id:r.id})); });
     return;
   }
