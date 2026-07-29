@@ -155,8 +155,7 @@ module.exports = async (req, res) => {
       }
 
       // ── 後日の約束。分割(3日後に半分・5日後に半分)を何件でも受ける ────
-      // 期日は「いちばん早い、まだ果たされていない約束の日」に合わせる。
-      // 分割で何件足しても期日が跳ね回らないようにするため。
+      // 期日は動かさない(固定)。約束は期日とは別の「言われた予定」として持つ。
       case '約束': {
         const day = String(b.day || '');            // YYYY-MM-DD
         const amount = Number(b.amount);
@@ -167,25 +166,14 @@ module.exports = async (req, res) => {
         const target = (await sql(
           `SELECT id, no, due_date, planned_amount FROM schedule
             WHERE contract_id=$1 AND state <> '入金済み' ORDER BY no LIMIT 1`, [id]))[0];
-        const prev = target ? target.due_date : null;
+        // 約束を聞いた時点の期日を控える(期日は動かさないが、記録として残す)
+        const 期日 = target ? new Date(target.due_date).toISOString().slice(0, 10) : null;
 
         await sql(`INSERT INTO promise (contract_id, heard_on, promised_on, amount, heard_by, memo, prev_due_date)
                    VALUES ($1, current_date, $2, $3, $4, $5, $6)`,
-          [id, day, amount, who, memo, prev]);
+          [id, day, amount, who, memo, 期日]);
 
-        // 期日は、これから来る約束のうちいちばん早い日にそろえる
-        let 新期日 = null;
-        if (target) {
-          const first = (await sql(
-            `SELECT min(promised_on) AS d FROM promise
-              WHERE contract_id=$1 AND promised_on >= current_date`, [id]))[0];
-          if (first && first.d) {
-            新期日 = new Date(first.d).toISOString().slice(0, 10);
-            await sql(`UPDATE schedule SET due_date=$1 WHERE id=$2`, [新期日, target.id]);
-          }
-        }
-
-        // その回の残りと、約束の合計を出す(電話で「あといくら」と聞かれるため)
+        // その回の残りと、これから来る約束の合計(電話で「あといくら」と聞かれるため)
         const 残り = target
           ? Math.max(0, target.planned_amount - (await paidOn(sql, target.id))) : 0;
         const 約束合計 = target ? (await sql(
@@ -196,10 +184,9 @@ module.exports = async (req, res) => {
                    VALUES ($1,$2,$3,'約束',$4,$5)`,
           [id, target ? target.no : null, who,
            `${day} に ${yen(amount)}円 を支払うと約束`
-           + (target ? `（この回の残り ${yen(残り)}円 / 約束の合計 ${yen(約束合計)}円）` : '')
-           + (prev && 新期日 && new Date(prev).toISOString().slice(0,10) !== 新期日
-              ? `。期日を ${new Date(prev).toISOString().slice(0,10)} から ${新期日} に変更` : ''), memo]);
-        return ok(res, { done: true, 約束の日: day, 期日: 新期日,
+           + (target ? `（${target.no}回目・期日 ${期日}／この回の残り ${yen(残り)}円`
+                     + ` / 約束の合計 ${yen(約束合計)}円）` : ''), memo]);
+        return ok(res, { done: true, 約束の日: day, 期日,
                          この回の残り: 残り, 約束の合計: 約束合計 });
       }
 
@@ -225,20 +212,10 @@ module.exports = async (req, res) => {
         await sql(`UPDATE promise SET promised_on=$1, amount=$2, memo=$3 WHERE id=$4`,
           [day, amount, memo || pr.memo, pid]);
 
-        // 期日は、これから来る約束のうちいちばん早い日にそろえ直す
+        // 期日は動かさない(固定)。約束だけを書き換える
         const target = (await sql(
           `SELECT id, no, planned_amount FROM schedule
             WHERE contract_id=$1 AND state <> '入金済み' ORDER BY no LIMIT 1`, [id]))[0];
-        let 新期日 = null;
-        if (target) {
-          const f = (await sql(
-            `SELECT min(promised_on) AS d FROM promise
-              WHERE contract_id=$1 AND promised_on >= current_date`, [id]))[0];
-          if (f && f.d) {
-            新期日 = new Date(f.d).toISOString().slice(0, 10);
-            await sql(`UPDATE schedule SET due_date=$1 WHERE id=$2`, [新期日, target.id]);
-          }
-        }
         const 残り = target
           ? Math.max(0, target.planned_amount - (await paidOn(sql, target.id))) : 0;
 
@@ -251,7 +228,7 @@ module.exports = async (req, res) => {
            `約束を動かした（${変更.length ? 変更.join('、') : 'メモだけ更新'}）`
            + (target ? `。この回の残り ${yen(残り)}円` : ''), memo]);
         return ok(res, { done: true, 約束の日: day, 金額: amount,
-                         期日: 新期日, この回の残り: 残り,
+                         この回の残り: 残り,
                          もとの日: 前の日, もとの金額: 前の額 });
       }
 
