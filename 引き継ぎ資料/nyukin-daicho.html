@@ -535,7 +535,7 @@
   .cmp-input:focus,.cmp-text:focus{outline:2px solid var(--indigo);outline-offset:1px;border-color:var(--indigo);}
 
   /* ── 新しいお客さんの追加 ───────────────── */
-  .nc-num{max-width:160px;} .nc-day{max-width:70px;}
+  .nc-num{max-width:160px;} .nc-day{max-width:70px;} .nc-month{max-width:180px;}
   .nc-unit{font-size:12.5px;color:var(--ink-2);}
   .nc-preview{margin:12px 0 4px;padding:10px 12px;background:#FFFDF6;border:1px solid var(--rule);
     font-size:13.5px;line-height:1.7;}
@@ -2138,7 +2138,24 @@ function closeImport(){
 // ─── 新しいお客さん(契約)の追加 ───────────────────────
 function ncDigits(id){ const el = document.getElementById(id); return el ? +el.value.replace(/[^0-9]/g,'') : 0; }
 function ncMonths(id){ const el = document.getElementById(id); return el ? (el.value.match(/\d+/g)||[]).map(Number).filter(m => m>=1 && m<=12) : []; }
-function ncFirstMonth(){ return new Date(NOW.getFullYear(), NOW.getMonth()+1, 1); } // 原則、納車の翌月
+// 支払いの開始月。原則は納車の翌月だが、契約によって違うので画面で変えられる。
+function ncDefaultMonth(){
+  const d = new Date(NOW.getFullYear(), NOW.getMonth()+1, 1);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}`;
+}
+function ncFirstMonth(){
+  const el = document.getElementById('ncStart');
+  const m = (el && el.value || '').match(/^(\d{4})-(\d{2})$/);
+  if(!m) return new Date(NOW.getFullYear(), NOW.getMonth()+1, 1);
+  return new Date(+m[1], +m[2]-1, 1);
+}
+// その月に支払日が無いとき(2月31日など)は、その月の末日にする
+function ncFirstDate(){
+  const nm = ncFirstMonth(), day = ncPayDay();
+  const last = new Date(nm.getFullYear(), nm.getMonth()+1, 0).getDate();
+  return new Date(nm.getFullYear(), nm.getMonth(), Math.min(day, last));
+}
+function ncPayDay(){ return Math.min(Math.max(ncDigits('ncDay')||27, 1), 31); }
 
 function openNewCustomer(){ document.getElementById('newModal').hidden = false; renderNewCustomer(); }
 function closeNewCustomer(){ document.getElementById('newModal').hidden = true; }
@@ -2151,6 +2168,7 @@ function renderNewCustomer(){
     <div class="cmp-line"><span class="cmp-k">毎月の額</span><input class="cmp-input nc-num" id="ncMonthly" inputmode="numeric" autocomplete="off" placeholder="0"><span class="nc-unit">円</span></div>
     <div class="cmp-line"><span class="cmp-k">車の代金</span><input class="cmp-input nc-num" id="ncPrice" inputmode="numeric" autocomplete="off" placeholder="任意（確認用）"><span class="nc-unit">円</span></div>
     <div class="cmp-line"><span class="cmp-k">支払日</span><input class="cmp-input nc-day" id="ncDay" inputmode="numeric" autocomplete="off" value="27"><span class="nc-unit">日（原則27）</span></div>
+    <div class="cmp-line"><span class="cmp-k">開始月</span><input class="cmp-input nc-month" id="ncStart" type="month" value="${ncDefaultMonth()}"><span class="nc-unit">から48回</span></div>
     <div class="cmp-line"><span class="cmp-k">初回</span><span class="cmp-v" id="ncFirst"></span></div>
     <div class="cmp-line"><span class="cmp-k">ボーナス月</span><input class="cmp-input" id="ncBonusMonths" autocomplete="off" placeholder="例: 8,12（任意）"></div>
     <div class="cmp-line"><span class="cmp-k">ボーナス額</span><input class="cmp-input nc-num" id="ncBonusEach" inputmode="numeric" autocomplete="off" placeholder="1回あたり（任意）"><span class="nc-unit">円</span></div>
@@ -2165,17 +2183,28 @@ function renderNewCustomer(){
     const el = document.getElementById(id);
     el.addEventListener('input', () => { const n = el.value.replace(/[^0-9]/g,''); el.value = n ? Number(n).toLocaleString('ja-JP') : ''; ncPreview(); });
   });
-  ['ncDay','ncBonusMonths'].forEach(id => document.getElementById(id).addEventListener('input', ncPreview));
+  ['ncDay','ncBonusMonths','ncStart'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', ncPreview);
+    el.addEventListener('change', ncPreview);   // 月の選択はchangeで来ることがある
+  });
   document.getElementById('ncName').focus();
   ncPreview();
 }
 
 function ncPreview(){
   const box = document.getElementById('ncPreview'); if(!box) return;
-  const day = Math.min(Math.max(ncDigits('ncDay')||27, 1), 31);
-  const nm = ncFirstMonth();
+  const day = ncPayDay();
+  const fd = ncFirstDate(), nm = ncFirstMonth();
+  const last = new Date(nm.getFullYear(), nm.getMonth()+1, 0).getDate();
+  // 最終回(48回目)まで出す。開始月を変えると終わりも動くことが見えるように
+  const end = new Date(nm.getFullYear(), nm.getMonth()+47, 1);
+  const endDay = Math.min(day, new Date(end.getFullYear(), end.getMonth()+1, 0).getDate());
   const first = document.getElementById('ncFirst');
-  if(first) first.textContent = `${nm.getFullYear()}年${nm.getMonth()+1}月${day}日から`;
+  if(first) first.innerHTML =
+    `${fd.getFullYear()}年${fd.getMonth()+1}月${fd.getDate()}日`
+    + (day > last ? `<span class="nc-hint">（${nm.getMonth()+1}月に${day}日が無いため末日）</span>` : '')
+    + `　→　最終回 ${end.getFullYear()}年${end.getMonth()+1}月${endDay}日`;
   const amount = ncDigits('ncMonthly');
   if(!amount){ box.innerHTML = '<span class="nc-hint">毎月の額を入れると、内訳と支払総額が出ます。</span>'; return; }
   const moto = Math.round(amount*0.75), fee = amount - moto;
@@ -2200,12 +2229,12 @@ function addCustomer(){
   const amount = ncDigits('ncMonthly');
   if(!name){ alert('お名前を入れてください。'); return; }
   if(!amount){ alert('毎月の額を入れてください。'); return; }
-  const day = Math.min(Math.max(ncDigits('ncDay')||27, 1), 31);
+  const day = ncPayDay();
   const bm = ncMonths('ncBonusMonths'), be = ncDigits('ncBonusEach');
   const bonusTotal = be * bm.length * 4;
   const moto = Math.round(amount*0.75), fee = amount - moto;
-  const nm = ncFirstMonth(), fy = nm.getFullYear(), fm = nm.getMonth()+1;
-  const due = `${pad(fm)}-${pad(day)}`;
+  const fd = ncFirstDate(), fy = fd.getFullYear(), fm = fd.getMonth()+1;
+  const due = `${pad(fm)}-${pad(fd.getDate())}`;
   let si = MONTHS.findIndex(mo => mo.y===fy && mo.m===fm); if(si < 0) si = MONTHS.length;
   const id = Math.max(0, ...state.map(r => r.id)) + 1;
   const row = { id, due, name,
@@ -2218,7 +2247,9 @@ function addCustomer(){
     contact: (document.getElementById('ncContact').value||'').trim() };
   HIST[id] = MONTHS.map((_, i) => i < si ? 'none' : 'pending');
   state.push(row);
-  logEvent(row, 'メモ', `新しいお客さん（${name}／${car || '車両未記入'}）を登録した`, '');
+  logEvent(row, 'メモ',
+    `新しいお客さん（${name}／${car || '車両未記入'}）を登録した`
+    + `：毎月 ${yen(amount)}円、${fy}年${fm}月${fd.getDate()}日から全48回`, '');
   closeNewCustomer();
   filter = 'up'; openId = id; cardId = null; resetPanel(row); go('card');
   showUndo(`${name}さん を新しく登録しました`, () => {
