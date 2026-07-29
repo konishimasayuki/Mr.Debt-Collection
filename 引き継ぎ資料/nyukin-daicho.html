@@ -680,6 +680,7 @@
     padding-bottom:8px;border-bottom:1px solid var(--rule);}
   .cal-edit-h .chip{display:inline-block;}
   .cal-x{margin-left:auto;}
+  .btn-rare{opacity:.75;font-size:12.5px;}
 
   .card-cols{display:grid;grid-template-columns:7fr 3fr;
     gap:30px;margin-top:20px;align-items:start;}
@@ -974,7 +975,10 @@ const daysLate = due => Math.round((asDate(TODAY) - asDate(due)) / 86400000);
 const FILTERS = [
   {key:'today',   label:'入金待ち', test:r => statusOf(r)==='today'},
   {key:'overdue', label:'遅れ',    test:r => statusOf(r)==='overdue'},
-  {key:'hold',    label:'約束した方', test:r => !r.paid && (r.hold || PROMISES.some(p => p.id === r.id)), hidden:true},
+  // 期日は固定なので、約束の日が来た方はこの区分で拾う
+  {key:'hold',    label:'約束した方',
+   test:r => !r.paid && (r.hold ||
+     PROMISES.some(p => p.id === r.id && p.iso && p.iso <= isoToday())), hidden:true},
   {key:'up',      label:'次回',    test:r => statusOf(r)==='up'},
   {key:'settle',  label:'完済前',   test:needSettle, hidden:true},
   {key:'all',     label:'すべて',  test:() => true}
@@ -1018,7 +1022,12 @@ function renderDash(){
   // 督促をとめている方は「連絡する」の数に入れない(一覧には残る)
   const late  = unpaid(r => statusOf(r)==='overdue' && !held(r));
   const heldN = state.filter(r => !r.paid && statusOf(r)==='overdue' && held(r)).length;
-  const prom  = state.filter(r => !r.paid && (r.hold || PROMISES.some(p => p.id === r.id)));
+  // 期日は固定なので、約束の日が来た方はここで拾う(期日では拾えない)
+  const 今日まで = p => p.iso && p.iso <= isoToday();
+  const prom  = state.filter(r => !r.paid &&
+    (r.hold || PROMISES.some(p => p.id === r.id && 今日まで(p))));
+  const promFuture = state.filter(r => !r.paid && !prom.includes(r) &&
+    PROMISES.some(p => p.id === r.id)).length;
   const cashSum = CASH.reduce((s,c) => s + c.amount, 0);
 
   const byMethod = list => list.length ? `合計 ${yen(list.reduce((s,r) => s + r.amount, 0))}円` : '';
@@ -1034,7 +1043,10 @@ function renderDash(){
      sub: unmatched.length ? '振込人の名前から本人を探します'
         : (imported ? 'すべて片づきました' : '全銀協規定形式のCSVを読み込みます'),
      go: unmatched.length ? 'unmatched' : 'import', tone:'overdue'},
-    {n:prom.length, label:'後日の約束を確かめる', sub:prom.length ? '約束の日が来た方がいます' : '本日ぶんの約束はありません', go:'hold', tone:'today'},
+    {n:prom.length, label:'後日の約束を確かめる',
+     sub:(prom.length ? '約束の日が来た方がいます' : '本日ぶんの約束はありません')
+        + (promFuture ? `　※先の約束が ${promFuture}名` : ''),
+     go:'hold', tone:'today'},
   ];
 
   document.getElementById('workList').innerHTML = items
@@ -1749,7 +1761,18 @@ const ST_LABEL = {paid:'入金', late:'遅れて入金', unpaid:'未収', part:'
 let calMonth = null;             // {y, m}。null なら今月
 let calDay = null;               // 開いている日 'YYYY-MM-DD'
 
-const calYM = () => calMonth || {y: NOW.getFullYear(), m: NOW.getMonth()+1};
+// 開いたときに出す月。いま追いかけている回(未入金でいちばん古い回)の月を出す。
+// その月の入金が満額で済んでいれば、次の入金月が自然に出る。
+// 遅れている方は過去の月ではなく今月を出す(約束を足すのは今月以降のため)。
+function calDefaultYM(r){
+  const now = {y: NOW.getFullYear(), m: NOW.getMonth()+1};
+  if(!r) return now;
+  const row = schedRow(r, currentNo(r));
+  if(!row) return now;
+  const [y, m] = row[1].split('-').map(Number);
+  return (y * 12 + m) < (now.y * 12 + now.m) ? now : {y, m};
+}
+const calYM = () => calMonth || calDefaultYM(state.find(x => x.id === cardId));
 const isoOf = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
 
 // その回の請求・入金済み・残り
@@ -1926,9 +1949,11 @@ function calDayBox(r, iso){
       ${past ? '<span class="hint">過ぎた日には約束を足せません。</span>'
              : `<button class="btn-pay" data-calprom="${r.id}:${iso}">この日に払う約束にする</button>`}
       ${dueHere && !dueHere.done ? '' :
-        `<button class="btn" data-caldue="${r.id}:${iso}">${no}回目の期日をこの日にする</button>`}
+        `<button class="btn btn-rare" data-caldue="${r.id}:${iso}">（例外）${no}回目の期日をこの日に変える</button>`}
     </div>
-    <p class="nc-hint">分割のときは、日を変えて何回でも足せます。期日は「いちばん早い約束の日」に合わせます。</p>
+    <p class="nc-hint">分割のときは、日を変えて何回でも約束を足せます。
+      <b>期日は動きません。</b>約束は期日とは別に持ちます。
+      期日そのものを変えるのは、契約を変えたときだけにしてください。</p>
   </div>`;
 }
 
@@ -1940,6 +1965,7 @@ function logAt(r, no, kind, text, memo){
 
 function openCard(id){
   cardId = id; openNo = null;
+  calMonth = null; calDay = null;      // 開くたびに、いま追いかけている月から出し直す
   resetPanel(state.find(x => x.id === id));   // 前の方の選択を持ち越さない
   go('card');
 }
