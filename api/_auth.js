@@ -1,11 +1,20 @@
 // ログインの確認。画面もAPIも同じ判定を使う。
-// ※ 暫定の簡易認証(ユーザー名 a / パスワード a)。本運用の前に、
-//    パスワードを環境変数へ、または担当者ごとの利用者に置き換えること。
-const USER = 'a';
-const PASS = 'a';
+//
+// 利用者名とパスワードは環境変数で決める。入れていなければ a / a で動く
+// (手元で試すため)。実データを置く場所では必ず入れること。
+// ※ まだ全員が同じ合鍵を使う簡易認証。担当者ごとの利用者は未実装。
+import { createHash } from 'node:crypto';
+
+const USER = process.env.LEDGER_USER || 'a';
+const PASS = process.env.LEDGER_PASS || 'a';
 
 const COOKIE_NAME = 'nyukin_session';
-const SESSION_TOKEN = 'ok.v1.8f3c1a9e5b2d47';
+// クッキーに入れる合鍵。SESSION_SECRET とパスワードから作るので、
+// パスワードを変えれば古いクッキーは自動で使えなくなる。
+// HTTPヘッダには ASCII しか置けないため、16進の文字列にしている。
+const SESSION_TOKEN = 'ok.v1.' + createHash('sha256')
+  .update(`${process.env.SESSION_SECRET || 'kaigi-no-aikagi'}|${USER}|${PASS}`)
+  .digest('hex').slice(0, 32);
 const MAX_AGE = 60 * 60 * 8; // 8時間
 
 function hasSession(req) {
