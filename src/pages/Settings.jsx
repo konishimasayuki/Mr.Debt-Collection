@@ -143,10 +143,15 @@ function Maintenance() {
     setBusy(true); setErr(''); setMsg('');
     try {
       const d = await api.setup(載せ替え ? { 載せ替え: true } : {});
-      setMsg(載せ替え
+      // 旧台帳のテーブルを別の置き場へ移したときは、必ず伝える（消していないこと）
+      const 退避 = d.退避した旧テーブル?.length
+        ? `\n旧台帳のテーブル ${d.退避した旧テーブル.length}件（${d.退避した旧テーブル.join('、')}）を`
+          + ` old_ledger へ移しました。消していません。`
+        : '';
+      setMsg((載せ替え
         ? `追加した顧客 ${d.追加した顧客}名／すでに居た顧客 ${d.すでに居た顧客}名／`
           + `作った支払予定 ${d.作った支払予定}件。\n${d.注意 || ''}`
-        : `テーブルを用意しました（${d.実行した文}件）。${d.次に || ''}`);
+        : `テーブルを用意しました（${d.実行した文}件）。${d.次に || ''}`) + 退避);
     } catch (e) { setErr(e.message); }
     finally { setBusy(false); }
   };
