@@ -9,6 +9,30 @@ import { STATEMENTS } from './_schema.js';
 import { readBody, dueOf, yen, makeSchedule } from './_lib.js';
 import OLD from './data/contracts.json' with { type: 'json' };
 
+// 旧台帳のテーブル。新しい台帳と名前が重なるものが多い。
+const 旧テーブル = ['contract', 'schedule', 'payment', 'allocation',
+                    'promise', 'payer_alias', 'event'];
+
+const ある = async (sql, schema, name) => (await sql(
+  `SELECT 1 FROM information_schema.tables
+    WHERE table_schema=$1 AND table_name=$2`, [schema, name])).length > 0;
+
+// 旧台帳が残っていれば old_ledger スキーマへ移す。消さない。
+// contract は旧台帳にしかないので、これがあるかどうかで見分ける。
+// 何度呼んでも安全（二度目は contract が public に無いので何もしない）。
+async function moveOldTables(sql) {
+  if (!(await ある(sql, 'public', 'contract'))) return [];
+  await sql('CREATE SCHEMA IF NOT EXISTS old_ledger');
+  const 移した = [];
+  for (const t of 旧テーブル) {
+    if (!(await ある(sql, 'public', t))) continue;
+    if (await ある(sql, 'old_ledger', t)) continue;   // すでに退避済み
+    await sql(`ALTER TABLE public.${t} SET SCHEMA old_ledger`);
+    移した.push(t);
+  }
+  return 移した;
+}
+
 export default async (req, res) => {
   if (!requireSession(req, res)) return;
   if ((req.method || '').toUpperCase() !== 'POST') {
@@ -21,12 +45,22 @@ export default async (req, res) => {
     const sql = db();
     const b = await readBody(req);
 
+    // ── 旧台帳のテーブルを退避する ───────────────
+    // schedule・payment などは新旧で名前が同じで中身が違う。残っていると
+    // IF NOT EXISTS が読み飛ばし、新しい列に索引を張るところで落ちる。
+    // 手で入れたオープニングが入っているので、消さずに別のスキーマへ移す。
+    const 退避 = await moveOldTables(sql);
+
     // ── テーブルを作る ─────────────────────────
     let 作った = 0;
     for (const stmt of STATEMENTS) { await sql(stmt); 作った++; }
 
     if (!b['載せ替え']) {
       return ok(res, { done: true, 実行した文: 作った,
+        ...(退避.length ? {
+          退避した旧テーブル: 退避,
+          退避先: 'old_ledger スキーマ（消していません）',
+        } : {}),
         次に: '「既存データを載せ替える」を押すと、旧台帳の顧客が入ります。' });
     }
 
@@ -66,6 +100,10 @@ export default async (req, res) => {
 
     return ok(res, { done: true, 実行した文: 作った,
       追加した顧客: 追加, すでに居た顧客: 飛ばした, 作った支払予定: 予定,
+      ...(退避.length ? {
+        退避した旧テーブル: 退避,
+        退避先: 'old_ledger スキーマ（消していません）',
+      } : {}),
       注意: '旧台帳に無い項目（債権譲渡会社・債権譲渡先・よみ・性別・生年月日・住所・電話番号・契約日）は'
         + '空のままです。設定タブで会社を登録してから、顧客ページで選んでください。' });
   } catch (e) {
