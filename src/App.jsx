@@ -20,19 +20,22 @@ export default function App() {
   const [me, setMe] = useState(null);          // null=確認中
   const [tab, setTab] = useState('customers');
   const [customerId, setCustomerId] = useState(null);   // 顧客ページを開いているとき
-  const [historyQuery, setHistoryQuery] = useState(''); // 未入金から飛んできたときの検索語
+  const [jump, setJump] = useState(null);      // 未入金などから飛んできたときの検索語
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => { api.me().then(setMe).catch(() => setMe({ ログイン中: false })); }, []);
 
   const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
 
-  // 未入金の行を押したら、入金履歴でその人を検索した状態にする
+  // 未入金の行を押したら、入金履歴でその人を検索した状態にする。
+  // 検索語は入金履歴が受け取ったら消す（下の onJumped）。持ったままにすると、
+  // 検索欄を空にして別のタブへ行き、戻ってきたときに古い名前でまた絞り込まれる。
   const goHistory = useCallback((name) => {
-    setHistoryQuery(name || '');
+    setJump({ 名前: name || '' });
     setCustomerId(null);
     setTab('history');
   }, []);
+  const onJumped = useCallback(() => setJump(null), []);
 
   const goTab = (key) => { setCustomerId(null); setTab(key); };
 
@@ -78,8 +81,8 @@ export default function App() {
           <PaymentEntry onChanged={refresh} goHistory={goHistory} />
         ) : tab === 'history' ? (
           <History
-            key={reloadKey + '|' + historyQuery}
-            initialQuery={historyQuery}
+            jump={jump}
+            onJumped={onJumped}
             onOpen={setCustomerId}
             onChanged={refresh}
           />
