@@ -183,17 +183,23 @@ export default function CustomerPage({ id, onBack, onChanged, goHistory }) {
               const cls = ['rec-r', s.状態 === '入金済み' ? 'paid' : s.状態 === '一部入金' ? 'part' : '',
                 late ? 'late' : '', s.回次 === c.回次 ? 'now' : ''].filter(Boolean).join(' ');
               return (
-                <div className={cls} key={s.回次}>
-                  <span className="no">{s.回次}回</span>
-                  <span>{md(s.期日)}
-                    {s.状態 === '一部入金' &&
-                      <span style={{ color: 'var(--today)', marginLeft: 6, fontSize: 12 }}>
-                        残 {yen(s.請求 - s.入金)}
-                      </span>}
-                    {late && s.状態 !== '一部入金' &&
-                      <span style={{ color: 'var(--overdue)', marginLeft: 6, fontSize: 12 }}>未入金</span>}
-                  </span>
-                  <span className="amt">{yen(s.請求)}</span>
+                <div key={s.回次}>
+                  <div className={cls}>
+                    <span className="no">{s.回次}回</span>
+                    <span>{md(s.期日)}
+                      {s.状態 === '一部入金' &&
+                        <span style={{ color: 'var(--today)', marginLeft: 6, fontSize: 12 }}>
+                          残 {yen(s.請求 - s.入金)}
+                        </span>}
+                      {late && s.状態 !== '一部入金' &&
+                        <span style={{ color: 'var(--overdue)', marginLeft: 6, fontSize: 12 }}>未入金</span>}
+                    </span>
+                    <span className="amt">{yen(s.請求)}</span>
+                  </div>
+                  <RecMemos
+                    顧客id={c.id} 回次={s.回次} メモ={s.メモ}
+                    onDone={() => { load(); onChanged && onChanged(); }}
+                  />
                 </div>
               );
             })}
@@ -205,6 +211,83 @@ export default function CustomerPage({ id, onBack, onChanged, goHistory }) {
 }
 
 // ── 日を押したときの欄 ─────────────────────────
+// ── 回ごとのメモ（支払いの記録の各回の下）─────────────
+// 新しい順に3件まで出し、それより古いものは折りたたむ。
+// 入金約束を入れたときなどに自動で足され、あとから編集・削除できる。
+function RecMemos({ 顧客id, 回次, メモ, onDone }) {
+  const [開く, set開く] = useState(false);
+  const [編集, set編集] = useState(null);   // {id, 本文}
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  if (!メモ || !メモ.length) return null;
+  const 手前 = メモ.slice(0, 3);
+  const 残り = メモ.slice(3);
+
+  const save = async () => {
+    const text = String(編集.本文 || '').trim();
+    if (!text) { setErr('メモを入れてください。'); return; }
+    setBusy(true); setErr('');
+    try {
+      await api.postCustomer({ id: 顧客id, 種類: '回メモ変更', メモid: 編集.id, 本文: text });
+      set編集(null); onDone();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const remove = async (m) => {
+    if (!confirm(`${回次}回目のメモを削除します。\n\n${m.本文}\n\nよろしいですか。`)) return;
+    setBusy(true); setErr('');
+    try { await api.postCustomer({ id: 顧客id, 種類: '回メモ削除', メモid: m.id }); onDone(); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const 一件 = (m) => (
+    編集 && 編集.id === m.id ? (
+      <div className="rec-m editing" key={m.id}>
+        <input
+          value={編集.本文} autoFocus disabled={busy}
+          onChange={(e) => set編集((o) => ({ ...o, 本文: e.target.value }))}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') set編集(null); }}
+        />
+        <div className="rec-m-btn">
+          <button className="btn btn-sm btn-main" onClick={save} disabled={busy}>保存</button>
+          <button className="btn btn-sm" onClick={() => set編集(null)} disabled={busy}>キャンセル</button>
+        </div>
+      </div>
+    ) : (
+      <div className="rec-m" key={m.id}>
+        <span className="rec-m-t">{m.本文}</span>
+        <span className="rec-m-d">{m.日時.slice(5, 10)}</span>
+        <div className="rec-m-btn">
+          <button className="btn btn-sm" onClick={() => set編集({ id: m.id, 本文: m.本文 })}>編集</button>
+          <button className="btn btn-sm btn-danger" onClick={() => remove(m)} disabled={busy}>削除</button>
+        </div>
+      </div>
+    )
+  );
+
+  return (
+    <div className="rec-ms">
+      {手前.map(一件)}
+      {残り.length > 0 && (
+        開く ? (
+          <>
+            {残り.map(一件)}
+            <button className="rec-m-more" onClick={() => set開く(false)}>古いメモを隠す</button>
+          </>
+        ) : (
+          <button className="rec-m-more" onClick={() => set開く(true)}>
+            古いメモ {残り.length}件を表示
+          </button>
+        )
+      )}
+      <Err>{err}</Err>
+    </div>
+  );
+}
+
 // ── 顧客情報の編集 ────────────────────────────
 // 月々の金額・支払回数・毎月の支払日・開始月はここでは変えられない。
 // 変えると支払予定を作り直すことになり、すでに充てた入金の行き先が消えるため。

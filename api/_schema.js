@@ -104,6 +104,22 @@ const STATEMENTS = [
    )`,
   `CREATE INDEX IF NOT EXISTS promise_customer_idx ON promise (customer_id, promised_on)`,
 
+  // ── 回ごとのメモ(支払いの記録の各回の下に出る)────────
+  // 入金約束を入れた・動かした・取り消したときに自動で1行足す。
+  // 記録(event)と違って、あとから直せるし消せる。
+  `CREATE TABLE IF NOT EXISTS schedule_memo (
+     id          serial PRIMARY KEY,
+     customer_id integer NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
+     schedule_no integer NOT NULL CHECK (schedule_no > 0),
+     text        text NOT NULL,
+     auto        boolean NOT NULL DEFAULT false,   -- 約束などから自動で入ったもの
+     created_by  text NOT NULL,
+     created_at  timestamptz NOT NULL DEFAULT now(),
+     updated_at  timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS schedule_memo_idx
+     ON schedule_memo (customer_id, schedule_no, id DESC)`,
+
   // ── 名寄せ辞書(CSVの振込人名 → 顧客)──────────────
   `CREATE TABLE IF NOT EXISTS payer_alias (
      id              serial PRIMARY KEY,

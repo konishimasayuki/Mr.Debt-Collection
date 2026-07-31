@@ -12,6 +12,14 @@ const bad = (res, msg, why) => {
   res.end(JSON.stringify(why ? { error: msg, 理由: why } : { error: msg }));
 };
 const hhmm = (t) => (t ? String(t).slice(0, 5) : null);
+const jp = (d) => String(d).replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1年$2月$3日');
+
+// 支払いの記録の、その回の下に出るメモ。約束を入れたときなどに自動で足す。
+// 回が決まっていない約束は、どの回に出すか決められないので足さない。
+const 回メモを足す = (sql, id, no, text, who, auto = true) => (no
+  ? sql(`INSERT INTO schedule_memo (customer_id, schedule_no, text, auto, created_by)
+         VALUES ($1,$2,$3,$4,$5)`, [id, Number(no), text, auto, who])
+  : Promise.resolve());
 
 export default async (req, res) => {
   if (!requireSession(req, res)) return;
@@ -50,6 +58,17 @@ export default async (req, res) => {
       const promises = await sql(
         `SELECT id, promised_on, until_time, schedule_no, amount, memo, done, created_by
            FROM promise WHERE customer_id=$1 ORDER BY promised_on, id`, [id]);
+      const memos = await sql(
+        `SELECT id, schedule_no, text, auto, created_by, created_at
+           FROM schedule_memo WHERE customer_id=$1 ORDER BY schedule_no, id DESC`, [id]);
+      const 回メモ = {};
+      memos.forEach((m) => {
+        (回メモ[m.schedule_no] = 回メモ[m.schedule_no] || []).push({
+          id: m.id, 本文: m.text, 自動: m.auto, 記録者: m.created_by,
+          日時: new Date(m.created_at).toISOString().slice(0, 16).replace('T', ' '),
+        });
+      });
+
       const events = await sql(
         `SELECT id, occurred_at, recorded_by, kind, text, memo
            FROM event WHERE customer_id=$1 ORDER BY id DESC LIMIT 200`, [id]);
@@ -78,6 +97,7 @@ export default async (req, res) => {
         支払予定: rows.map((s) => ({
           回次: s.no, 期日: isoOf(s.due_date), 請求: s.planned_amount,
           入金: paidBy[s.id] || 0, 状態: s.state,
+          メモ: 回メモ[s.no] || [],       // 新しい順
         })),
         入金: payments.map((p) => ({
           id: p.id, 日付: isoOf(p.paid_on), 金額: p.amount, 入金方法: p.method,
@@ -168,6 +188,9 @@ export default async (req, res) => {
                    VALUES ($1,$2,'約束',$3,$4)`,
           [id, who, `${day}${時刻 ? ` ${時刻}まで` : '（終日）'} に ${yen(amount)}円`
             + (no ? `（${no}回目ぶん）` : '') + ' の入金約束', memo]);
+        await 回メモを足す(sql, id, no,
+          `${jp(day)}${時刻 ? ` ${時刻}まで` : '（終日）'} に ${yen(amount)}円 の入金約束`
+          + (memo ? ` — ${memo}` : ''), who);
         return ok(res, { done: true, id: ins[0].id });
       }
 
@@ -192,6 +215,9 @@ export default async (req, res) => {
         await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                    VALUES ($1,$2,'約束',$3,$4)`,
           [id, who, `約束を動かした（${変更.length ? 変更.join('、') : 'メモだけ更新'}）`, memo]);
+        await 回メモを足す(sql, id, b.回次 ? Number(b.回次) : pr.schedule_no,
+          `入金約束を変更（${変更.length ? 変更.join('、') : 'メモだけ更新'}）`
+          + (memo ? ` — ${memo}` : ''), who);
         return ok(res, { done: true, もとの日: 前.日, もとの金額: 前.額 });
       }
 
@@ -204,6 +230,48 @@ export default async (req, res) => {
         await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                    VALUES ($1,$2,'約束',$3,$4)`,
           [id, who, `${isoOf(pr.promised_on)} の約束（${yen(pr.amount)}円）を取り消した`, memo]);
+        await 回メモを足す(sql, id, pr.schedule_no,
+          `${jp(isoOf(pr.promised_on))} の入金約束（${yen(pr.amount)}円）を取り消し`
+          + (memo ? ` — ${memo}` : ''), who);
+        return ok(res, { done: true });
+      }
+
+      // ── 回ごとのメモ（支払いの記録の各回の下）────────
+      if (b.種類 === '回メモ') {
+        const no = Number(b.回次);
+        const text = String(b.本文 || '').trim();
+        if (!no) return bad(res, 'どの回かを指定してください。');
+        if (!text) return bad(res, 'メモを入れてください。');
+        const s2 = await sql('SELECT id FROM schedule WHERE customer_id=$1 AND no=$2', [id, no]);
+        if (!s2.length) return bad(res, 'その回が見つかりません。');
+        const r = await sql(
+          `INSERT INTO schedule_memo (customer_id, schedule_no, text, auto, created_by)
+           VALUES ($1,$2,$3,false,$4) RETURNING id`, [id, no, text, who]);
+        return ok(res, { done: true, id: r[0].id });
+      }
+
+      if (b.種類 === '回メモ変更') {
+        const mid = Number(b.メモid);
+        const text = String(b.本文 || '').trim();
+        if (!mid) return bad(res, 'どのメモかを指定してください。');
+        if (!text) return bad(res, 'メモを入れてください。');
+        const m = (await sql(
+          'SELECT id FROM schedule_memo WHERE id=$1 AND customer_id=$2', [mid, id]))[0];
+        if (!m) return bad(res, 'そのメモが見つかりません。');
+        await sql('UPDATE schedule_memo SET text=$1, updated_at=now() WHERE id=$2', [text, mid]);
+        return ok(res, { done: true });
+      }
+
+      if (b.種類 === '回メモ削除') {
+        const mid = Number(b.メモid);
+        const m = (await sql(
+          'SELECT * FROM schedule_memo WHERE id=$1 AND customer_id=$2', [mid, id]))[0];
+        if (!m) return bad(res, 'そのメモが見つかりません。');
+        await sql('DELETE FROM schedule_memo WHERE id=$1', [mid]);
+        // メモは消せるが、消したことは記録に残す
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'メモ',$3,$4)`,
+          [id, who, `${m.schedule_no}回目のメモを消した`, m.text]);
         return ok(res, { done: true });
       }
 
