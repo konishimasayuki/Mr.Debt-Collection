@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, yen, ymd, jpDate, norm, 本日 } from '../api';
-import { Modal, Text, Money, Select, Err, Note, Empty } from '../components/ui';
+import { api, yen, ymd, jpDate, 本日 } from '../api';
+import { Modal, Text, Money, Select, Picker, Err, Note, Empty } from '../components/ui';
 
 // CSVは銀行によって Shift-JIS のことも UTF-8 のこともある。
 // 両方で読んでみて、文字化け（置換文字）の少ないほうを採る。
@@ -273,15 +273,11 @@ function ImportResult({ d, onClose, onChanged, goHistory }) {
 function ManualPayment({ onClose, onDone }) {
   const [customers, setCustomers] = useState([]);
   const [v, setV] = useState({ 日付: 本日(), 顧客id: '', 金額: '', 入金方法: '振込', メモ: '' });
-  const [key, setKey] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k) => (val) => setV((o) => ({ ...o, [k]: val }));
 
   useEffect(() => { api.customers().then((d) => setCustomers(d.顧客)).catch(() => {}); }, []);
-
-  const k = norm(key);
-  const shown = customers.filter((c) => !k || norm(c.氏名).includes(k) || norm(c.よみ).includes(k));
 
   const submit = async () => {
     setBusy(true); setErr('');
@@ -315,14 +311,11 @@ function ManualPayment({ onClose, onDone }) {
         <Text label="日付" type="date" value={v.日付} onChange={set('日付')} />
         <Money label="金額" value={v.金額} onChange={set('金額')} />
       </div>
-      <Text label="名前で絞る" value={key} onChange={setKey}
-            placeholder="かな・カナ・漢字・英字のどれでも" />
-      <Select label="名前" value={v.顧客id} onChange={set('顧客id')} placeholder="選んでください"
-              options={shown.map((c) => ({
-                value: String(c.id),
-                label: `${c.氏名}${c.よみ ? `（${c.よみ}）` : ''} 月々 ${yen(c.金額)}円`,
-              }))}
-              hint={key && shown.length === 0 ? '見つかりませんでした。' : undefined} />
+      <Picker label="名前" value={v.顧客id} onChange={set('顧客id')}
+              placeholder="名前を打つと候補が出ます（かな・カナ・漢字・英字）"
+              items={customers.map((c) => ({
+                id: c.id, 名前: c.氏名, よみ: c.よみ, 脇: `月々 ${yen(c.金額)}円`,
+              }))} />
       <Select label="入金方法" value={v.入金方法} onChange={set('入金方法')}
               options={[{ value: '振込', label: '振り込み' }, { value: '現金', label: '現金' },
                         { value: 'その他', label: 'その他' }]} />

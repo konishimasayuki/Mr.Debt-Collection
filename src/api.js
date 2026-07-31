@@ -55,10 +55,6 @@ export const api = {
   patchCompany: (body) => call('/api/companies', { method: 'PATCH', body }),
   deleteCompany: (id) => call('/api/companies' + q({ id }), { method: 'DELETE' }),
   setup: (body) => call('/api/setup', { method: 'POST', body: body || {} }),
-
-  // 開始時の入金実績（過去分が何回目まで済んでいるか）
-  opening: () => call('/api/opening'),
-  putOpening: (body) => call('/api/opening', { method: 'POST', body }),
 };
 
 // ── 表示用の小道具 ────────────────────────────
