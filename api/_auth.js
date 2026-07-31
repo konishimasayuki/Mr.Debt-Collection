@@ -31,5 +31,5 @@ function requireSession(req, res) {
   return false;
 }
 
-module.exports = { USER, PASS, COOKIE_NAME, SESSION_TOKEN, MAX_AGE,
+export { USER, PASS, COOKIE_NAME, SESSION_TOKEN, MAX_AGE,
                    hasSession, requireSession, recordedBy };

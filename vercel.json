@@ -1,89 +1,20 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/gate.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": [
-          "assets/ledger.html"
-        ]
-      }
-    },
-    {
-      "src": "api/setup.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/seed.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": [
-          "api/data/**"
-        ]
-      }
-    },
-    {
-      "src": "api/opening.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/contracts.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/record.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/import.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/yomi.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/customer.js",
-      "use": "@vercel/node"
-    }
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/*.js": { "runtime": "@vercel/node@5.1.10" }
+  },
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
-  "routes": [
+  "headers": [
     {
-      "src": "/api/setup",
-      "dest": "/api/setup.js"
-    },
-    {
-      "src": "/api/seed",
-      "dest": "/api/seed.js"
-    },
-    {
-      "src": "/api/opening",
-      "dest": "/api/opening.js"
-    },
-    {
-      "src": "/api/contracts",
-      "dest": "/api/contracts.js"
-    },
-    {
-      "src": "/api/record",
-      "dest": "/api/record.js"
-    },
-    {
-      "src": "/api/import",
-      "dest": "/api/import.js"
-    },
-    {
-      "src": "/api/yomi",
-      "dest": "/api/yomi.js"
-    },
-    {
-      "src": "/api/customer",
-      "dest": "/api/customer.js"
-    },
-    {
-      "src": "/.*",
-      "dest": "/api/gate.js"
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "same-origin" }
+      ]
     }
   ]
 }

@@ -1,8 +1,12 @@
 // データベース(Neon / PostgreSQL)への接続。
 // 接続情報は Vercel の環境変数から来る(DATABASE_URL)。画面からは直接触らせない。
-const { neon } = require('@neondatabase/serverless');
+import { neon } from '@neondatabase/serverless';
 
 let sql = null;
+
+// 検査のときだけ、別の接続に差し替えられるようにする
+function setDb(fn) { sql = fn; }
+
 function db() {
   if (!sql) {
     const url = process.env.DATABASE_URL;
@@ -34,4 +38,4 @@ function ok(res, body) {
   res.end(JSON.stringify(body));
 }
 
-module.exports = { db, fail, ok };
+export { db, setDb, fail, ok };

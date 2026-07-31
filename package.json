@@ -2,8 +2,23 @@
   "name": "nyukin-daicho",
   "version": "0.1.0",
   "private": true,
-  "description": "入金管理台帳(認証つき配信 + データ保存)",
+  "description": "入金管理台帳（React + Vite / Vercel関数 + PostgreSQL）",
   "dependencies": {
-    "@neondatabase/serverless": "^0.10.4"
+    "@neondatabase/serverless": "^0.10.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.5",
+    "jsdom": "^30.0.1",
+    "pg": "^8.22.0",
+    "playwright-core": "^1.62.1",
+    "vite": "^8.2.0"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   }
 }
