@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, yen, jpDate, md, 本日 } from '../api';
-import { Modal, Text, Money, Select, Err, Note, Empty } from '../components/ui';
+import { Modal, Text, Money, Select, Err, Note, Empty, Loading } from '../components/ui';
 
 const p2 = (n) => String(n).padStart(2, '0');
 const isoOf = (y, m, d) => `${y}-${p2(m)}-${p2(d)}`;
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 
-export default function CustomerPage({ id, onBack, onChanged, goHistory }) {
+export default function CustomerPage({ id, onChanged }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
   const [month, setMonth] = useState(null);   // {y,m}。null なら追いかけている月
@@ -32,8 +32,8 @@ export default function CustomerPage({ id, onBack, onChanged, goHistory }) {
     return (y * 12 + m) < (nowYM.y * 12 + nowYM.m) ? nowYM : { y, m };
   }, [month, d]);
 
-  if (err) return (<><div className="bar"><button className="btn" onClick={onBack}>← 顧客一覧へ戻る</button></div><Err>{err}</Err></>);
-  if (!d) return <Empty>読み込んでいます…</Empty>;
+  if (err) return <Err>{err}</Err>;
+  if (!d) return <Loading 件数={2} 行={6} />;
 
   const c = d.顧客;
   const move = (n) => {
@@ -63,14 +63,6 @@ export default function CustomerPage({ id, onBack, onChanged, goHistory }) {
 
   return (
     <>
-      <div className="bar">
-        <button className="btn" onClick={onBack}>← 顧客一覧へ戻る</button>
-        <div className="bar-right">
-          <button className="btn" onClick={() => setEditCustomer(true)}>顧客情報を編集</button>
-          <button className="btn" onClick={() => goHistory(c.氏名)}>この方の入金履歴を見る →</button>
-        </div>
-      </div>
-
       {editCustomer && (
         <EditCustomer
           c={c}
@@ -80,30 +72,28 @@ export default function CustomerPage({ id, onBack, onChanged, goHistory }) {
       )}
 
       <div className="cust-head">
-        <div>
-          <h2 className="cust-name">{c.氏名}</h2>
-          <div className="cust-sub">
-            {c.よみ && <span>{c.よみ}</span>}
-            {c.車種 && <span>{c.車種}</span>}
-            <span>{c.回次}回目 / 全{c.回数}回</span>
-            <span>毎月 {c.支払日}日</span>
-            {c.債権譲渡会社 && <span>譲渡会社：{c.債権譲渡会社}</span>}
-            {c.債権譲渡先 && <span>譲渡先：{c.債権譲渡先}</span>}
-            {c.電話番号 && <a href={`tel:${c.電話番号.replace(/-/g, '')}`}>{c.電話番号}</a>}
-          </div>
-        </div>
+        <h2 className="cust-name">{c.氏名}</h2>
+        <button className="btn btn-sm" onClick={() => setEditCustomer(true)}>顧客情報を編集</button>
+      </div>
+      <div className="cust-sub">
+        {c.よみ && <span>{c.よみ}</span>}
+        {c.車種 && <span>{c.車種}</span>}
+        {c.債権譲渡会社 && <span>譲渡会社：{c.債権譲渡会社}</span>}
+        {c.債権譲渡先 && <span>譲渡先：{c.債権譲渡先}</span>}
+        {c.電話番号 && <a href={`tel:${c.電話番号.replace(/-/g, '')}`}>{c.電話番号}</a>}
       </div>
 
+      {/* 大事な数字。スマホでも折り返して全部見えるようにする（横に流さない） */}
       <div className="strip">
         <div className="s"><b>{yen(c.月々の金額)}円</b><i>月々の金額</i></div>
         <div className="s"><b>{c.次の期日 ? jpDate(c.次の期日) : '—'}</b><i>次の支払期日</i></div>
+        <div className="s"><b>{c.回次}回目 / 全{c.回数}回</b><i>いま追いかけている回</i></div>
+        <div className="s"><b>{c.残り回数}回</b><i>残り支払い回数</i></div>
+        <div className="s"><b>{yen(c.残債)}円</b><i>残債金額</i></div>
         {c.この回の入金 > 0 && (
           <div className="s bad"><b>{yen(c.この回の残り)}円</b>
             <i>この回の残り（請求 {yen(c.この回の請求)}円 / 入金 {yen(c.この回の入金)}円）</i></div>
         )}
-        <div className="s"><b>{c.回数 - c.残り回数}回 / {c.回数}回</b><i>支払い回数</i></div>
-        <div className="s"><b>{c.残り回数}回</b><i>残り支払い回数</i></div>
-        <div className="s"><b>{yen(c.残債)}円</b><i>残債金額</i></div>
         {c.完済 && <div className="s good"><b>完済</b><i>お支払いは終わっています</i></div>}
       </div>
 
@@ -138,14 +128,16 @@ export default function CustomerPage({ id, onBack, onChanged, goHistory }) {
                         <span className="cal-d">{dd}</span>
                         {ev.map((e, i) => e.t === 'due' ? (
                           <span key={i} className={'chip c-due' + (e.済み ? ' done' : '')}>
-                            {e.回次}回目 {e.済み ? '済' : yen(e.残り)}
+                            <b>{e.回次}回目</b><i>{e.済み ? '済' : yen(e.残り)}</i>
                           </span>
                         ) : e.t === 'prom' ? (
                           <span key={i} className="chip c-prom">
-                            約束 {yen(e.金額)}{e.時刻 ? ` ${e.時刻}` : ''}
+                            <b>約束{e.時刻 ? ` ${e.時刻}` : ''}</b><i>{yen(e.金額)}</i>
                           </span>
                         ) : (
-                          <span key={i} className="chip c-paid">入金 {yen(e.金額)}</span>
+                          <span key={i} className="chip c-paid">
+                            <b>入金</b><i>{yen(e.金額)}</i>
+                          </span>
                         ))}
                       </button>
                     );

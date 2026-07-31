@@ -169,3 +169,20 @@ export function Err({ children }) {
 export function Empty({ children }) {
   return <div className="empty">{children}</div>;
 }
+
+// 読み込み中の下敷き。「読み込んでいます…」の一行より、
+// これから何が並ぶかが見えるほうが待ち時間が短く感じる。
+export function Loading({ 件数 = 5, 行 = 4 }) {
+  return (
+    <div className="skel" aria-label="読み込んでいます">
+      {Array.from({ length: 件数 }, (_, i) => (
+        <div className="skel-c" key={i}>
+          <span className="skel-b t" />
+          {Array.from({ length: 行 }, (_, j) => (
+            <span className="skel-b" key={j} style={{ width: `${[62, 48, 70, 40][j % 4]}%` }} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { Modal, Text, Err, Note, Empty } from '../components/ui';
+import { Modal, Text, Err, Note, Empty, Loading } from '../components/ui';
 
 export default function Settings({ onChanged }) {
   const [rows, setRows] = useState(null);
@@ -45,7 +45,7 @@ export default function Settings({ onChanged }) {
               <tr><th>会社名</th><th>メモ</th><th className="num">使用中の顧客</th><th /></tr>
             </thead>
             <tbody>
-              {rows === null && <tr><td colSpan={4}><Empty>読み込んでいます…</Empty></td></tr>}
+              {rows === null && <tr><td colSpan={4}><Loading 件数={2} 行={1} /></td></tr>}
               {rows && rows.length === 0 && (
                 <tr><td colSpan={4}><Empty>
                   まだ登録がありません。「債権会社を追加」から入れてください。

@@ -69,12 +69,7 @@ export default function App() {
 
       <main className="main">
         {customerId ? (
-          <CustomerPage
-            id={customerId}
-            onBack={() => setCustomerId(null)}
-            onChanged={refresh}
-            goHistory={goHistory}
-          />
+          <CustomerPage id={customerId} onChanged={refresh} />
         ) : tab === 'customers' ? (
           <Customers key={reloadKey} onOpen={setCustomerId} onChanged={refresh} />
         ) : tab === 'entry' ? (

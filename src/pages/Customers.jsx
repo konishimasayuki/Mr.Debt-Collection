@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { api, yen, ymd, norm } from '../api';
-import { Modal, Text, Money, Select, Err, Empty, Note } from '../components/ui';
+import { Modal, Text, Money, Select, Err, Empty, Note, Loading } from '../components/ui';
+
+// 電話帳と同じ並び。索引はサーバーが「あ」「か」…で返す
+const 行 = ['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', 'その他'];
 
 export default function Customers({ onOpen, onChanged }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState('');
-  const [bulk, setBulk] = useState(false);
 
   const load = () => {
     setErr('');
@@ -19,6 +21,14 @@ export default function Customers({ onOpen, onChanged }) {
   const shown = (rows || []).filter((r) => !k
     || norm(r.氏名).includes(k) || norm(r.よみ).includes(k) || norm(r.車種).includes(k));
 
+  // 行ごとにまとめる（サーバーがあいうえお順で返しているので、並べ直さない）
+  const 組 = 行.map((g) => ({ 行: g, 人: shown.filter((r) => r.索引 === g) }))
+    .filter((g) => g.人.length);
+  const とぶ = (g) => {
+    const el = document.getElementById(`gyo-${g}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <>
       <div className="bar">
@@ -28,60 +38,78 @@ export default function Customers({ onOpen, onChanged }) {
             className="search" placeholder="氏名・よみ・車種で検索"
             value={key} onChange={(e) => setKey(e.target.value)}
           />
-          <button className="btn" onClick={() => setBulk(true)} disabled={!shown.length}>
-            債権会社をまとめて設定
-          </button>
           <button className="btn btn-main" onClick={() => setOpen(true)}>＋ 新規顧客登録</button>
         </div>
       </div>
 
-      {bulk && (
-        <BulkCompany
-          対象={shown} 絞り込み中={!!k}
-          onClose={() => setBulk(false)}
-          onDone={() => { setBulk(false); load(); onChanged && onChanged(); }}
-        />
-      )}
-
       <Err>{err}</Err>
 
-      <div className="card tw cards">
-        <table>
-          <thead>
-            <tr>
-              <th>氏名</th>
-              <th>債権譲渡会社</th>
-              <th>車種</th>
-              <th className="num">毎月の支払日</th>
-              <th className="num">金額</th>
-              <th className="num">残り支払い回数</th>
-              <th className="num">残債金額</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows === null && <tr><td colSpan={7}><Empty>読み込んでいます…</Empty></td></tr>}
-            {rows && shown.length === 0 && (
-              <tr><td colSpan={7}><Empty>
-                {rows.length ? '見つかりませんでした。' : '顧客がまだ登録されていません。'}
-              </Empty></td></tr>
-            )}
-            {shown.map((r) => (
-              <tr key={r.id} className="clickable" onClick={() => onOpen(r.id)}>
-                <td>
-                  <b>{r.氏名}</b>
-                  {r.よみ && <span className="sub" style={{ marginLeft: 8, color: 'var(--ink-3)', fontSize: 12 }}>{r.よみ}</span>}
-                </td>
-                <td data-label="債権譲渡会社">{r.債権譲渡会社 || <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
-                <td data-label="車種">{r.車種 || <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
-                <td className="num" data-label="毎月の支払日">{r.毎月の支払日}日</td>
-                <td className="num" data-label="金額">{yen(r.金額)}</td>
-                <td className="num" data-label="残り支払い回数">{r.残り支払い回数}回</td>
-                <td className="num" data-label="残債金額">{yen(r.残債金額)}</td>
+      {rows !== null && (
+        <div className="idx">
+          {行.map((g) => {
+            const ある = 組.some((x) => x.行 === g);
+            return (
+              <button key={g} className={'idx-b' + (ある ? '' : ' off')}
+                      onClick={() => ある && とぶ(g)} disabled={!ある}>
+                {g === 'その他' ? '他' : g}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {rows === null && <Loading 件数={6} />}
+
+      {rows && shown.length === 0 && (
+        <div className="card"><Empty>
+          {rows.length ? '見つかりませんでした。' : '顧客がまだ登録されていません。'}
+        </Empty></div>
+      )}
+
+      {rows && shown.length > 0 && (
+        <div className="card tw cards">
+          <table>
+            <thead>
+              <tr>
+                <th>氏名</th>
+                <th>債権譲渡会社</th>
+                <th>車種</th>
+                <th className="num">毎月の支払日</th>
+                <th className="num">金額</th>
+                <th className="num">残り支払い回数</th>
+                <th className="num">残債金額</th>
               </tr>
+            </thead>
+            {組.map(({ 行: g, 人 }) => (
+              <tbody key={g}>
+                {/* 行の見出し。1つの表に差し込むので、列の幅がそろう */}
+                <tr className="grp-row">
+                  <th colSpan={7} id={`gyo-${g}`}>
+                    {g === 'その他' ? 'よみが分からない方' : `${g}行`}
+                    <span>{人.length}名</span>
+                  </th>
+                </tr>
+                {人.map((r) => (
+                  <tr key={r.id} className="clickable" onClick={() => onOpen(r.id)}>
+                    <td>
+                      <b>{r.氏名}</b>
+                      {r.よみ && <span className="yomi">{r.よみ}</span>}
+                    </td>
+                    <td data-label="債権譲渡会社">
+                      {r.債権譲渡会社 || <span className="none">—</span>}
+                    </td>
+                    <td data-label="車種">{r.車種 || <span className="none">—</span>}</td>
+                    <td className="num" data-label="毎月の支払日">{r.毎月の支払日}日</td>
+                    <td className="num" data-label="金額">{yen(r.金額)}円</td>
+                    <td className="num" data-label="残り支払い回数">{r.残り支払い回数}回</td>
+                    <td className="num strong" data-label="残債金額">{yen(r.残債金額)}円</td>
+                  </tr>
+                ))}
+              </tbody>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </table>
+        </div>
+      )}
 
       {open && (
         <NewCustomer
@@ -90,67 +118,6 @@ export default function Customers({ onOpen, onChanged }) {
         />
       )}
     </>
-  );
-}
-
-// ── 債権会社をまとめて設定 ──────────────────────
-// 債権譲渡が起きると複数の顧客の会社が一度に変わる。1件ずつ開かせない。
-// 検索で絞ってから開けば、絞り込んだ人だけに当てられる。
-function BulkCompany({ 対象, 絞り込み中, onClose, onDone }) {
-  const [companies, setCompanies] = useState([]);
-  const [v, setV] = useState({ 種類: '債権譲渡会社', 会社: '' });
-  const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => { api.companies().then((d) => setCompanies(d.会社)).catch(() => {}); }, []);
-
-  const 会社名 = (companies.find((x) => String(x.id) === v.会社) || {}).名前 || '';
-
-  const save = async () => {
-    if (!v.会社) { setErr('会社を選んでください。'); return; }
-    if (!confirm(`${対象.length}名の「${v.種類}」を「${会社名}」にします。\n\nよろしいですか。`)) return;
-    setBusy(true); setErr('');
-    try {
-      const d = await api.patchCustomers({
-        [v.種類]: Number(v.会社),
-        対象: 対象.map((x) => x.id),
-      });
-      alert(`${d.変えた人数}名を変更しました。`);
-      onDone();
-    } catch (e) { setErr(e.message); setBusy(false); }
-  };
-
-  return (
-    <Modal
-      title="債権会社をまとめて設定"
-      onClose={onClose}
-      foot={
-        <>
-          <button className="btn" onClick={onClose}>キャンセル</button>
-          <div className="right">
-            <button className="btn btn-main" onClick={save} disabled={busy}>
-              {busy ? '変更しています…' : `${対象.length}名に設定する`}
-            </button>
-          </div>
-        </>
-      }
-    >
-      <Note>
-        いま一覧に出ている <b>{対象.length}名</b> に当てます。
-        {絞り込み中
-          ? '検索で絞り込んだ人だけが対象です。'
-          : '一部の人だけに当てたいときは、いったん閉じて検索で絞ってから開いてください。'}
-      </Note>
-      <Select label="どちらを設定するか" value={v.種類}
-              onChange={(x) => setV((o) => ({ ...o, 種類: x }))}
-              options={[{ value: '債権譲渡会社', label: '債権譲渡会社' },
-                        { value: '債権譲渡先', label: '債権譲渡先' }]} />
-      <Select label="会社" value={v.会社} onChange={(x) => setV((o) => ({ ...o, 会社: x }))}
-              placeholder={companies.length ? '選んでください' : '設定タブで登録してください'}
-              options={companies.map((x) => ({ value: String(x.id), label: x.名前 }))}
-              disabled={!companies.length} />
-      <Err>{err}</Err>
-    </Modal>
   );
 }
 

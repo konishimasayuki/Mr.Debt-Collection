@@ -5,6 +5,7 @@
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
 import { readBody, query, isoOf, today, dueOf, yen, norm, summarize, makeSchedule } from './_lib.js';
+import { 並び読み, 索引 } from './_yomi_dict.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -12,10 +13,11 @@ const bad = (res, msg, why) => {
   res.end(JSON.stringify(why ? { error: msg, 理由: why } : { error: msg }));
 };
 
-// あいうえお順。よみが無い人は氏名で並べ、最後にまわす
+// あいうえお順。登録された「よみ」が無い人は苗字の辞書で補って並べる。
+// それでも読みが分からない人だけ、最後にまわす。
 const collator = new Intl.Collator('ja');
 const byKana = (a, b) => {
-  const ak = norm(a.kana), bk = norm(b.kana);
+  const ak = norm(並び読み(a.name, a.kana)), bk = norm(並び読み(b.name, b.kana));
   if (!!ak !== !!bk) return ak ? -1 : 1;
   return collator.compare(ak || a.name, bk || b.name) || a.id - b.id;
 };
@@ -52,6 +54,7 @@ export default async (req, res) => {
         const s = summarize(c, by[c.id] || [], paidBy);
         return {
           id: c.id, 氏名: c.name, よみ: c.kana || '',
+          索引: 索引(c.name, c.kana),
           債権譲渡会社: c.assignor_name || '', 債権譲渡先: c.assignee_name || '',
           車種: c.car || '', 毎月の支払日: c.pay_day, 金額: c.monthly_amount,
           残り支払い回数: s.残り回数, 残債金額: s.残債,
