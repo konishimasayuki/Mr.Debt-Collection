@@ -15,6 +15,8 @@ Vercel で動かすための構成。
 
 `vercel.json` の要点。
 
+- `framework: "vite"` — Import 画面の Application Preset を Vite に固定する。
+  書いていないと、自動検出のタイミングによっては「Other」のまま出る
 - `buildCommand: npm run build` / `outputDirectory: dist`
 - `functions: { "api/*.js": { runtime: "@vercel/node@5.1.10" } }`
 - `/((?!api/).*)` → `/index.html`(画面はタブ切替だけなのでルーターを持たない)
@@ -34,7 +36,9 @@ Vercel の Project → Settings → Environment Variables に入れる。
 ## 公開のしかた
 
 1. Vercel でこのリポジトリを Import する
-2. Framework は **Vite**(`vercel.json` があるのでそのままでよい)
+2. Application Preset が **Vite** になっていることを確かめる。
+   「Other」と出ていたら、そのページを開いたあとに main が進んでいる。
+   **ページを読み込み直す**と検出しなおす(`vercel.json` の `framework` で固定してある)
 3. 上の環境変数を入れる
 4. デプロイ対象ブランチを選ぶ
 5. 以後、push するたびに自動でデプロイされる
