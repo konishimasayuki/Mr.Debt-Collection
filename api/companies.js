@@ -21,11 +21,14 @@ export default async (req, res) => {
     const sql = db();
 
     if (method === 'GET') {
+      // 並びは登録した順。名前順にすると、あとから足した会社が先頭に来て
+      // 「逆に入っている」ように見えるため。
       const rows = await sql(
         `SELECT c.id, c.name, c.note,
                 (SELECT count(*)::int FROM customer x
                   WHERE (x.assignor_id = c.id OR x.assignee_id = c.id) AND x.archived=false) AS 使用数
-           FROM company c ORDER BY c.name`);
+           FROM company c ORDER BY c.id`);
+
       return ok(res, { 会社: rows.map((r) => ({
         id: r.id, 名前: r.name, メモ: r.note || '', 使用数: r.使用数 })) });
     }

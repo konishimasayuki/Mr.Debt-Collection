@@ -1,6 +1,6 @@
 // 顧客ページの中身と、その顧客への書き込み。
 // GET   /api/customer?id=1        … カレンダー・支払いの記録・メモ・約束
-// PATCH /api/customer             … {id, メモ / よみ / 連絡先 …} を更新
+// PATCH /api/customer             … {id, 名前 / よみ / 連絡先 / 会社 …} を更新
 // POST  /api/customer             … {id, 種類:'約束'|'約束変更'|'約束削除', …}
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
@@ -109,6 +109,11 @@ export default async (req, res) => {
     if (method === 'PATCH') {
       const set = [], val = [];
       const put = (col, v) => { val.push(v); set.push(`${col}=$${val.length}`); };
+      if (b.名前 !== undefined) {
+        const name = String(b.名前).trim();
+        if (!name) return bad(res, 'お名前を入れてください。');
+        put('name', name);
+      }
       if (b.よみ !== undefined) put('kana', String(b.よみ).trim() || null);
       if (b.顧客メモ !== undefined) put('memo', String(b.顧客メモ));
       if (b.電話番号 !== undefined) put('tel', String(b.電話番号).trim() || null);
@@ -117,9 +122,16 @@ export default async (req, res) => {
       if (b.性別 !== undefined) put('gender', String(b.性別).trim() || null);
       if (b.生年月日 !== undefined) put('birthday', b.生年月日 || null);
       if (b.契約日 !== undefined) put('contract_date', b.契約日 || null);
-      if (b.債権譲渡会社 !== undefined) put('assignor_id', b.債権譲渡会社 ? Number(b.債権譲渡会社) : null);
-      if (b.債権譲渡先 !== undefined) put('assignee_id', b.債権譲渡先 ? Number(b.債権譲渡先) : null);
-      if (!set.length) return bad(res, '直す項目がありません。');
+      // 会社の指定があれば実在を確かめる
+      for (const [key, col] of [['債権譲渡会社', 'assignor_id'], ['債権譲渡先', 'assignee_id']]) {
+        if (b[key] === undefined) continue;
+        if (b[key]) {
+          const co = await sql('SELECT id FROM company WHERE id=$1', [Number(b[key])]);
+          if (!co.length) return bad(res, `${key}が見つかりません。`, '設定で登録してください');
+          put(col, Number(b[key]));
+        } else put(col, null);
+      }
+      if (!set.length) return bad(res, '変更する項目がありません。');
       val.push(id);
       await sql(`UPDATE customer SET ${set.join(', ')}, updated_at=now() WHERE id=$${val.length}`, val);
 
@@ -130,7 +142,7 @@ export default async (req, res) => {
       }
       await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                  VALUES ($1,$2,'メモ',$3,NULL)`,
-        [id, who, b.顧客メモ !== undefined ? '顧客のメモを更新した' : '顧客の情報を直した']);
+        [id, who, b.顧客メモ !== undefined ? '顧客のメモを更新した' : '顧客の情報を変更した']);
       return ok(res, { done: true });
     }
 

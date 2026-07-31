@@ -7,6 +7,7 @@ export default function Customers({ onOpen, onChanged }) {
   const [err, setErr] = useState('');
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState('');
+  const [bulk, setBulk] = useState(false);
 
   const load = () => {
     setErr('');
@@ -27,9 +28,20 @@ export default function Customers({ onOpen, onChanged }) {
             className="search" placeholder="氏名・よみ・車種で検索"
             value={key} onChange={(e) => setKey(e.target.value)}
           />
+          <button className="btn" onClick={() => setBulk(true)} disabled={!shown.length}>
+            債権会社をまとめて設定
+          </button>
           <button className="btn btn-main" onClick={() => setOpen(true)}>＋ 新規顧客登録</button>
         </div>
       </div>
+
+      {bulk && (
+        <BulkCompany
+          対象={shown} 絞り込み中={!!k}
+          onClose={() => setBulk(false)}
+          onDone={() => { setBulk(false); load(); onChanged && onChanged(); }}
+        />
+      )}
 
       <Err>{err}</Err>
 
@@ -78,6 +90,67 @@ export default function Customers({ onOpen, onChanged }) {
         />
       )}
     </>
+  );
+}
+
+// ── 債権会社をまとめて設定 ──────────────────────
+// 債権譲渡が起きると複数の顧客の会社が一度に変わる。1件ずつ開かせない。
+// 検索で絞ってから開けば、絞り込んだ人だけに当てられる。
+function BulkCompany({ 対象, 絞り込み中, onClose, onDone }) {
+  const [companies, setCompanies] = useState([]);
+  const [v, setV] = useState({ 種類: '債権譲渡会社', 会社: '' });
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { api.companies().then((d) => setCompanies(d.会社)).catch(() => {}); }, []);
+
+  const 会社名 = (companies.find((x) => String(x.id) === v.会社) || {}).名前 || '';
+
+  const save = async () => {
+    if (!v.会社) { setErr('会社を選んでください。'); return; }
+    if (!confirm(`${対象.length}名の「${v.種類}」を「${会社名}」にします。\n\nよろしいですか。`)) return;
+    setBusy(true); setErr('');
+    try {
+      const d = await api.patchCustomers({
+        [v.種類]: Number(v.会社),
+        対象: 対象.map((x) => x.id),
+      });
+      alert(`${d.変えた人数}名を変更しました。`);
+      onDone();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal
+      title="債権会社をまとめて設定"
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn" onClick={onClose}>キャンセル</button>
+          <div className="right">
+            <button className="btn btn-main" onClick={save} disabled={busy}>
+              {busy ? '変更しています…' : `${対象.length}名に設定する`}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <Note>
+        いま一覧に出ている <b>{対象.length}名</b> に当てます。
+        {絞り込み中
+          ? '検索で絞り込んだ人だけが対象です。'
+          : '一部の人だけに当てたいときは、いったん閉じて検索で絞ってから開いてください。'}
+      </Note>
+      <Select label="どちらを設定するか" value={v.種類}
+              onChange={(x) => setV((o) => ({ ...o, 種類: x }))}
+              options={[{ value: '債権譲渡会社', label: '債権譲渡会社' },
+                        { value: '債権譲渡先', label: '債権譲渡先' }]} />
+      <Select label="会社" value={v.会社} onChange={(x) => setV((o) => ({ ...o, 会社: x }))}
+              placeholder={companies.length ? '選んでください' : '設定タブで登録してください'}
+              options={companies.map((x) => ({ value: String(x.id), label: x.名前 }))}
+              disabled={!companies.length} />
+      <Err>{err}</Err>
+    </Modal>
   );
 }
 

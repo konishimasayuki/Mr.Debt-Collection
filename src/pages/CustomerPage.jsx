@@ -12,6 +12,7 @@ export default function CustomerPage({ id, onBack, onChanged, goHistory }) {
   const [month, setMonth] = useState(null);   // {y,m}。null なら追いかけている月
   const [day, setDay] = useState(null);       // 開いている日
   const [editing, setEditing] = useState(null); // 編集中の約束
+  const [editCustomer, setEditCustomer] = useState(false);
 
   const load = useCallback(() => {
     setErr('');
@@ -65,9 +66,18 @@ export default function CustomerPage({ id, onBack, onChanged, goHistory }) {
       <div className="bar">
         <button className="btn" onClick={onBack}>← 顧客一覧へ戻る</button>
         <div className="bar-right">
+          <button className="btn" onClick={() => setEditCustomer(true)}>顧客情報を編集</button>
           <button className="btn" onClick={() => goHistory(c.氏名)}>この方の入金履歴を見る →</button>
         </div>
       </div>
+
+      {editCustomer && (
+        <EditCustomer
+          c={c}
+          onClose={() => setEditCustomer(false)}
+          onDone={() => { setEditCustomer(false); load(); onChanged && onChanged(); }}
+        />
+      )}
 
       <div className="cust-head">
         <div>
@@ -195,6 +205,82 @@ export default function CustomerPage({ id, onBack, onChanged, goHistory }) {
 }
 
 // ── 日を押したときの欄 ─────────────────────────
+// ── 顧客情報の編集 ────────────────────────────
+// 月々の金額・支払回数・毎月の支払日・開始月はここでは変えられない。
+// 変えると支払予定を作り直すことになり、すでに充てた入金の行き先が消えるため。
+function EditCustomer({ c, onClose, onDone }) {
+  const [v, setV] = useState({
+    名前: c.氏名, よみ: c.よみ, 性別: c.性別, 生年月日: c.生年月日 || '',
+    住所: c.住所, 電話番号: c.電話番号, 契約日: c.契約日 || '', 車種: c.車種,
+    債権譲渡会社: c.債権譲渡会社id ? String(c.債権譲渡会社id) : '',
+    債権譲渡先: c.債権譲渡先id ? String(c.債権譲渡先id) : '',
+  });
+  const [companies, setCompanies] = useState([]);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (val) => setV((o) => ({ ...o, [k]: val }));
+
+  useEffect(() => { api.companies().then((d) => setCompanies(d.会社)).catch(() => {}); }, []);
+  const opts = companies.map((x) => ({ value: String(x.id), label: x.名前 }));
+
+  const save = async () => {
+    setBusy(true); setErr('');
+    try { await api.patchCustomer({ id: c.id, ...v }); onDone(); }
+    catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal
+      title="顧客情報の編集"
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn" onClick={onClose}>キャンセル</button>
+          <div className="right">
+            <button className="btn btn-main" onClick={save} disabled={busy}>
+              {busy ? '保存しています…' : '保存する'}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <div className="grid2">
+        <Text label="名前" value={v.名前} onChange={set('名前')} />
+        <Text label="よみ（カナ）" value={v.よみ} onChange={set('よみ')}
+              placeholder="ヤマダ タロウ" hint="あいうえお順と、CSVの振込人名の照合に使います" />
+      </div>
+      <div className="grid3">
+        <Select label="性別" value={v.性別} onChange={set('性別')} placeholder="選択しない"
+                options={[{ value: '男性', label: '男性' }, { value: '女性', label: '女性' },
+                          { value: 'その他', label: 'その他' }]} />
+        <Text label="生年月日" type="date" value={v.生年月日} onChange={set('生年月日')} />
+        <Text label="電話番号" value={v.電話番号} onChange={set('電話番号')} />
+      </div>
+      <Text label="住所" value={v.住所} onChange={set('住所')} />
+      <div className="grid2">
+        <Text label="契約日" type="date" value={v.契約日} onChange={set('契約日')} />
+        <Text label="車種" value={v.車種} onChange={set('車種')} />
+      </div>
+      <div className="grid2">
+        <Select label="債権譲渡会社" value={v.債権譲渡会社} onChange={set('債権譲渡会社')}
+                placeholder={opts.length ? '選択しない' : '設定タブで登録してください'}
+                options={opts} disabled={!opts.length} />
+        <Select label="債権譲渡先" value={v.債権譲渡先} onChange={set('債権譲渡先')}
+                placeholder={opts.length ? '選択しない' : '設定タブで登録してください'}
+                options={opts} disabled={!opts.length} />
+      </div>
+      <Note>
+        月々の金額 {yen(c.月々の金額)}円 ／ 全{c.回数}回 ／ 毎月{c.支払日}日 ／
+        {c.開始日} から。
+        <b>この4つはここでは変えられません。</b>
+        変えると支払予定を作り直すことになり、すでに充てた入金の行き先が消えるためです。
+        直す必要があるときは声をかけてください。
+      </Note>
+      <Err>{err}</Err>
+    </Modal>
+  );
+}
+
 function DayBox({ iso, 顧客, 予定, 印, editing, setEditing, onClose, onDone }) {
   const 未済 = 予定.filter((s) => s.状態 !== '入金済み');
   const 既定回 = (未済[0] || {}).回次 || '';
