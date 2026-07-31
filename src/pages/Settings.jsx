@@ -39,7 +39,7 @@ export default function Settings({ onChanged }) {
         </Note>
         <Err>{err}</Err>
 
-        <div className="card tw">
+        <div className="card tw cards">
           <table>
             <thead>
               <tr><th>会社名</th><th>メモ</th><th className="num">使用中の顧客</th><th /></tr>
@@ -54,8 +54,8 @@ export default function Settings({ onChanged }) {
               {rows && rows.map((c) => (
                 <tr key={c.id}>
                   <td><b>{c.名前}</b></td>
-                  <td style={{ whiteSpace: 'normal', fontSize: 13 }}>{c.メモ || ''}</td>
-                  <td className="num">{c.使用数}件</td>
+                  <td data-label="メモ" style={{ whiteSpace: 'normal', fontSize: 13 }}>{c.メモ || ''}</td>
+                  <td className="num" data-label="使用中の顧客">{c.使用数}件</td>
                   <td style={{ display: 'flex', gap: 6 }}>
                     <button className="btn btn-sm" onClick={() => setEdit(c)}>編集</button>
                     <button className="btn btn-sm btn-danger" onClick={() => remove(c)}>削除</button>

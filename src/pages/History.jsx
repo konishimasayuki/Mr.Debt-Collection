@@ -55,7 +55,7 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
       </Note>
       <Err>{err}</Err>
 
-      <div className="card tw">
+      <div className="card tw cards">
         <table>
           <thead>
             <tr>
@@ -73,7 +73,7 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
             {d && d.入金.map((p) => (
               <tr key={p.id} className={'clickable' + (p.区分 === '手動' ? ' manual' : '')}
                   onClick={() => setEdit(p)}>
-                <td>{ymd(p.日付)}</td>
+                <td data-label="日付">{ymd(p.日付)}</td>
                 <td>
                   {p.顧客id ? (
                     <span
@@ -82,16 +82,18 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
                     >{p.顧客名}</span>
                   ) : <span className="tag t-warn">未割当</span>}
                 </td>
-                <td className="num">{yen(p.金額)}</td>
-                <td>{p.入金方法}</td>
-                <td>
+                <td className="num" data-label="金額">{yen(p.金額)}</td>
+                <td data-label="入金方法">{p.入金方法}</td>
+                <td data-label="区分">
                   <span className={'tag ' + (p.区分 === '手動' ? 't-manual' : 't-csv')}>{p.区分}</span>
                 </td>
-                <td style={{ fontFamily: 'var(--mono)', fontSize: 12.5 }}>
+                <td data-label="付番 / 振込人" style={{ fontFamily: 'var(--mono)', fontSize: 12.5 }}>
                   {[p.付番, p.振込人].filter(Boolean).join(' / ') || '—'}
                 </td>
-                <td style={{ maxWidth: 260, whiteSpace: 'normal', fontSize: 13 }}>{p.メモ || ''}</td>
-                <td style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>{p.記録者}</td>
+                <td data-label="メモ" style={{ maxWidth: 260, whiteSpace: 'normal', fontSize: 13 }}>
+                  {p.メモ || ''}
+                </td>
+                <td data-label="記録者" style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>{p.記録者}</td>
               </tr>
             ))}
           </tbody>

@@ -45,7 +45,7 @@ export default function Customers({ onOpen, onChanged }) {
 
       <Err>{err}</Err>
 
-      <div className="card tw">
+      <div className="card tw cards">
         <table>
           <thead>
             <tr>
@@ -71,12 +71,12 @@ export default function Customers({ onOpen, onChanged }) {
                   <b>{r.氏名}</b>
                   {r.よみ && <span className="sub" style={{ marginLeft: 8, color: 'var(--ink-3)', fontSize: 12 }}>{r.よみ}</span>}
                 </td>
-                <td>{r.債権譲渡会社 || <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
-                <td>{r.車種 || <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
-                <td className="num">{r.毎月の支払日}日</td>
-                <td className="num">{yen(r.金額)}</td>
-                <td className="num">{r.残り支払い回数}回</td>
-                <td className="num">{yen(r.残債金額)}</td>
+                <td data-label="債権譲渡会社">{r.債権譲渡会社 || <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
+                <td data-label="車種">{r.車種 || <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
+                <td className="num" data-label="毎月の支払日">{r.毎月の支払日}日</td>
+                <td className="num" data-label="金額">{yen(r.金額)}</td>
+                <td className="num" data-label="残り支払い回数">{r.残り支払い回数}回</td>
+                <td className="num" data-label="残債金額">{yen(r.残債金額)}</td>
               </tr>
             ))}
           </tbody>

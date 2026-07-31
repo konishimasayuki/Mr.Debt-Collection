@@ -31,7 +31,7 @@ export default function Unpaid({ onOpen, goHistory }) {
       </Note>
       <Err>{err}</Err>
 
-      <div className="card tw">
+      <div className="card tw cards">
         <table>
           <thead>
             <tr>
@@ -66,12 +66,12 @@ export default function Unpaid({ onOpen, goHistory }) {
                     </span>
                   )}
                 </td>
-                <td className="num">{yen(r.金額)}</td>
-                <td>{ymd(r.支払い期日)}</td>
-                <td className="num">{r.毎月の支払日}日</td>
-                <td className="num">{r.支払い回数}回</td>
-                <td className="num">{r.残り支払い回数}回</td>
-                <td className="num">{yen(r.残債金額)}</td>
+                <td className="num" data-label="月額">{yen(r.金額)}</td>
+                <td data-label="支払い期日">{ymd(r.支払い期日)}</td>
+                <td className="num" data-label="支払日">{r.毎月の支払日}日</td>
+                <td className="num" data-label="支払い回数">{r.支払い回数}回</td>
+                <td className="num" data-label="残回数">{r.残り支払い回数}回</td>
+                <td className="num" data-label="残債">{yen(r.残債金額)}</td>
                 <td>
                   <button
                     className="btn btn-sm"
