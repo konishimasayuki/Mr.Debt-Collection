@@ -54,7 +54,7 @@ export default function Unpaid({ onOpen, goHistory }) {
             )}
             {rows && rows.map((r) => (
               <tr key={r.id} className="clickable" onClick={() => goHistory(r.氏名)}>
-                <td>
+                <td className="nm">
                   <b>{r.氏名}</b>
                   {r.よみ && (
                     <span style={{ marginLeft: 8, color: 'var(--ink-3)', fontSize: 12 }}>{r.よみ}</span>

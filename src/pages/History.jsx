@@ -74,7 +74,7 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
               <tr key={p.id} className={'clickable' + (p.区分 === '手動' ? ' manual' : '')}
                   onClick={() => setEdit(p)}>
                 <td data-label="日付">{ymd(p.日付)}</td>
-                <td>
+                <td className="nm">
                   {p.顧客id ? (
                     <span
                       style={{ color: 'var(--indigo)', textDecoration: 'underline' }}
@@ -82,7 +82,7 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
                     >{p.顧客名}</span>
                   ) : <span className="tag t-warn">未割当</span>}
                 </td>
-                <td className="num" data-label="金額">{yen(p.金額)}</td>
+                <td className="num strong" data-label="金額">{yen(p.金額)}円</td>
                 <td data-label="入金方法">{p.入金方法}</td>
                 <td data-label="区分">
                   <span className={'tag ' + (p.区分 === '手動' ? 't-manual' : 't-csv')}>{p.区分}</span>

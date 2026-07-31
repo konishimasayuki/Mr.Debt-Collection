@@ -260,19 +260,20 @@ tbody tr.off td{text-decoration:line-through}
     margin-bottom:10px;padding:0;box-shadow:0 1px 0 rgba(22,24,26,.04)}
   .cards tbody tr.manual{background:var(--manual)}
   .cards tbody tr.off{opacity:.45}
-  .cards td{border:0;padding:5px 14px;white-space:normal;display:flex;gap:12px;
-    align-items:baseline;text-align:left;font-size:14px}
+  /* 札の中身は縦に積む。見出し（.nm）は order で必ず先頭へ */
+  .cards tbody tr.clickable{display:flex;flex-direction:column;padding-bottom:10px}
+  .cards td{border:0;padding:4px 14px;white-space:normal;display:flex;gap:12px;
+    align-items:baseline;text-align:left;font-size:14px;order:1}
   .cards td.num{text-align:left;font-variant-numeric:tabular-nums}
   .cards td::before{content:attr(data-label);flex:0 0 7.6em;color:var(--ink-3);font-size:11px;
     letter-spacing:0;line-height:1.6}
-  .cards td + td{padding-top:0}
-  /* 名前の行は帯にする */
-  .cards td:first-child{display:block;font-size:16.5px;padding:10px 14px 9px;
-    background:var(--paper-2);border-bottom:1px solid var(--rule);margin-bottom:6px}
-  .cards td:first-child::before{display:none}
-  .cards td:first-child .yomi{display:block;margin:2px 0 0;font-size:12px}
-  .cards td:last-child{padding-bottom:11px}
-  .cards td.strong{font-size:15.5px}
+  /* 名前（や会社名）の行は帯にして、いちばん上に置く */
+  /* 帯は下地に薄く重ねる。手動入金の行（色つき）でも浮かないように */
+  .cards td.nm{order:0;display:block;font-size:16.5px;font-weight:700;padding:10px 14px 9px;
+    background:rgba(22,24,26,.045);border-bottom:1px solid var(--rule);margin-bottom:6px}
+  .cards td.nm::before{display:none}
+  .cards td.nm .yomi{display:block;margin:2px 0 0;font-size:12px;font-weight:400}
+  .cards td.strong{font-size:15.5px;font-weight:700}
   .cards td:empty{display:none}
   .cards .empty{border:1px solid var(--rule);background:var(--paper)}
   /* 索引は上に貼り付けて、いつでも押せるように */
@@ -284,6 +285,8 @@ tbody tr.off td{text-decoration:line-through}
   .bar-right{width:100%;margin-left:0}
   .bar-right .search{flex:1 1 100%;min-width:0}
   .bar-right .btn{flex:1 1 auto}
+  /* 件数などの小さな選び欄は、ボタンと同じ行に置く */
+  .bar-right .f{flex:0 0 auto;margin-bottom:0;min-width:110px}
 
   /* 数字の帯は横に流す */
   .strip{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -340,7 +343,8 @@ tbody tr.off td{text-decoration:line-through}
 .idx-b{min-width:0;padding:7px 0;font-family:inherit;font-size:14px;
   background:var(--paper);border:1px solid var(--rule-strong);color:var(--indigo);
   cursor:pointer;border-radius:2px}
-.idx-b:hover:not(.off){background:var(--indigo);color:#fff}
+@media (hover:hover){.idx-b:hover:not(.off){background:var(--paper-2)}}
+.idx-b.on{background:var(--indigo);border-color:var(--indigo);color:#fff;font-weight:700}
 .idx-b.off{color:var(--ink-3);border-color:var(--rule);background:transparent;cursor:default}
 
 /* 行の見出し（表の中に差し込む）*/

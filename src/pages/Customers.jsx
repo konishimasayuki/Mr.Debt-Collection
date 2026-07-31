@@ -1,15 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, yen, ymd, norm } from '../api';
 import { Modal, Text, Money, Select, Err, Empty, Note, Loading } from '../components/ui';
 
 // 電話帳と同じ並び。索引はサーバーが「あ」「か」…で返す
 const 行 = ['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', 'その他'];
 
+// 貼り付いた帯の下端。飛び先と「いまの行」の判定に同じ値を使う。
+// ずれていると、飛んだ直後に手前の行が塗られる。
+const 寸法 = (sel, 名) => {
+  const e = document.querySelector(sel);
+  return e ? e.getBoundingClientRect()[名] : 0;
+};
+// いま画面に貼り付いている帯の下端。「いまの行」の判定に使う
+const 帯の下 = () => Math.max(寸法('.head', 'bottom'), 寸法('.idx', 'bottom'));
+// 貼り付いたときの帯の下端。飛び先の計算に使う。
+// 画面の上にいるときは索引バーがまだ流れの中にあり、bottom が実際より下に出るため、
+// 高さから求めないと飛びすぎる（押した行の1つ手前が塗られる）。
+const 貼り付いたときの帯の下 = () => 寸法('.head', 'height') + 寸法('.idx', 'height');
+const 余白 = 8;   // 見出しを帯からこれだけ離して止める
+
 export default function Customers({ onOpen, onChanged }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState('');
+  const [いまの行, setいまの行] = useState('');   // 画面に出ている行。索引の色に使う
+  const [余りの高さ, set余りの高さ] = useState(0); // 最後の行も上まで送れるようにする余白
+  const 表 = useRef(null);
 
   const load = () => {
     setErr('');
@@ -24,17 +41,68 @@ export default function Customers({ onOpen, onChanged }) {
   // 行ごとにまとめる（サーバーがあいうえお順で返しているので、並べ直さない）
   const 組 = 行.map((g) => ({ 行: g, 人: shown.filter((r) => r.索引 === g) }))
     .filter((g) => g.人.length);
+  // いま画面に出ている行を追って、索引の色を合わせる。
+  // 貼り付いた帯の下にいちばん近い見出しが「いまの行」。
+  useEffect(() => {
+    if (!rows) return;
+    let 待ち = 0;
+    const 見る = () => {
+      待ち = 0;
+      // 飛んだ直後の見出し（帯から余白のぶん下）も「いまの行」に入るよう、
+      // 判定の線は余白より少しだけ下に取る
+      const 線 = 帯の下() + 余白 + 4;
+      const 見出し達 = [...document.querySelectorAll('[id^="gyo-"]')];
+      // ふつうは「線より上にある最後の見出し」がいまの行
+      let いま = '';
+      for (const el of 見出し達) {
+        if (el.getBoundingClientRect().top <= 線) いま = el.id.slice(4);
+      }
+      // いちばん下まで来たら、それ以上スクロールできない。
+      // 最後のほうの見出しは線まで上がらないので、
+      // 画面のいちばん上に見えている行を指す
+      const 下端 = window.innerHeight + window.scrollY
+        >= document.documentElement.scrollHeight - 2;
+      if (下端) {
+        const 見えている = 見出し達.find((el) => el.getBoundingClientRect().bottom > 線);
+        if (見えている) いま = 見えている.id.slice(4);
+      }
+      // どの見出しもまだ線より下なら、いちばん上の行を指しておく
+      setいまの行(いま || (見出し達[0] ? 見出し達[0].id.slice(4) : ''));
+    };
+    const 動いた = () => { if (!待ち) 待ち = requestAnimationFrame(見る); };
+    見る();
+    window.addEventListener('scroll', 動いた, { passive: true });
+    window.addEventListener('resize', 動いた);
+    return () => {
+      window.removeEventListener('scroll', 動いた);
+      window.removeEventListener('resize', 動いた);
+      if (待ち) cancelAnimationFrame(待ち);
+    };
+  }, [rows, key]);
+
+  // 最後のほうの行は、画面の下が足りなくて上まで送れない。
+  // 送れないと索引の色も合わないので、足りないぶんだけ余白を足す。
+  useEffect(() => {
+    if (!rows) return;
+    const 測る = () => {
+      const 束 = 表.current && 表.current.querySelectorAll('tbody');
+      if (!束 || !束.length) return set余りの高さ(0);
+      const 最後 = 束[束.length - 1].getBoundingClientRect().height;
+      set余りの高さ(Math.max(0, Math.round(
+        window.innerHeight - 貼り付いたときの帯の下() - 余白 - 最後 - 24)));
+    };
+    測る();
+    window.addEventListener('resize', 測る);
+    return () => window.removeEventListener('resize', 測る);
+  }, [rows, key]);
+
   // 索引を押したときの飛び先。ヘッダーと索引バーは画面の上に貼り付いたままなので、
   // その高さぶん手前で止めないと、肝心の見出しと最初の名前が裏に隠れる。
   const とぶ = (g) => {
     const el = document.getElementById(`gyo-${g}`);
     if (!el) return;
-    const 高さ = (sel) => {
-      const e = document.querySelector(sel);
-      return e ? e.getBoundingClientRect().height : 0;
-    };
-    const 上 = 高さ('.head') + 高さ('.idx') + 8;
-    const y = el.getBoundingClientRect().top + window.scrollY - 上;
+    const y = el.getBoundingClientRect().top + window.scrollY
+      - 貼り付いたときの帯の下() - 余白;
     window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
   };
 
@@ -58,8 +126,12 @@ export default function Customers({ onOpen, onChanged }) {
           {行.map((g) => {
             const ある = 組.some((x) => x.行 === g);
             return (
-              <button key={g} className={'idx-b' + (ある ? '' : ' off')}
-                      onClick={() => ある && とぶ(g)} disabled={!ある}>
+              <button
+                key={g}
+                className={'idx-b' + (ある ? '' : ' off') + (いまの行 === g ? ' on' : '')}
+                onClick={(e) => { if (ある) { とぶ(g); e.currentTarget.blur(); } }}
+                disabled={!ある}
+              >
                 {g === 'その他' ? '他' : g}
               </button>
             );
@@ -76,7 +148,7 @@ export default function Customers({ onOpen, onChanged }) {
       )}
 
       {rows && shown.length > 0 && (
-        <div className="card tw cards">
+        <div className="card tw cards" ref={表}>
           <table>
             <thead>
               <tr>
@@ -100,7 +172,7 @@ export default function Customers({ onOpen, onChanged }) {
                 </tr>
                 {人.map((r) => (
                   <tr key={r.id} className="clickable" onClick={() => onOpen(r.id)}>
-                    <td>
+                    <td className="nm">
                       <b>{r.氏名}</b>
                       {r.よみ && <span className="yomi">{r.よみ}</span>}
                     </td>
@@ -118,6 +190,10 @@ export default function Customers({ onOpen, onChanged }) {
             ))}
           </table>
         </div>
+      )}
+
+      {rows && shown.length > 0 && 余りの高さ > 0 && (
+        <div aria-hidden style={{ height: 余りの高さ }} />
       )}
 
       {open && (
