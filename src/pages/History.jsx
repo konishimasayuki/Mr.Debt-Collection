@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, yen, ymd } from '../api';
 import { Modal, Text, Money, Select, Err, Empty, Note } from '../components/ui';
 
-export default function History({ initialQuery, onOpen, onChanged }) {
-  const [key, setKey] = useState(initialQuery || '');
+export default function History({ jump, onJumped, onOpen, onChanged }) {
+  const [key, setKey] = useState(jump ? jump.名前 : '');
   const [limit, setLimit] = useState(30);
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
@@ -16,7 +16,15 @@ export default function History({ initialQuery, onOpen, onChanged }) {
       .catch((e) => { setD({ 入金: [], 件数: 0, 全件: 0 }); setErr(e.message); });
   }, [key, limit]);
 
-  // 打っている最中に何度も呼ばないよう、少し待ってから探す
+  // 未入金などから飛んできた検索語は、一度だけ受け取って親から消してもらう。
+  // 消さないと、検索欄を空にして別のタブへ行き、戻ってきたときにまた入ってしまう。
+  useEffect(() => {
+    if (!jump) return;
+    setKey(jump.名前);
+    onJumped();
+  }, [jump, onJumped]);
+
+  // 打っている最中に何度も呼ばないよう、少し待ってから検索する
   useEffect(() => { const t = setTimeout(load, key ? 250 : 0); return () => clearTimeout(t); }, [load, key]);
 
   return (
@@ -33,7 +41,7 @@ export default function History({ initialQuery, onOpen, onChanged }) {
             className="search" value={key} onChange={(e) => setKey(e.target.value)}
             placeholder="顧客名で検索（かな・カナ・半角カナ・英字）"
           />
-          {key && <button className="btn btn-sm" onClick={() => setKey('')}>削除</button>}
+          {key && <button className="btn btn-sm" onClick={() => setKey('')}>クリア</button>}
           <Select
             label="" value={String(limit)} onChange={(v) => setLimit(Number(v))}
             options={[30, 100, 300].map((n) => ({ value: String(n), label: `${n}件` }))}
