@@ -154,7 +154,7 @@ export default function PaymentEntry({ onChanged, goHistory }) {
             <button className="btn btn-main" onClick={commit} disabled={busy || !残す数}>
               {busy ? '取り込んでいます…' : `${残す数}件を取り込む（${yen(残す額)}円）`}
             </button>
-            <button className="btn" onClick={() => setPreview(null)} disabled={busy}>やめる</button>
+            <button className="btn" onClick={() => setPreview(null)} disabled={busy}>キャンセル</button>
             <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>
               取り込みたくない行は、左のチェックを外してください。
             </span>
@@ -298,7 +298,7 @@ function ManualPayment({ onClose, onDone }) {
       onClose={onClose}
       foot={
         <>
-          <button className="btn" onClick={onClose}>やめる</button>
+          <button className="btn" onClick={onClose}>キャンセル</button>
           <div className="right">
             <button className="btn btn-main" onClick={submit} disabled={busy}>
               {busy ? '登録しています…' : '登録する'}

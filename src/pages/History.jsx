@@ -31,9 +31,9 @@ export default function History({ initialQuery, onOpen, onChanged }) {
         <div className="bar-right">
           <input
             className="search" value={key} onChange={(e) => setKey(e.target.value)}
-            placeholder="顧客名で探す（かな・カナ・半角カナ・英字）"
+            placeholder="顧客名で検索（かな・カナ・半角カナ・英字）"
           />
-          {key && <button className="btn btn-sm" onClick={() => setKey('')}>消す</button>}
+          {key && <button className="btn btn-sm" onClick={() => setKey('')}>削除</button>}
           <Select
             label="" value={String(limit)} onChange={(v) => setLimit(Number(v))}
             options={[30, 100, 300].map((n) => ({ value: String(n), label: `${n}件` }))}
@@ -43,7 +43,7 @@ export default function History({ initialQuery, onOpen, onChanged }) {
 
       <Note>
         <span className="tag t-manual">手動</span> の行は色を変えています。
-        行を押すと内容を直せます。
+        行を押すと内容を編集できます。
       </Note>
       <Err>{err}</Err>
 
@@ -128,13 +128,13 @@ function EditPayment({ p, onClose, onDone }) {
 
   return (
     <Modal
-      title={`入金を直す（${p.区分}）`}
+      title={`入金の編集（${p.区分}）`}
       onClose={onClose}
       foot={
         <>
-          <button className="btn btn-danger" onClick={remove} disabled={busy}>この入金を取り消す</button>
+          <button className="btn btn-danger" onClick={remove} disabled={busy}>この入金を削除</button>
           <div className="right">
-            <button className="btn" onClick={onClose}>やめる</button>
+            <button className="btn" onClick={onClose}>キャンセル</button>
             <button className="btn btn-main" onClick={save} disabled={busy}>
               {busy ? '保存しています…' : '保存する'}
             </button>
@@ -145,7 +145,7 @@ function EditPayment({ p, onClose, onDone }) {
       {p.区分 === 'CSV' && (
         <Note>
           この入金はCSVから取り込んだものです。
-          日付や金額を直すと、通帳と食い違うことがあります。理由をメモに残してください。
+          日付や金額を変更すると、通帳と食い違うことがあります。理由をメモに残してください。
         </Note>
       )}
       <div className="grid2">
@@ -161,7 +161,7 @@ function EditPayment({ p, onClose, onDone }) {
       <Select label="入金方法" value={v.入金方法} onChange={set('入金方法')}
               options={[{ value: '振込', label: '振り込み' }, { value: '現金', label: '現金' },
                         { value: 'その他', label: 'その他' }]} />
-      <Text label="メモ" value={v.メモ} onChange={set('メモ')} placeholder="直した理由" />
+      <Text label="メモ" value={v.メモ} onChange={set('メモ')} placeholder="変更した理由" />
       {(p.付番 || p.振込人) && (
         <p style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>
           もとの明細：付番 {p.付番 || '—'} ／ 振込人 {p.振込人 || '—'}

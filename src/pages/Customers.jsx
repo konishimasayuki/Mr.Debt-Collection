@@ -24,7 +24,7 @@ export default function Customers({ onOpen, onChanged }) {
         <h2>顧客一覧</h2>
         <div className="bar-right">
           <input
-            className="search" placeholder="氏名・よみ・車種で探す"
+            className="search" placeholder="氏名・よみ・車種で検索"
             value={key} onChange={(e) => setKey(e.target.value)}
           />
           <button className="btn btn-main" onClick={() => setOpen(true)}>＋ 新規顧客登録</button>
@@ -97,7 +97,7 @@ function NewCustomer({ onClose, onDone }) {
 
   useEffect(() => {
     api.companies()
-      .then((d) => setCompanies(d.会社.filter((c) => c.使う)))
+      .then((d) => setCompanies(d.会社))
       .catch(() => setCompanies([]));
   }, []);
 
@@ -130,7 +130,7 @@ function NewCustomer({ onClose, onDone }) {
       onClose={onClose}
       foot={
         <>
-          <button className="btn" onClick={onClose}>やめる</button>
+          <button className="btn" onClick={onClose}>キャンセル</button>
           <div className="right">
             <button className="btn btn-main" onClick={submit} disabled={busy}>
               {busy ? '登録しています…' : '登録する'}
