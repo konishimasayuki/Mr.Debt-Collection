@@ -273,8 +273,8 @@ function DayBox({ iso, 顧客, 予定, 印, editing, setEditing, onClose, onDone
               {p.回次 && <span style={{ fontSize: 13 }}>{p.回次}回目ぶん</span>}
               {p.メモ && <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>{p.メモ}</span>}
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                <button className="btn btn-sm" onClick={() => setEditing(p)}>直す</button>
-                <button className="btn btn-sm btn-danger" onClick={() => remove(p)} disabled={busy}>取り消す</button>
+                <button className="btn btn-sm" onClick={() => setEditing(p)}>編集</button>
+                <button className="btn btn-sm btn-danger" onClick={() => remove(p)} disabled={busy}>削除</button>
               </span>
             </div>
           ))}
@@ -286,7 +286,7 @@ function DayBox({ iso, 顧客, 予定, 印, editing, setEditing, onClose, onDone
       ) : (
         <>
           <h4 style={{ margin: '0 0 8px', fontSize: 13.5 }}>
-            {editing ? 'この約束を直す' : 'この日に入金する約束を入れる'}
+            {editing ? '入金約束の編集' : '入金約束の登録'}
           </h4>
           <div className="grid3">
             <Select label="どの回ぶん" value={v.回次} onChange={set('回次')} placeholder="決めない"
@@ -313,9 +313,9 @@ function DayBox({ iso, 顧客, 予定, 印, editing, setEditing, onClose, onDone
           <Err>{err}</Err>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-main" onClick={save} disabled={busy}>
-              {busy ? '保存しています…' : editing ? 'この約束を直す' : 'この日の約束にする'}
+              {busy ? '保存しています…' : editing ? '変更を保存' : '登録する'}
             </button>
-            {editing && <button className="btn" onClick={() => setEditing(null)}>やめる</button>}
+            {editing && <button className="btn" onClick={() => setEditing(null)}>キャンセル</button>}
           </div>
         </>
       )}

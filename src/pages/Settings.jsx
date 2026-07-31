@@ -14,16 +14,10 @@ export default function Settings({ onChanged }) {
   };
   useEffect(load, []);
 
-  const toggle = async (c) => {
-    try { await api.patchCompany({ id: c.id, 使う: !c.使う }); load(); onChanged && onChanged(); }
-    catch (e) { setErr(e.message); }
-  };
-
   const remove = async (c) => {
-    if (!confirm(`債権会社「${c.名前}」を消します。よろしいですか。`)) return;
+    if (!confirm(`債権会社「${c.名前}」を削除します。よろしいですか。`)) return;
     try {
-      const d = await api.deleteCompany(c.id);
-      if (d.知らせ) alert(d.知らせ);
+      await api.deleteCompany(c.id);
       load(); onChanged && onChanged();
     } catch (e) { setErr(e.message); }
   };
@@ -41,36 +35,30 @@ export default function Settings({ onChanged }) {
         <h3>債権会社</h3>
         <Note>
           ここで登録した会社が、新規顧客登録の「債権譲渡会社」「債権譲渡先」の選択肢になります。
-          顧客に使われている会社は消せません（「使わない」にすると、次からは選べなくなります）。
+          顧客に使われている会社は削除できません。
         </Note>
         <Err>{err}</Err>
 
         <div className="card tw">
           <table>
             <thead>
-              <tr><th>会社名</th><th>メモ</th><th className="num">使用中の顧客</th>
-                <th>選べる</th><th /></tr>
+              <tr><th>会社名</th><th>メモ</th><th className="num">使用中の顧客</th><th /></tr>
             </thead>
             <tbody>
-              {rows === null && <tr><td colSpan={5}><Empty>読み込んでいます…</Empty></td></tr>}
+              {rows === null && <tr><td colSpan={4}><Empty>読み込んでいます…</Empty></td></tr>}
               {rows && rows.length === 0 && (
-                <tr><td colSpan={5}><Empty>
+                <tr><td colSpan={4}><Empty>
                   まだ登録がありません。「債権会社を追加」から入れてください。
                 </Empty></td></tr>
               )}
               {rows && rows.map((c) => (
-                <tr key={c.id} className={c.使う ? '' : 'off'}>
+                <tr key={c.id}>
                   <td><b>{c.名前}</b></td>
                   <td style={{ whiteSpace: 'normal', fontSize: 13 }}>{c.メモ || ''}</td>
                   <td className="num">{c.使用数}件</td>
-                  <td>
-                    <button className="btn btn-sm" onClick={() => toggle(c)}>
-                      {c.使う ? '選べる' : '使わない'}
-                    </button>
-                  </td>
                   <td style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-sm" onClick={() => setEdit(c)}>直す</button>
-                    <button className="btn btn-sm btn-danger" onClick={() => remove(c)}>消す</button>
+                    <button className="btn btn-sm" onClick={() => setEdit(c)}>編集</button>
+                    <button className="btn btn-sm btn-danger" onClick={() => remove(c)}>削除</button>
                   </td>
                 </tr>
               ))}
@@ -107,11 +95,11 @@ function CompanyForm({ c, onClose, onDone }) {
 
   return (
     <Modal
-      title={c ? '債権会社を直す' : '債権会社を追加'}
+      title={c ? '債権会社の編集' : '債権会社の追加'}
       onClose={onClose}
       foot={
         <>
-          <button className="btn" onClick={onClose}>やめる</button>
+          <button className="btn" onClick={onClose}>キャンセル</button>
           <div className="right">
             <button className="btn btn-main" onClick={submit} disabled={busy}>
               {busy ? '保存しています…' : c ? '保存する' : '追加する'}

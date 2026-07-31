@@ -1,8 +1,8 @@
 // 債権会社の管理（設定タブ）。譲渡会社・譲渡先の選択肢はここで増やす。
 // GET    /api/companies … 一覧
 // POST   /api/companies … {名前, メモ} を追加
-// PATCH  /api/companies … {id, 名前 / メモ / 使う} を直す
-// DELETE /api/companies?id=1 … 使っていなければ消す。使っていれば「使わない」に倒す
+// PATCH  /api/companies … {id, 名前 / メモ} を変更する
+// DELETE /api/companies?id=1 … 使っていなければ削除。使っていれば断る
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
 import { readBody, query } from './_lib.js';
@@ -22,12 +22,12 @@ export default async (req, res) => {
 
     if (method === 'GET') {
       const rows = await sql(
-        `SELECT c.id, c.name, c.note, c.active,
+        `SELECT c.id, c.name, c.note,
                 (SELECT count(*)::int FROM customer x
                   WHERE (x.assignor_id = c.id OR x.assignee_id = c.id) AND x.archived=false) AS 使用数
-           FROM company c ORDER BY c.active DESC, c.name`);
+           FROM company c ORDER BY c.name`);
       return ok(res, { 会社: rows.map((r) => ({
-        id: r.id, 名前: r.name, メモ: r.note || '', 使う: r.active, 使用数: r.使用数 })) });
+        id: r.id, 名前: r.name, メモ: r.note || '', 使用数: r.使用数 })) });
     }
 
     const b = await readBody(req);
@@ -62,13 +62,12 @@ export default async (req, res) => {
         put('name', name);
       }
       if (b.メモ !== undefined) put('note', String(b.メモ).trim() || null);
-      if (b.使う !== undefined) put('active', !!b.使う);
-      if (!set.length) return bad(res, '直す項目がありません。');
+      if (!set.length) return bad(res, '変更する項目がありません。');
       val.push(id);
       await sql(`UPDATE company SET ${set.join(', ')} WHERE id=$${val.length}`, val);
       await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                  VALUES (NULL,$1,'設定',$2,NULL)`,
-        [who, `債権会社「${c.name}」を直した`]);
+        [who, `債権会社「${c.name}」を変更した`]);
       return ok(res, { done: true });
     }
 
@@ -80,19 +79,15 @@ export default async (req, res) => {
       const used = (await sql(
         `SELECT count(*)::int AS n FROM customer
           WHERE (assignor_id=$1 OR assignee_id=$1) AND archived=false`, [id]))[0].n;
+      // 使われている会社は消さない。過去の契約の表示が壊れるため
       if (used) {
-        // 使われている会社は消さない。過去の契約の記録が壊れるため
-        await sql('UPDATE company SET active=false WHERE id=$1', [id]);
-        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
-                   VALUES (NULL,$1,'設定',$2,NULL)`,
-          [who, `債権会社「${c.name}」を「使わない」にした（${used}件で使用中のため消さない）`]);
-        return ok(res, { done: true, 消した: false, 使用数: used,
-          知らせ: `${used}件の顧客で使われているため、消さずに「使わない」にしました。` });
+        return bad(res, 'この会社は削除できません。',
+          `${used}件の顧客で使用中です。先にその顧客の債権譲渡会社・債権譲渡先を変えてください。`);
       }
       await sql('DELETE FROM company WHERE id=$1', [id]);
       await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
-                 VALUES (NULL,$1,'設定',$2,NULL)`, [who, `債権会社「${c.name}」を消した`]);
-      return ok(res, { done: true, 消した: true });
+                 VALUES (NULL,$1,'設定',$2,NULL)`, [who, `債権会社「${c.name}」を削除した`]);
+      return ok(res, { done: true, 削除した: true });
     }
 
     return bad(res, '対応していない操作です。');

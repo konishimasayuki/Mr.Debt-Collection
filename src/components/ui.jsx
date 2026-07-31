@@ -120,7 +120,7 @@ export function Picker({ label, hint, value, onChange, items, placeholder }) {
             {選択中.よみ && <span className="pick-sub">{選択中.よみ}</span>}
             {選択中.脇 && <span className="pick-sub">{選択中.脇}</span>}
             <button type="button" className="btn btn-sm" onClick={() => { onChange(''); setKey(''); }}>
-              選び直す
+              変更
             </button>
           </div>
         ) : (
