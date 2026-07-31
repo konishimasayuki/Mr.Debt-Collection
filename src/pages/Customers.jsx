@@ -24,9 +24,18 @@ export default function Customers({ onOpen, onChanged }) {
   // 行ごとにまとめる（サーバーがあいうえお順で返しているので、並べ直さない）
   const 組 = 行.map((g) => ({ 行: g, 人: shown.filter((r) => r.索引 === g) }))
     .filter((g) => g.人.length);
+  // 索引を押したときの飛び先。ヘッダーと索引バーは画面の上に貼り付いたままなので、
+  // その高さぶん手前で止めないと、肝心の見出しと最初の名前が裏に隠れる。
   const とぶ = (g) => {
     const el = document.getElementById(`gyo-${g}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!el) return;
+    const 高さ = (sel) => {
+      const e = document.querySelector(sel);
+      return e ? e.getBoundingClientRect().height : 0;
+    };
+    const 上 = 高さ('.head') + 高さ('.idx') + 8;
+    const y = el.getBoundingClientRect().top + window.scrollY - 上;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
   };
 
   return (

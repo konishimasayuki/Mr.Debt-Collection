@@ -25,6 +25,21 @@ export default function App() {
 
   useEffect(() => { api.me().then(setMe).catch(() => setMe({ ログイン中: false })); }, []);
 
+  // ヘッダーの高さを測って CSS へ渡す。
+  // 索引バーをこの下に貼り付けたいが、高さは端末と文字サイズで変わるため、
+  // 決め打ちにすると隠れたり浮いたりする。
+  useEffect(() => {
+    const el = document.querySelector('.head');
+    if (!el || typeof ResizeObserver !== 'function') return;
+    const 測る = () => document.documentElement.style
+      .setProperty('--head-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    測る();
+    const ro = new ResizeObserver(測る);
+    ro.observe(el);
+    window.addEventListener('resize', 測る);
+    return () => { ro.disconnect(); window.removeEventListener('resize', 測る); };
+  }, [me]);
+
   const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
 
   // 未入金の行を押したら、入金履歴でその人を検索した状態にする。

@@ -253,7 +253,7 @@ tbody tr.off td{text-decoration:line-through}
   /* 行の見出しは、札の上の帯にする */
   .cards .grp-row{border:0;background:none;margin:14px 0 6px;box-shadow:none}
   .cards .grp-row th{display:block;border:0;border-bottom:1px solid var(--rule-strong);
-    padding:0 2px 5px;background:none;scroll-margin-top:96px}
+    padding:0 2px 5px;background:none;scroll-margin-top:calc(var(--head-h,0px) + 56px)}
   .cards{border:0;background:none}
   /* 札。名前を見出しにして、下に項目を並べる */
   .cards tbody tr{border:1px solid var(--rule);background:var(--paper);
@@ -276,7 +276,7 @@ tbody tr.off td{text-decoration:line-through}
   .cards td:empty{display:none}
   .cards .empty{border:1px solid var(--rule);background:var(--paper)}
   /* 索引は上に貼り付けて、いつでも押せるように */
-  .idx{top:0;padding:8px 0;gap:2px;box-shadow:0 6px 8px -6px rgba(22,24,26,.18)}
+  .idx{padding:8px 0;gap:2px;box-shadow:0 6px 8px -6px rgba(22,24,26,.18)}
   .idx-b{padding:9px 0;font-size:13px}
   .grp-h{scroll-margin-top:96px}
 
@@ -333,7 +333,9 @@ tbody tr.off td{text-decoration:line-through}
 }
 
 /* ── あいうえお索引と、行ごとの見出し（電話帳の形）──────── */
-.idx{display:grid;grid-template-columns:repeat(11,1fr);gap:3px;position:sticky;top:0;z-index:9;
+/* ヘッダーの真下に貼り付く。高さは App が測って --head-h に入れる */
+.idx{display:grid;grid-template-columns:repeat(11,1fr);gap:3px;position:sticky;
+  top:var(--head-h,0px);z-index:9;
   background:var(--paper-2);padding:6px 0 8px;margin-bottom:4px}
 .idx-b{min-width:0;padding:7px 0;font-family:inherit;font-size:14px;
   background:var(--paper);border:1px solid var(--rule-strong);color:var(--indigo);
@@ -344,7 +346,8 @@ tbody tr.off td{text-decoration:line-through}
 /* 行の見出し（表の中に差し込む）*/
 .grp-row th{background:var(--paper-2);border-top:1px solid var(--rule-strong);
   border-bottom:1px solid var(--rule-strong);font-size:12.5px;letter-spacing:.12em;
-  color:var(--indigo);font-weight:700;padding:7px 12px;scroll-margin-top:104px;
+  color:var(--indigo);font-weight:700;padding:7px 12px;
+  scroll-margin-top:calc(var(--head-h,0px) + 56px);
   position:static;text-align:left}
 .grp-row th span{margin-left:10px;font-size:11.5px;color:var(--ink-3);
   letter-spacing:0;font-weight:400}
