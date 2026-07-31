@@ -1,0 +1,163 @@
+// 顧客一覧と、新規顧客の登録。
+// GET  /api/customers          … 一覧（氏名・債権譲渡会社・車種・支払日・金額・残り回数・残債）
+// GET  /api/customers?未入金=1 … 支払期日までに入金できていない顧客（あいうえお順）
+// POST /api/customers          … 新規登録。支払予定も同時に作る
+import { requireSession, recordedBy } from './_auth.js';
+import { db, fail, ok } from './_db.js';
+import { readBody, query, isoOf, today, dueOf, yen, norm, summarize, makeSchedule } from './_lib.js';
+
+const bad = (res, msg, why) => {
+  res.statusCode = 400;
+  res.setHeader('Content-Type', 'application/json; charset=UTF-8');
+  res.end(JSON.stringify(why ? { error: msg, 理由: why } : { error: msg }));
+};
+
+// あいうえお順。よみが無い人は氏名で並べ、最後にまわす
+const collator = new Intl.Collator('ja');
+const byKana = (a, b) => {
+  const ak = norm(a.kana), bk = norm(b.kana);
+  if (!!ak !== !!bk) return ak ? -1 : 1;
+  return collator.compare(ak || a.name, bk || b.name) || a.id - b.id;
+};
+
+export default async (req, res) => {
+  if (!requireSession(req, res)) return;
+  const method = (req.method || 'GET').toUpperCase();
+
+  try {
+    const sql = db();
+
+    if (method === 'GET') {
+      const q = query(req);
+      const customers = await sql(
+        `SELECT c.*, a.name AS assignor_name, b.name AS assignee_name
+           FROM customer c
+           LEFT JOIN company a ON a.id = c.assignor_id
+           LEFT JOIN company b ON b.id = c.assignee_id
+          WHERE c.archived = false
+          ORDER BY c.id`);
+      const schedules = await sql(
+        `SELECT id, customer_id, no, due_date, planned_amount, state
+           FROM schedule ORDER BY customer_id, no`);
+      const paidRows = await sql(
+        `SELECT schedule_id, COALESCE(sum(amount),0)::int AS n FROM allocation
+          WHERE schedule_id IS NOT NULL GROUP BY schedule_id`);
+      const paidBy = {};
+      paidRows.forEach((r) => (paidBy[r.schedule_id] = r.n));
+
+      const by = {};
+      schedules.forEach((s) => (by[s.customer_id] = by[s.customer_id] || []).push(s));
+
+      let list = customers.map((c) => {
+        const s = summarize(c, by[c.id] || [], paidBy);
+        return {
+          id: c.id, 氏名: c.name, よみ: c.kana || '',
+          債権譲渡会社: c.assignor_name || '', 債権譲渡先: c.assignee_name || '',
+          車種: c.car || '', 毎月の支払日: c.pay_day, 金額: c.monthly_amount,
+          残り支払い回数: s.残り回数, 残債金額: s.残債,
+          支払い回数: s.支払い回数, 支払い期日: s.次の期日, 回次: s.回次,
+          この回の残り: s.この回の残り, 遅れ: s.遅れ, 遅れ日数: s.遅れ日数, 完済: s.完済,
+          電話番号: c.tel || '',
+        };
+      });
+
+      if (q['未入金']) {
+        // 期日を過ぎて、その回にまだ残りがある人。あいうえお順で出す
+        list = list.filter((r) => r.遅れ && r.この回の残り > 0);
+        list.sort((a, b) => byKana(
+          { kana: a.よみ, name: a.氏名, id: a.id },
+          { kana: b.よみ, name: b.氏名, id: b.id }));
+      } else {
+        list.sort((a, b) => byKana(
+          { kana: a.よみ, name: a.氏名, id: a.id },
+          { kana: b.よみ, name: b.氏名, id: b.id }));
+      }
+      return ok(res, { 顧客: list, 本日: today() });
+    }
+
+    if (method === 'POST') {
+      const who = recordedBy(req);
+      const b = await readBody(req);
+
+      const name = String(b.名前 || '').trim();
+      const monthly = Math.round(Number(b.月々の金額) || 0);
+      if (!name) return bad(res, 'お名前を入れてください。');
+      if (!monthly || monthly <= 0) return bad(res, '月々の金額を入れてください。');
+
+      const term = Math.max(1, Math.round(Number(b.回数) || 48));
+      const payDay = Math.min(Math.max(Math.round(Number(b.支払日) || 27), 1), 31);
+
+      // 開始月。指定が無ければ契約日の翌月から
+      let y0, m0;
+      const st = String(b.開始月 || '').match(/^(\d{4})-(\d{2})$/);
+      if (st) { y0 = +st[1]; m0 = +st[2]; }
+      else {
+        const base = b.契約日 ? new Date(b.契約日) : new Date();
+        if (isNaN(base)) return bad(res, '契約日が読めません。');
+        const t = base.getFullYear() * 12 + base.getMonth() + 1;
+        y0 = Math.floor(t / 12); m0 = (t % 12) + 1;
+      }
+      if (m0 < 1 || m0 > 12) return bad(res, '開始月が読めません。');
+      const start = dueOf(y0, m0, payDay, 1);
+
+      // 会社の指定があれば実在を確かめる
+      for (const [key, col] of [['債権譲渡会社', 'assignor'], ['債権譲渡先', 'assignee']]) {
+        const v = b[key];
+        if (v) {
+          const c = await sql('SELECT id FROM company WHERE id=$1', [Number(v)]);
+          if (!c.length) return bad(res, `${key}が見つかりません。`, '設定で登録してください');
+        }
+      }
+
+      // 二重登録を止める(同じ氏名・同じ月額・同じ開始日は同じ契約とみなす)
+      const dup = await sql(
+        `SELECT id FROM customer WHERE name=$1 AND monthly_amount=$2 AND start_date=$3
+           AND archived=false`, [name, monthly, start]);
+      if (dup.length) {
+        return bad(res, 'この顧客はすでに登録されています。',
+          `${name}さん・月々 ${yen(monthly)}円・${start} 開始（顧客番号 ${dup[0].id}）`);
+      }
+      const same = await sql('SELECT id FROM customer WHERE name=$1 AND archived=false', [name]);
+
+      const total = monthly * term;
+      const ins = await sql(
+        `INSERT INTO customer
+           (name, kana, gender, birthday, address, tel, contract_date, car,
+            assignor_id, assignee_id, monthly_amount, term_count, pay_day,
+            start_date, total_amount, memo)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+        [name, String(b.よみ || '').trim() || null,
+         String(b.性別 || '').trim() || null,
+         b.生年月日 || null,
+         String(b.住所 || '').trim() || null,
+         String(b.電話番号 || '').trim() || null,
+         b.契約日 || null,
+         String(b.車種 || '').trim() || null,
+         b.債権譲渡会社 ? Number(b.債権譲渡会社) : null,
+         b.債権譲渡先 ? Number(b.債権譲渡先) : null,
+         monthly, term, payDay, start, total,
+         String(b.メモ || '').trim() || null]);
+      const id = ins[0].id;
+
+      await makeSchedule(sql, id, y0, m0, payDay, term, monthly);
+      if (b.よみ) {
+        await sql(`INSERT INTO payer_alias (normalized_name, customer_id, created_by)
+                   VALUES ($1,$2,$3) ON CONFLICT (normalized_name) DO NOTHING`,
+          [norm(b.よみ), id, who]);
+      }
+      await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                 VALUES ($1,$2,'登録',$3,$4)`,
+        [id, who,
+         `新規登録：月々 ${yen(monthly)}円 × ${term}回、${start} から ${dueOf(y0, m0, payDay, term)} まで`,
+         String(b.メモ || '').trim() || null]);
+
+      return ok(res, { done: true, id, 氏名: name, 初回: start,
+        最終回: dueOf(y0, m0, payDay, term), 支払総額: total,
+        同姓同名: same.length ? same.length + 1 : 0 });
+    }
+
+    return bad(res, '対応していない操作です。');
+  } catch (e) {
+    fail(res, e, 'customers');
+  }
+};

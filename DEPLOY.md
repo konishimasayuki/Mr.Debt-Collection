@@ -1,49 +1,71 @@
-# Vercel での表示手順
+# Vercel での公開手順
 
-入金台帳のモック(`引き継ぎ資料/nyukin-daicho.html` と同一内容の `assets/ledger.html`)を、
-簡易認証つきで Vercel に表示するための構成。
+入金管理台帳(React + Vite の画面 + Vercel の関数 + Neon の PostgreSQL)を
+Vercel で動かすための構成。
 
 ## 何が入っているか
 
-| ファイル | 役割 |
+| | 役割 |
 |---|---|
-| `assets/ledger.html` | 表示する台帳モック本体(実データ入り)。静的URLとしては公開されない |
-| `api/gate.js` | すべてのリクエストを受ける認証ゲート。認証が通ったときだけ台帳を返す |
-| `vercel.json` | 全パス(`/.*`)を `api/gate.js` に集約するルート設定 |
+| `index.html` / `src/` | 画面。React + Vite。`npm run build` で `dist/` に出る |
+| `api/*.js` | Vercel の関数。1ファイル1エンドポイント。**ESM で書く**(`export default`) |
+| `api/_*.js` | 関数から読む共通部品(スキーマ・DB接続・正規化・CSV解析)。エンドポイントではない |
+| `api/data/contracts.json` | 旧台帳の54件。載せ替えに使う |
+| `vercel.json` | ビルド設定と、`/api/` 以外を `index.html` へ返す書き換え |
 
-## 認証(重要)
+`vercel.json` の要点。
 
-- ひとまずの簡易認証。**ユーザー名 `a` / パスワード `a`** でログインできる。
-- ブラウザ標準のログイン画面(Basic 認証)が出る。
-- 認証が通るまで HTML は一切返らないため、ソースを見ても実データは覗けない。
+- `buildCommand: npm run build` / `outputDirectory: dist`
+- `functions: { "api/*.js": { runtime: "@vercel/node@5.1.10" } }`
+- `/((?!api/).*)` → `/index.html`(画面はタブ切替だけなのでルーターを持たない)
+- `X-Robots-Tag: noindex`
 
-### これは暫定である
+## 環境変数
 
-- ID/パスワードがコード内に固定されている。誰でもこのリポジトリを読めれば分かる。
-- 本運用の前に、次のどちらかへ移行すること。
-  - パスワードを Vercel の環境変数に移し、`api/gate.js` から読む
-  - Vercel の Deployment Protection(Password Protection / Vercel Authentication)を使う
+| 名前 | 中身 |
+|---|---|
+| `DATABASE_URL` | Neon の接続文字列。**必須** |
+| `LEDGER_USER` / `LEDGER_PASS` | ログインの利用者名とパスワード |
+| `SESSION_SECRET` | クッキーに入れる合鍵のもと |
 
-## 表示のしかた
+Vercel の Project → Settings → Environment Variables に入れる。
+入れていない場合は開発用の既定値(`a` / `a`)で動くが、**本番では必ず入れること。**
 
-### A. GitHub 連携(推奨・恒久)
+## 公開のしかた
 
 1. Vercel でこのリポジトリを Import する
-2. デプロイ対象ブランチを選ぶ(このブランチ、または main へマージ後の main)
-3. 以後、push するたびに自動でデプロイされる
+2. Framework は **Vite**(`vercel.json` があるのでそのままでよい)
+3. 上の環境変数を入れる
+4. デプロイ対象ブランチを選ぶ
+5. 以後、push するたびに自動でデプロイされる
 
-フレームワークは「Other」。ビルド設定は `vercel.json` が持つのでそのままでよい。
+Vercel CLI があれば `vercel deploy` / `vercel deploy --prod` でもよい。
 
-### B. 直接デプロイ(単発)
+## 初回にすること
 
-Vercel CLI がある場合:
+ログインして**設定タブ**を開き、上から順に押す。
+
+1. **「テーブルを用意する」** — `POST /api/setup`。何度押しても同じ結果になる
+2. **「既存データを載せ替える」** — 旧台帳54件が入る。氏名で照合して飛ばすので何度押しても増えない
+3. **債権会社を登録する** — 旧台帳に会社の情報が無いため、登録してから顧客ページで選び直す
+
+**載せ替えただけでは全員が1回目から未入金に見える。**
+すでに何回目まで払い終えているかは旧台帳に無い。
+運用に乗せる前に、CSV取込か手動入金で過去分を入れること(`docs/データ保存設計.md`)。
+
+## 手元で動かす
 
 ```
-vercel deploy            # プレビュー
-vercel deploy --prod     # 本番
+npm install
+npm run dev        # Vite の開発サーバー(APIは動かない)
+npm run build      # dist/ を作る
 ```
+
+APIまで通して試すときは PostgreSQL を立て、`api/_db.js` の `setDb()` で
+接続先を差し替える小さなサーバーを噛ませる。
 
 ## 注意
 
-- 実顧客の氏名・債務額・滞納状況を含む。公開範囲に注意すること。
-- 検索インデックスには載らないよう `X-Robots-Tag: noindex` を付けている。
+- 実顧客の氏名・債務額・滞納状況を含む。公開範囲に注意すること
+- ログインは簡易なもの。担当者ごとの利用者と権限は未実装(`docs/データ保存設計.md` の「先に決めること」)
+- HTTPヘッダの値は ASCII しか置けない。日本語を Set-Cookie などに入れない

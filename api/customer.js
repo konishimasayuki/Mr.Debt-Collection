@@ -1,145 +1,204 @@
-// 新しいお客さん(契約)の登録。48回ぶんの支払予定もここで作る。
-//
-// POST /api/customer {name, kana, car, monthly, price, pay_day, start, bonus_months, bonus_each, contact}
-//
-// 手数料は支払総額の25%(仕様の定率)。車の代金(price)は確認用で、
-// 計算した元本と食い違うときは登録を止めずに知らせる。
-const { requireSession, recordedBy } = require('./_auth');
-const { db, fail, ok } = require('./_db');
+// 顧客ページの中身と、その顧客への書き込み。
+// GET   /api/customer?id=1        … カレンダー・支払いの記録・メモ・約束
+// PATCH /api/customer             … {id, メモ / よみ / 連絡先 …} を更新
+// POST  /api/customer             … {id, 種類:'約束'|'約束変更'|'約束削除', …}
+import { requireSession, recordedBy } from './_auth.js';
+import { db, fail, ok } from './_db.js';
+import { readBody, query, isoOf, today, yen, norm } from './_lib.js';
 
-function readBody(req) {
-  return new Promise((resolve) => {
-    if (req.body && typeof req.body === 'object') return resolve(req.body);
-    let d = '';
-    req.on('data', (c) => { d += c; if (d.length > 1e6) req.destroy(); });
-    req.on('end', () => { try { resolve(JSON.parse(d || '{}')); } catch { resolve({}); } });
-    req.on('error', () => resolve({}));
-  });
-}
-const yen = (n) => Number(n).toLocaleString('ja-JP');
 const bad = (res, msg, why) => {
   res.statusCode = 400;
   res.setHeader('Content-Type', 'application/json; charset=UTF-8');
   res.end(JSON.stringify(why ? { error: msg, 理由: why } : { error: msg }));
 };
+const hhmm = (t) => (t ? String(t).slice(0, 5) : null);
 
-// その月の末日
-const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
-
-// 回次kの支払期日。その月に支払日が無ければ末日にする(2月31日→2月28日)
-function dueOf(y0, m0, day, k) {
-  const t = y0 * 12 + (m0 - 1) + (k - 1);
-  const y = Math.floor(t / 12), m = t % 12 + 1;
-  const d = Math.min(day, lastDay(y, m));
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
-
-// 入力を整える。全角カナに寄せる(名寄せと同じ形)
-function tidyKana(s) {
-  return String(s || '').normalize('NFKC').replace(/[\s　]/g, '')
-    .replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60)).trim();
-}
-const isKana = (s) => /^[ァ-ヺー]+$/.test(s);
-
-module.exports = async (req, res) => {
+export default async (req, res) => {
   if (!requireSession(req, res)) return;
-  if ((req.method || '').toUpperCase() !== 'POST') return bad(res, 'POSTで送ってください。');
-  const who = recordedBy(req);
+  const method = (req.method || 'GET').toUpperCase();
 
   try {
     const sql = db();
+
+    // ── 読み取り ────────────────────────────
+    if (method === 'GET') {
+      const id = Number(query(req).id);
+      if (!id) return bad(res, '顧客が指定されていません。');
+      const c = (await sql(
+        `SELECT c.*, a.name AS assignor_name, b.name AS assignee_name
+           FROM customer c
+           LEFT JOIN company a ON a.id = c.assignor_id
+           LEFT JOIN company b ON b.id = c.assignee_id
+          WHERE c.id=$1`, [id]))[0];
+      if (!c) { res.statusCode = 404; return res.end(JSON.stringify({ error: '顧客が見つかりません。' })); }
+
+      const rows = await sql(
+        `SELECT id, no, due_date, planned_amount, state FROM schedule
+          WHERE customer_id=$1 ORDER BY no`, [id]);
+      const paidRows = await sql(
+        `SELECT a.schedule_id, COALESCE(sum(a.amount),0)::int AS n
+           FROM allocation a WHERE a.schedule_id IS NOT NULL
+          GROUP BY a.schedule_id`);
+      const paidBy = {};
+      paidRows.forEach((r) => (paidBy[r.schedule_id] = r.n));
+
+      const payments = await sql(
+        `SELECT p.id, p.paid_on, p.amount, p.method, p.source, p.ref_no, p.memo,
+                p.payer_name, p.recorded_by, p.created_at
+           FROM payment p WHERE p.customer_id=$1
+          ORDER BY p.paid_on DESC, p.id DESC`, [id]);
+      const promises = await sql(
+        `SELECT id, promised_on, until_time, schedule_no, amount, memo, done, created_by
+           FROM promise WHERE customer_id=$1 ORDER BY promised_on, id`, [id]);
+      const events = await sql(
+        `SELECT id, occurred_at, recorded_by, kind, text, memo
+           FROM event WHERE customer_id=$1 ORDER BY id DESC LIMIT 200`, [id]);
+
+      const cur = rows.find((s) => s.state !== '入金済み') || null;
+      const 入金合計 = rows.reduce((a, s) => a + (paidBy[s.id] || 0), 0);
+
+      return ok(res, {
+        顧客: {
+          id: c.id, 氏名: c.name, よみ: c.kana || '', 性別: c.gender || '',
+          生年月日: isoOf(c.birthday), 住所: c.address || '', 電話番号: c.tel || '',
+          契約日: isoOf(c.contract_date), 車種: c.car || '',
+          債権譲渡会社: c.assignor_name || '', 債権譲渡先: c.assignee_name || '',
+          債権譲渡会社id: c.assignor_id, 債権譲渡先id: c.assignee_id,
+          月々の金額: c.monthly_amount, 回数: c.term_count, 支払日: c.pay_day,
+          開始日: isoOf(c.start_date), 支払総額: c.total_amount, メモ: c.memo || '',
+          残債: Math.max(0, c.total_amount - 入金合計), 入金合計,
+          残り回数: c.term_count - rows.filter((s) => s.state === '入金済み').length,
+          回次: cur ? cur.no : c.term_count,
+          この回の請求: cur ? cur.planned_amount : 0,
+          この回の入金: cur ? (paidBy[cur.id] || 0) : 0,
+          この回の残り: cur ? Math.max(0, cur.planned_amount - (paidBy[cur.id] || 0)) : 0,
+          次の期日: cur ? isoOf(cur.due_date) : null,
+          完済: !cur,
+        },
+        支払予定: rows.map((s) => ({
+          回次: s.no, 期日: isoOf(s.due_date), 請求: s.planned_amount,
+          入金: paidBy[s.id] || 0, 状態: s.state,
+        })),
+        入金: payments.map((p) => ({
+          id: p.id, 日付: isoOf(p.paid_on), 金額: p.amount, 入金方法: p.method,
+          区分: p.source, 付番: p.ref_no || '', メモ: p.memo || '',
+          振込人: p.payer_name || '', 記録者: p.recorded_by,
+        })),
+        約束: promises.map((p) => ({
+          id: p.id, 日付: isoOf(p.promised_on), 時刻: hhmm(p.until_time),
+          終日: !p.until_time, 回次: p.schedule_no, 金額: p.amount,
+          メモ: p.memo || '', 済み: p.done, 記録者: p.created_by,
+        })),
+        記録: events.map((e) => ({
+          id: e.id, 日時: new Date(e.occurred_at).toISOString().slice(0, 16).replace('T', ' '),
+          記録者: e.recorded_by, 種類: e.kind, 内容: e.text, メモ: e.memo || '',
+        })),
+        本日: today(),
+      });
+    }
+
     const b = await readBody(req);
+    const id = Number(b.id);
+    if (!id) return bad(res, '顧客が指定されていません。');
+    const c = (await sql('SELECT * FROM customer WHERE id=$1', [id]))[0];
+    if (!c) return bad(res, '顧客が見つかりません。');
+    const who = recordedBy(req);
+    const memo = String(b.メモ || '').trim() || null;
 
-    const name = String(b.name || '').trim();
-    const monthly = Math.round(Number(b.monthly) || 0);
-    const term = 48;
-    if (!name) return bad(res, 'お名前を入れてください。');
-    if (!monthly || monthly <= 0) return bad(res, '毎月の額を入れてください。');
+    // ── 顧客の情報を直す ───────────────────────
+    if (method === 'PATCH') {
+      const set = [], val = [];
+      const put = (col, v) => { val.push(v); set.push(`${col}=$${val.length}`); };
+      if (b.よみ !== undefined) put('kana', String(b.よみ).trim() || null);
+      if (b.顧客メモ !== undefined) put('memo', String(b.顧客メモ));
+      if (b.電話番号 !== undefined) put('tel', String(b.電話番号).trim() || null);
+      if (b.住所 !== undefined) put('address', String(b.住所).trim() || null);
+      if (b.車種 !== undefined) put('car', String(b.車種).trim() || null);
+      if (b.性別 !== undefined) put('gender', String(b.性別).trim() || null);
+      if (b.生年月日 !== undefined) put('birthday', b.生年月日 || null);
+      if (b.契約日 !== undefined) put('contract_date', b.契約日 || null);
+      if (b.債権譲渡会社 !== undefined) put('assignor_id', b.債権譲渡会社 ? Number(b.債権譲渡会社) : null);
+      if (b.債権譲渡先 !== undefined) put('assignee_id', b.債権譲渡先 ? Number(b.債権譲渡先) : null);
+      if (!set.length) return bad(res, '直す項目がありません。');
+      val.push(id);
+      await sql(`UPDATE customer SET ${set.join(', ')}, updated_at=now() WHERE id=$${val.length}`, val);
 
-    const day = Math.min(Math.max(Math.round(Number(b.pay_day) || 27), 1), 31);
-    const m = String(b.start || '').match(/^(\d{4})-(\d{2})$/);
-    if (!m) return bad(res, '開始月を選んでください。');
-    const y0 = +m[1], m0 = +m[2];
-    if (m0 < 1 || m0 > 12) return bad(res, '開始月を選んでください。');
-
-    const kana = tidyKana(b.kana);
-    if (kana && !isKana(kana))
-      return bad(res, 'よみはカナで入れてください。', `「${b.kana}」は読み取れません`);
-
-    const months = (Array.isArray(b.bonus_months) ? b.bonus_months : [])
-      .map(Number).filter((n) => n >= 1 && n <= 12);
-    const each = Math.max(0, Math.round(Number(b.bonus_each) || 0));
-    const bonusTotal = each * months.length * 4;          // 1回あたり × 年の回数 × 4年
-
-    const total = monthly * term + bonusTotal;
-    const fee = Math.round(total * 0.25);
-    const purchase = total - fee;
-
-    // 二重登録を止める。同じお名前・同じ毎月額・同じ開始月は同じ契約とみなす
-    const start = dueOf(y0, m0, day, 1);
-    const dup = await sql(
-      `SELECT id FROM contract WHERE name=$1 AND monthly_amount=$2 AND start_date=$3`,
-      [name, monthly, start]);
-    if (dup.length)
-      return bad(res, 'この契約はすでに登録されています。',
-        `${name}さん・毎月 ${yen(monthly)}円・${y0}年${m0}月開始（契約番号 ${dup[0].id}）`);
-
-    // 同姓同名が別にいるときは、止めずに知らせる(実際に同姓の方がいるため)
-    const same = await sql(`SELECT id FROM contract WHERE name=$1`, [name]);
-
-    const ins = await sql(
-      `INSERT INTO contract
-         (name, kana, car, tel, email, purchase_amount, fee_amount, total_amount,
-          monthly_amount, term_count, pay_day, start_date, bonus_months, bonus_each,
-          bonus_remaining, memo)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
-      [name, kana || null, String(b.car || '').trim() || null,
-       String(b.tel || '').trim() || null, String(b.email || '').trim() || null,
-       purchase, fee, total, monthly, term, day, start,
-       months, each, bonusTotal, String(b.memo || '').trim() || null]);
-    const id = ins[0].id;
-
-    // 支払予定48回。予定額は毎月額のみ(ADR-002)
-    for (let k = 1; k <= term; k++) {
-      await sql(`INSERT INTO schedule (contract_id, no, due_date, planned_amount)
-                 VALUES ($1,$2,$3,$4) ON CONFLICT (contract_id, no) DO NOTHING`,
-        [id, k, dueOf(y0, m0, day, k), monthly]);
-    }
-
-    // よみを入れてあれば名寄せ辞書にも入れる(初回の振込から自動で当たる)
-    if (kana) {
-      await sql(`INSERT INTO payer_alias (normalized_name, contract_id, created_by)
-                 VALUES ($1,$2,$3) ON CONFLICT (normalized_name) DO NOTHING`, [kana, id, who]);
-    }
-
-    const last = dueOf(y0, m0, day, term);
-    await sql(`INSERT INTO event (contract_id,no,recorded_by,kind,text,memo)
-               VALUES ($1,1,$2,'メモ',$3,$4)`,
-      [id, who,
-       `新しいお客さん（${name}／${String(b.car || '').trim() || '車両未記入'}）を登録`
-       + `：毎月 ${yen(monthly)}円 × ${term}回、${start} から ${last} まで`
-       + (bonusTotal ? `、ボーナス見込み ${yen(bonusTotal)}円（${months.join('・')}月 × ${yen(each)}円）` : ''),
-       String(b.memo || '').trim() || null]);
-
-    // 車の代金は確認用。食い違っても登録は止めず、記録に残して人に知らせる
-    const price = Math.round(Number(b.price) || 0);
-    let 検算 = null;
-    if (price) {
-      const df = price - purchase;
-      検算 = { 車の代金: price, 計算した元本: purchase, 差: df, 一致: Math.abs(df) <= 100 };
-      if (!検算.一致) {
-        await sql(`INSERT INTO event (contract_id,no,recorded_by,kind,text,memo)
-                   VALUES ($1,NULL,$2,'メモ',$3,NULL)`,
-          [id, who, `要確認:車の代金 ${yen(price)}円 と、毎月額から計算した元本 ${yen(purchase)}円 が`
-                    + ` ${yen(Math.abs(df))}円 ちがいます`]);
+      if (b.よみ !== undefined && String(b.よみ).trim()) {
+        await sql(`INSERT INTO payer_alias (normalized_name, customer_id, created_by)
+                   VALUES ($1,$2,$3) ON CONFLICT (normalized_name) DO NOTHING`,
+          [norm(b.よみ), id, who]);
       }
+      await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                 VALUES ($1,$2,'メモ',$3,NULL)`,
+        [id, who, b.顧客メモ !== undefined ? '顧客のメモを更新した' : '顧客の情報を直した']);
+      return ok(res, { done: true });
     }
 
-    return ok(res, { done: true, id, name,
-      支払総額: total, 手数料: fee, 元本: purchase,
-      初回: start, 最終回: last, ボーナス見込み: bonusTotal,
-      検算,
-      同姓同名: same.length ? same.length + 1 : 0 });
+    // ── 入金約束(カレンダーから)──────────────────
+    if (method === 'POST') {
+      const 時刻 = b.終日 ? null : (String(b.時刻 || '').match(/^\d{2}:\d{2}$/) ? b.時刻 : null);
+
+      if (b.種類 === '約束') {
+        const day = String(b.日付 || '');
+        const amount = Math.round(Number(b.金額) || 0);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return bad(res, '約束の日付を入れてください。');
+        if (!amount || amount <= 0) return bad(res, '約束の金額を入れてください。');
+        const no = b.回次 ? Number(b.回次) : null;
+        if (no) {
+          const s = await sql('SELECT id FROM schedule WHERE customer_id=$1 AND no=$2', [id, no]);
+          if (!s.length) return bad(res, 'その回が見つかりません。');
+        }
+        const ins = await sql(
+          `INSERT INTO promise (customer_id, promised_on, until_time, schedule_no, amount, memo, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+          [id, day, 時刻, no, amount, memo, who]);
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'約束',$3,$4)`,
+          [id, who, `${day}${時刻 ? ` ${時刻}まで` : '（終日）'} に ${yen(amount)}円`
+            + (no ? `（${no}回目ぶん）` : '') + ' の入金約束', memo]);
+        return ok(res, { done: true, id: ins[0].id });
+      }
+
+      if (b.種類 === '約束変更') {
+        const pid = Number(b.約束id);
+        const day = String(b.日付 || '');
+        const amount = Math.round(Number(b.金額) || 0);
+        if (!pid) return bad(res, 'どの約束かを指定してください。');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return bad(res, '約束の日付を入れてください。');
+        if (!amount || amount <= 0) return bad(res, '約束の金額を入れてください。');
+        const pr = (await sql('SELECT * FROM promise WHERE id=$1 AND customer_id=$2', [pid, id]))[0];
+        if (!pr) return bad(res, 'その約束が見つかりません。');
+        const 前 = { 日: isoOf(pr.promised_on), 額: pr.amount };
+        await sql(
+          `UPDATE promise SET promised_on=$1, until_time=$2, schedule_no=$3, amount=$4, memo=$5
+            WHERE id=$6`,
+          [day, 時刻, b.回次 ? Number(b.回次) : pr.schedule_no, amount,
+           memo !== null ? memo : pr.memo, pid]);
+        const 変更 = [];
+        if (前.日 !== day) 変更.push(`日を ${前.日} から ${day} へ`);
+        if (前.額 !== amount) 変更.push(`金額を ${yen(前.額)}円 から ${yen(amount)}円 へ`);
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'約束',$3,$4)`,
+          [id, who, `約束を動かした（${変更.length ? 変更.join('、') : 'メモだけ更新'}）`, memo]);
+        return ok(res, { done: true, もとの日: 前.日, もとの金額: 前.額 });
+      }
+
+      if (b.種類 === '約束削除') {
+        const pid = Number(b.約束id);
+        const pr = (await sql('SELECT * FROM promise WHERE id=$1 AND customer_id=$2', [pid, id]))[0];
+        if (!pr) return bad(res, 'その約束が見つかりません。');
+        await sql('DELETE FROM promise WHERE id=$1', [pid]);
+        // 約束そのものは消すが、消したことは記録に残す
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'約束',$3,$4)`,
+          [id, who, `${isoOf(pr.promised_on)} の約束（${yen(pr.amount)}円）を取り消した`, memo]);
+        return ok(res, { done: true });
+      }
+
+      return bad(res, '種類が指定されていません。');
+    }
+
+    return bad(res, '対応していない操作です。');
   } catch (e) {
     fail(res, e, 'customer');
   }
