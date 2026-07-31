@@ -85,6 +85,21 @@ tbody tr.off td{text-decoration:line-through}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
 @media (max-width:640px){.grid2,.grid3{grid-template-columns:1fr}}
 .search{padding:8px 12px;border:1px solid var(--rule-strong);background:#fff;min-width:240px}
+/* 名前を打って選ぶ欄 */
+.pick{position:relative}
+.pick-list{position:absolute;left:0;right:0;top:100%;z-index:30;background:#fff;
+  border:1px solid var(--rule-strong);border-top:none;max-height:280px;overflow-y:auto;
+  box-shadow:0 6px 18px rgba(22,24,26,.14)}
+.pick-item{padding:9px 12px;cursor:pointer;display:flex;align-items:baseline;gap:10px;
+  border-bottom:1px solid var(--rule)}
+.pick-item:last-child{border-bottom:none}
+.pick-item.on{background:var(--paper-2)}
+.pick-none{padding:10px 12px;color:var(--ink-3);font-size:13px}
+.pick-sub{color:var(--ink-3);font-size:12.5px}
+.pick-on{display:flex;align-items:center;gap:10px;padding:8px 12px;
+  border:1px solid var(--rule-strong);background:#fff;min-height:41px}
+.pick-on .btn{margin-left:auto}
+
 /* 表の中で回数を打つ欄（開始時の入金実績） */
 .num-in{width:78px;padding:6px 8px;text-align:right;font-family:inherit;font-size:15px;
   font-variant-numeric:tabular-nums;border:1px solid var(--rule-strong);background:#fff}

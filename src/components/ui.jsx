@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { norm } from '../api';
 
 // ── モーダル ────────────────────────────────
 // Escで閉じ、外側を押しても閉じる。開いたら最初の入力へ行く。
@@ -71,6 +72,85 @@ export function Select({ label, hint, value, onChange, options, placeholder, ...
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
+    </Field>
+  );
+}
+
+// ── 名前を打って選ぶ欄 ───────────────────────────
+// 「絞る欄」と「選ぶ欄」を分けない。打つと下に候補が出て、押すと決まる。
+// かな・カナ・半角カナ・漢字・英字のどれで打っても当たる（norm）。
+export function Picker({ label, hint, value, onChange, items, placeholder }) {
+  const [key, setKey] = useState('');
+  const [open, setOpen] = useState(false);
+  const [at, setAt] = useState(0);          // キーボードで動かしている候補
+  const box = useRef(null);
+
+  const 選択中 = items.find((x) => String(x.id) === String(value)) || null;
+
+  // 外を押したら候補を閉じる
+  useEffect(() => {
+    const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', away);
+    return () => document.removeEventListener('mousedown', away);
+  }, []);
+
+  const k = norm(key);
+  const 候補 = (k ? items.filter((x) => norm(x.名前).includes(k) || norm(x.よみ || '').includes(k))
+    : items).slice(0, 8);
+
+  const 決める = (x) => {
+    onChange(String(x.id));
+    setKey(''); setOpen(false); setAt(0);
+  };
+
+  const キー = (e) => {
+    if (!open) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setAt((n) => Math.min(n + 1, 候補.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setAt((n) => Math.max(n - 1, 0)); }
+    else if (e.key === 'Enter' && 候補[at]) { e.preventDefault(); 決める(候補[at]); }
+    else if (e.key === 'Escape') { setOpen(false); }
+  };
+
+  return (
+    <Field label={label} hint={hint}>
+      <div className="pick" ref={box}>
+        {選択中 ? (
+          <div className="pick-on">
+            <b>{選択中.名前}</b>
+            {選択中.よみ && <span className="pick-sub">{選択中.よみ}</span>}
+            {選択中.脇 && <span className="pick-sub">{選択中.脇}</span>}
+            <button type="button" className="btn btn-sm" onClick={() => { onChange(''); setKey(''); }}>
+              選び直す
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              value={key} placeholder={placeholder || '名前を打ってください'}
+              onChange={(e) => { setKey(e.target.value); setOpen(true); setAt(0); }}
+              onFocus={() => setOpen(true)}
+              onKeyDown={キー}
+            />
+            {open && (
+              <div className="pick-list">
+                {候補.length === 0 && <div className="pick-none">見つかりませんでした。</div>}
+                {候補.map((x, i) => (
+                  <div
+                    key={x.id}
+                    className={'pick-item' + (i === at ? ' on' : '')}
+                    onMouseEnter={() => setAt(i)}
+                    onMouseDown={(e) => { e.preventDefault(); 決める(x); }}
+                  >
+                    <b>{x.名前}</b>
+                    {x.よみ && <span className="pick-sub">{x.よみ}</span>}
+                    {x.脇 && <span className="pick-sub">{x.脇}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </Field>
   );
 }
