@@ -53,7 +53,7 @@ export default function Settings({ onChanged }) {
               )}
               {rows && rows.map((c) => (
                 <tr key={c.id}>
-                  <td><b>{c.名前}</b></td>
+                  <td className="nm"><b>{c.名前}</b></td>
                   <td data-label="メモ" style={{ whiteSpace: 'normal', fontSize: 13 }}>{c.メモ || ''}</td>
                   <td className="num" data-label="使用中の顧客">{c.使用数}件</td>
                   <td style={{ display: 'flex', gap: 6 }}>
