@@ -34,6 +34,7 @@ export const api = {
   // 顧客
   customers: (opt) => call('/api/customers' + q(opt)),
   addCustomer: (body) => call('/api/customers', { method: 'POST', body }),
+  patchCustomers: (body) => call('/api/customers', { method: 'PATCH', body }),
   customer: (id) => call('/api/customer' + q({ id })),
   patchCustomer: (body) => call('/api/customer', { method: 'PATCH', body }),
   postCustomer: (body) => call('/api/customer', { method: 'POST', body }),

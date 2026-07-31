@@ -156,6 +156,47 @@ export default async (req, res) => {
         同姓同名: same.length ? same.length + 1 : 0 });
     }
 
+    // ── まとめて直す ──────────────────────────
+    // 債権譲渡が起きると、複数の顧客の会社が一度に変わる。1件ずつ開かせない。
+    // PATCH /api/customers {債権譲渡会社:id}          … 全顧客に当てる
+    // PATCH /api/customers {債権譲渡先:id, 対象:[…]}  … 指定した顧客だけ
+    if (method === 'PATCH') {
+      const who = recordedBy(req);
+      const b = await readBody(req);
+
+      const set = [], val = [], 説明 = [];
+      for (const [key, col] of [['債権譲渡会社', 'assignor_id'], ['債権譲渡先', 'assignee_id']]) {
+        if (b[key] === undefined) continue;
+        if (b[key]) {
+          const co = (await sql('SELECT id, name FROM company WHERE id=$1', [Number(b[key])]))[0];
+          if (!co) return bad(res, `${key}が見つかりません。`, '設定で登録してください');
+          val.push(co.id); set.push(`${col}=$${val.length}`);
+          説明.push(`${key}を「${co.name}」に`);
+        } else {
+          set.push(`${col}=NULL`);
+          説明.push(`${key}を空に`);
+        }
+      }
+      if (!set.length) return bad(res, '変更する項目がありません。', '債権譲渡会社か債権譲渡先を指定してください');
+
+      let where = 'archived = false';
+      if (Array.isArray(b['対象'])) {
+        const ids = b['対象'].map(Number).filter(Boolean);
+        if (!ids.length) return bad(res, '対象の顧客が指定されていません。');
+        val.push(ids);
+        where += ` AND id = ANY($${val.length}::int[])`;
+      }
+      const done = await sql(
+        `UPDATE customer SET ${set.join(', ')}, updated_at=now() WHERE ${where} RETURNING id`, val);
+      if (done.length) {
+        await sql(
+          `INSERT INTO event (customer_id, recorded_by, kind, text)
+           SELECT x, $1, '設定', $2 FROM unnest($3::int[]) AS t(x)`,
+          [who, `まとめて変更：${説明.join('、')}した`, done.map((r) => r.id)]);
+      }
+      return ok(res, { done: true, 変えた人数: done.length, 内容: 説明.join('、') });
+    }
+
     return bad(res, '対応していない操作です。');
   } catch (e) {
     fail(res, e, 'customers');
