@@ -18,7 +18,10 @@ Vercel で動かすための構成。
 - `framework: "vite"` — Import 画面の Application Preset を Vite に固定する。
   書いていないと、自動検出のタイミングによっては「Other」のまま出る
 - `buildCommand: npm run build` / `outputDirectory: dist`
-- `functions: { "api/*.js": { runtime: "@vercel/node@5.1.10" } }`
+- `functions: { "api/*.js": { runtime: "@vercel/node@5.1.10" } }`。
+  この版が動くのは **Node 22.x まで**なので、`package.json` の `engines.node` で
+  22.x に固定してある。書かないと Vercel の既定(24.x)が使われ、
+  「Found invalid Node.js Version」でビルドが止まる
 - `/((?!api/).*)` → `/index.html`(画面はタブ切替だけなのでルーターを持たない)
 - `X-Robots-Tag: noindex`
 
