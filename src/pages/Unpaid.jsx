@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, yen, ymd } from '../api';
-import { Err, Empty, Note } from '../components/ui';
+import { Err, Empty, Note, Loading } from '../components/ui';
 
 export default function Unpaid({ onOpen, goHistory }) {
   const [rows, setRows] = useState(null);
@@ -46,7 +46,7 @@ export default function Unpaid({ onOpen, goHistory }) {
             </tr>
           </thead>
           <tbody>
-            {rows === null && <tr><td colSpan={8}><Empty>読み込んでいます…</Empty></td></tr>}
+            {rows === null && <tr><td colSpan={8}><Loading 件数={3} /></td></tr>}
             {rows && rows.length === 0 && (
               <tr><td colSpan={8}><Empty>
                 期日を過ぎて未入金の顧客はいません。

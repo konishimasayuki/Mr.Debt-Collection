@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, yen, ymd } from '../api';
-import { Modal, Text, Money, Select, Err, Empty, Note } from '../components/ui';
+import { Modal, Text, Money, Select, Err, Empty, Note, Loading } from '../components/ui';
 
 export default function History({ jump, onJumped, onOpen, onChanged }) {
   const [key, setKey] = useState(jump ? jump.名前 : '');
@@ -64,7 +64,7 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
             </tr>
           </thead>
           <tbody>
-            {d === null && <tr><td colSpan={8}><Empty>読み込んでいます…</Empty></td></tr>}
+            {d === null && <tr><td colSpan={8}><Loading 件数={4} /></td></tr>}
             {d && d.入金.length === 0 && (
               <tr><td colSpan={8}><Empty>
                 {key ? `「${key}」に当たる入金はありません。` : '入金がまだありません。'}
