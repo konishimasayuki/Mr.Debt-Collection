@@ -22,7 +22,6 @@ export default function Customers({ onOpen, onChanged }) {
     <>
       <div className="bar">
         <h2>顧客一覧</h2>
-        {rows && <span className="sub">{shown.length}名{k && ` / 全${rows.length}名`}</span>}
         <div className="bar-right">
           <input
             className="search" placeholder="氏名・よみ・車種で探す"
@@ -59,8 +58,6 @@ export default function Customers({ onOpen, onChanged }) {
                 <td>
                   <b>{r.氏名}</b>
                   {r.よみ && <span className="sub" style={{ marginLeft: 8, color: 'var(--ink-3)', fontSize: 12 }}>{r.よみ}</span>}
-                  {r.完済 ? <span className="tag t-done" style={{ marginLeft: 8 }}>完済</span>
-                    : r.遅れ ? <span className="tag t-late" style={{ marginLeft: 8 }}>{r.遅れ日数}日 遅れ</span> : null}
                 </td>
                 <td>{r.債権譲渡会社 || <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
                 <td>{r.車種 || <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>

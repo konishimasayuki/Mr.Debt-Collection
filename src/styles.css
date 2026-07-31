@@ -85,6 +85,10 @@ tbody tr.off td{text-decoration:line-through}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
 @media (max-width:640px){.grid2,.grid3{grid-template-columns:1fr}}
 .search{padding:8px 12px;border:1px solid var(--rule-strong);background:#fff;min-width:240px}
+/* 表の中で回数を打つ欄（開始時の入金実績） */
+.num-in{width:78px;padding:6px 8px;text-align:right;font-family:inherit;font-size:15px;
+  font-variant-numeric:tabular-nums;border:1px solid var(--rule-strong);background:#fff}
+.num-in:focus{outline:2px solid var(--indigo);outline-offset:1px}
 
 /* ── モーダル ──────────────────────── */
 .modal{position:fixed;inset:0;background:rgba(22,24,26,.45);display:flex;
