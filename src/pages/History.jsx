@@ -76,9 +76,8 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
                 <td data-label="日付">{ymd(p.日付)}</td>
                 <td className="nm">
                   {p.顧客id ? (
-                    <span
-                      style={{ color: 'var(--indigo)', textDecoration: 'underline' }}
-                      onClick={(e) => { e.stopPropagation(); onOpen(p.顧客id); }}
+                    <span className="lnk"
+                          onClick={(e) => { e.stopPropagation(); onOpen(p.顧客id); }}
                     >{p.顧客名}</span>
                   ) : <span className="tag t-warn">未割当</span>}
                 </td>
@@ -87,13 +86,11 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
                 <td data-label="区分">
                   <span className={'tag ' + (p.区分 === '手動' ? 't-manual' : 't-csv')}>{p.区分}</span>
                 </td>
-                <td data-label="付番 / 振込人" style={{ fontFamily: 'var(--mono)', fontSize: 12.5 }}>
+                <td data-label="付番 / 振込人" className="mono">
                   {[p.付番, p.振込人].filter(Boolean).join(' / ') || '—'}
                 </td>
-                <td data-label="メモ" style={{ maxWidth: 260, whiteSpace: 'normal', fontSize: 13 }}>
-                  {p.メモ || ''}
-                </td>
-                <td data-label="記録者" style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>{p.記録者}</td>
+                <td data-label="メモ" className="memo">{p.メモ || ''}</td>
+                <td data-label="記録者" className="who">{p.記録者}</td>
               </tr>
             ))}
           </tbody>

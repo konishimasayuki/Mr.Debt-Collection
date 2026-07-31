@@ -56,9 +56,7 @@ export default function Unpaid({ onOpen, goHistory }) {
               <tr key={r.id} className="clickable" onClick={() => goHistory(r.氏名)}>
                 <td className="nm">
                   <b>{r.氏名}</b>
-                  {r.よみ && (
-                    <span style={{ marginLeft: 8, color: 'var(--ink-3)', fontSize: 12 }}>{r.よみ}</span>
-                  )}
+                  {r.よみ && <span className="yomi">{r.よみ}</span>}
                   <span className="tag t-late" style={{ marginLeft: 8 }}>{r.遅れ日数}日 遅れ</span>
                   {r.この回の残り !== r.金額 && (
                     <span className="tag t-dup" style={{ marginLeft: 6 }}>
@@ -72,11 +70,11 @@ export default function Unpaid({ onOpen, goHistory }) {
                 <td className="num" data-label="支払い回数">{r.支払い回数}回</td>
                 <td className="num" data-label="残回数">{r.残り支払い回数}回</td>
                 <td className="num" data-label="残債">{yen(r.残債金額)}</td>
-                <td>
+                <td className="act">
                   <button
                     className="btn btn-sm"
                     onClick={(e) => { e.stopPropagation(); onOpen(r.id); }}
-                  >顧客ページ</button>
+                  >顧客ページを開く</button>
                 </td>
               </tr>
             ))}

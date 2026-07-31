@@ -28,6 +28,7 @@ button,a,.cal-c,tbody tr.clickable{-webkit-tap-highlight-color:transparent}
 .brand{font-size:18px;font-weight:700;letter-spacing:.1em;margin:0}
 .head-date{font-size:12.5px;color:var(--ink-2)}
 .head-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.head-right .btn{padding:5px 11px;font-size:12.5px;color:var(--ink-2)}
 .tabs{max-width:1400px;margin:0 auto;display:flex;gap:2px;overflow-x:auto;
   padding:0 max(20px,env(safe-area-inset-right)) 0 max(20px,env(safe-area-inset-left));
   scrollbar-width:none;-webkit-overflow-scrolling:touch}
@@ -58,6 +59,8 @@ button,a,.cal-c,tbody tr.clickable{-webkit-tap-highlight-color:transparent}
 /* 指で押す端末では、小さすぎるボタンを押せる大きさにする */
 @media (hover:none){
   .btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+  /* ヘッダーのログアウトだけは小さく。タブのすぐ上にあり、誤って押しやすいため */
+  .head-right .btn{min-height:30px;padding:4px 10px;font-size:12.5px}
   .btn-sm{min-height:36px;padding:6px 12px}
   .tab{padding:13px 16px}
   .rec-m-btn .btn{min-height:30px}
@@ -274,6 +277,13 @@ tbody tr.off td{text-decoration:line-through}
   .cards td.nm::before{display:none}
   .cards td.nm .yomi{display:block;margin:2px 0 0;font-size:12px;font-weight:400}
   .cards td.strong{font-size:15.5px;font-weight:700}
+  /* パソコン用の幅の上限は、札では邪魔になる（メモが早く折り返す）*/
+  .cards td.memo{max-width:none;font-size:13.5px}
+  .cards td.mono,.cards td.who{font-size:12.5px}
+  /* 札の下に置く操作。横いっぱいにして押しやすくする */
+  .cards td.act{order:2;padding:10px 14px 0;margin-top:6px;border-top:1px solid var(--rule)}
+  .cards td.act::before{display:none}
+  .cards td.act .btn{width:100%;min-height:40px}
   .cards td:empty{display:none}
   .cards .empty{border:1px solid var(--rule);background:var(--paper)}
   /* 索引は上に貼り付けて、いつでも押せるように */
@@ -358,6 +368,11 @@ tbody tr.off td{text-decoration:line-through}
 .yomi{margin-left:8px;color:var(--ink-3);font-size:12px}
 .none{color:var(--ink-3)}
 td.strong{font-weight:700}
+/* パソコンの表でだけ効かせる見た目。札のときは打ち消せるよう、直書きにしない */
+td.memo{max-width:260px;white-space:normal;font-size:13px}
+td.mono{font-family:var(--mono);font-size:12.5px}
+td.who{font-size:12.5px;color:var(--ink-2)}
+.lnk{color:var(--indigo);text-decoration:underline;cursor:pointer}
 
 /* ── 読み込み中の下敷き ─────────────────────── */
 .skel{display:flex;flex-direction:column;gap:10px}
