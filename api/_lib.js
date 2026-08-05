@@ -79,44 +79,62 @@ function query(req) {
 }
 
 // ── 充当まわり ────────────────────────────
-// その回にこれまでいくら入っているか
-async function paidOn(sql, scheduleId) {
-  const r = await sql(
-    `SELECT COALESCE(sum(amount),0)::int AS n FROM allocation WHERE schedule_id=$1`,
-    [scheduleId]);
-  return r[0].n;
-}
+// データベースは遠くにあり、問い合わせ1回ごとに往復の待ち時間がかかる。
+// 回ごとに1回ずつ聞くと、48回の契約では往復が48倍になって目に見えて遅くなる。
+// そのため、ここでは「回数によらず決まった数の問い合わせ」で済むように書く。
 
-// 充当を消したあと、その回の状態を入金額から決め直す
-async function restate(sql, scheduleId) {
-  const s = (await sql(`SELECT planned_amount FROM schedule WHERE id=$1`, [scheduleId]))[0];
-  if (!s) return;
-  const n = await paidOn(sql, scheduleId);
-  const state = n <= 0 ? '未入金' : (n >= s.planned_amount ? '入金済み' : '一部入金');
-  await sql(`UPDATE schedule SET state=$1 WHERE id=$2`, [state, scheduleId]);
+// 指定した回の状態を、いま入っている額から決め直す。何回ぶんでも1回で済ませる
+async function restateMany(sql, ids) {
+  if (!ids || !ids.length) return;
+  await sql(
+    `UPDATE schedule s SET state = CASE
+          WHEN p.n <= 0                  THEN '未入金'
+          WHEN p.n >= s.planned_amount   THEN '入金済み'
+          ELSE '一部入金' END
+       FROM (SELECT t.x AS id,
+                    COALESCE((SELECT sum(a.amount) FROM allocation a
+                               WHERE a.schedule_id = t.x),0)::int AS n
+               FROM unnest($1::int[]) AS t(x)) p
+      WHERE s.id = p.id`, [ids]);
 }
-
 // 入金を、未入金でいちばん古い回から順に充てる。
 // 満額に届いた回だけ「入金済み」にし、途中は「一部入金」のまま残りを持つ。
 // 予定を使い切ってもお金が余ったら、充当せずに余りとして返す(前受)。
 async function allocate(sql, customerId, paymentId, amount) {
   let left = amount;
   const touched = [];
+  // 各回の「すでに入っている額」も一緒に持ってくる(回ごとに聞き直さない)
   const rows = await sql(
-    `SELECT id, no, planned_amount FROM schedule
-      WHERE customer_id=$1 AND state <> '入金済み' ORDER BY no`, [customerId]);
+    `SELECT s.id, s.no, s.planned_amount,
+            COALESCE((SELECT sum(a.amount) FROM allocation a
+                       WHERE a.schedule_id = s.id),0)::int AS paid
+       FROM schedule s
+      WHERE s.customer_id=$1 AND s.state <> '入金済み'
+      ORDER BY s.no`, [customerId]);
+
+  const 値 = [], 引数 = [], 済み = [], 一部 = [];
   for (const s of rows) {
     if (left <= 0) break;
-    const already = await paidOn(sql, s.id);
-    const rest = s.planned_amount - already;
+    const rest = s.planned_amount - s.paid;
     if (rest <= 0) continue;
     const take = Math.min(left, rest);
-    await sql(`INSERT INTO allocation (payment_id, schedule_id, amount) VALUES ($1,$2,$3)`,
-      [paymentId, s.id, take]);
-    await sql(`UPDATE schedule SET state=$1 WHERE id=$2`,
-      [take >= rest ? '入金済み' : '一部入金', s.id]);
+    引数.push(paymentId, s.id, take);
+    const i = 引数.length;
+    値.push(`($${i - 2},$${i - 1},$${i})`);
+    (take >= rest ? 済み : 一部).push(s.id);
     touched.push({ no: s.no, 充てた: take, 残り: rest - take });
     left -= take;
+  }
+  if (値.length) {
+    await sql(`INSERT INTO allocation (payment_id, schedule_id, amount)
+               VALUES ${値.join(',')}`, 引数);
+    // 状態は2種類しかないので、まとめて2回で足りる
+    if (済み.length) {
+      await sql(`UPDATE schedule SET state='入金済み' WHERE id = ANY($1::int[])`, [済み]);
+    }
+    if (一部.length) {
+      await sql(`UPDATE schedule SET state='一部入金' WHERE id = ANY($1::int[])`, [一部]);
+    }
   }
   return { 充当: touched, 余り: left };
 }
@@ -127,7 +145,7 @@ async function unallocate(sql, paymentId) {
     `SELECT DISTINCT schedule_id FROM allocation
       WHERE payment_id=$1 AND schedule_id IS NOT NULL`, [paymentId]);
   await sql(`DELETE FROM allocation WHERE payment_id=$1`, [paymentId]);
-  for (const r of rows) await restate(sql, r.schedule_id);
+  await restateMany(sql, rows.map((r) => r.schedule_id));
 }
 
 // ── 顧客の今の状況(一覧・未入金で使う)─────────────
@@ -158,5 +176,5 @@ function summarize(cust, rows, paidBy) {
 
 export {
   norm, normPayer, pad, iso, isoOf, today, lastDay, dueOf, yen,
-  readBody, query, paidOn, restate, allocate, unallocate, summarize, makeSchedule,
+  readBody, query, restateMany, allocate, unallocate, summarize, makeSchedule,
 };

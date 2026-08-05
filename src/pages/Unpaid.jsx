@@ -53,9 +53,11 @@ export default function Unpaid({ onOpen, goHistory }) {
               </Empty></td></tr>
             )}
             {rows && rows.map((r) => (
-              <tr key={r.id} className="clickable" onClick={() => goHistory(r.氏名)}>
+              <tr key={r.id} className={'clickable' + (r.テスト ? ' test-row' : '')}
+                  onClick={() => goHistory(r.氏名)}>
                 <td className="nm">
                   <b>{r.氏名}</b>
+                  {r.テスト && <span className="tag t-test">テスト</span>}
                   {r.よみ && <span className="yomi">{r.よみ}</span>}
                   <span className="tag t-late" style={{ marginLeft: 8 }}>{r.遅れ日数}日 遅れ</span>
                   {r.この回の残り !== r.金額 && (

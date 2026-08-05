@@ -64,9 +64,10 @@ export default async (req, res) => {
     const sql = db();
     const b = await readBody(req);
 
-    const customers = await sql(
-      `SELECT id, name, kana, monthly_amount FROM customer WHERE archived=false ORDER BY id`);
-    const aliases = await sql(`SELECT normalized_name, customer_id FROM payer_alias`);
+    const [customers, aliases] = await Promise.all([
+      sql(`SELECT id, name, kana, monthly_amount FROM customer WHERE archived=false ORDER BY id`),
+      sql(`SELECT normalized_name, customer_id FROM payer_alias`),
+    ]);
     const match = matcher(aliases, customers);
     const nameOf = (id) => (customers.find((c) => c.id === id) || {}).name || null;
 
@@ -119,7 +120,10 @@ export default async (req, res) => {
 
       let 取込 = 0, 見送り = 0, 未割当 = 0;
       const 残り = [];
+
+      // 読み取れる行に絞り、二重取込の鍵を作る
       const seen = {};
+      const 有効 = [];
       for (const r of rows) {
         const amount = Math.round(Number(r.金額) || 0);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r.日付 || '')) || !amount || amount <= 0) {
@@ -127,36 +131,91 @@ export default async (req, res) => {
         }
         const base = dupKey(r);
         seen[base] = (seen[base] || 0) + 1;
-        const key = String(r.鍵 || importKey(r, seen[base]));
+        有効.push({ r, amount, key: String(r.鍵 || importKey(r, seen[base])) });
+      }
 
-        const dup = await sql('SELECT id FROM payment WHERE import_key=$1', [key]);
-        if (dup.length) { 見送り++; continue; }
+      // 取り込み済みかどうかは、1行ずつ聞かずにまとめて1回で聞く。
+      // データベースは遠くにあり、問い合わせ1回ごとに往復の待ち時間がかかる。
+      // 100行のCSVなら、それだけで往復が100回ぶん積み上がる。
+      const 済み = new Set();
+      if (有効.length) {
+        const d = await sql('SELECT import_key FROM payment WHERE import_key = ANY($1::text[])',
+          [有効.map((x) => x.key)]);
+        d.forEach((x) => 済み.add(x.import_key));
+      }
+      // 鍵が同じ行は1件にまとめる。まとめて入れるので、
+      // 1行でも鍵がぶつかると全部が入らなくなってしまう。
+      const 入れる = 有効.filter((x) => {
+        if (済み.has(x.key)) { 見送り++; return false; }
+        済み.add(x.key);
+        return true;
+      });
 
-        const cid = r.顧客id ? Number(r.顧客id) : match(r.振込人, amount).id;
-        const pid = (await sql(
+      // 入金の登録もまとめて1回。付いたIDは並び順で受け取る
+      let 入金 = [];
+      if (入れる.length) {
+        const 値 = [], 引数 = [];
+        入れる.forEach((x) => {
+          const cid = x.r.顧客id ? Number(x.r.顧客id) : match(x.r.振込人, x.amount).id;
+          x.cid = cid || null;
+          引数.push(x.cid, x.r.日付, x.amount, String(x.r.付番 || '') || null,
+                   String(x.r.振込人 || '') || null, x.key, who);
+          const i = 引数.length;
+          値.push(`($${i - 6},$${i - 5},$${i - 4},'振込','CSV',$${i - 3},$${i - 2},$${i - 1},$${i})`);
+        });
+        入金 = await sql(
           `INSERT INTO payment (customer_id, paid_on, amount, method, source, ref_no,
                                 payer_name, import_key, recorded_by)
-           VALUES ($1,$2,$3,'振込','CSV',$4,$5,$6,$7) RETURNING id`,
-          [cid || null, r.日付, amount, String(r.付番 || '') || null,
-           String(r.振込人 || '') || null, key, who]))[0].id;
-
-        if (cid) {
-          const al = await allocate(sql, cid, pid, amount);
-          await sql(`INSERT INTO event (customer_id, payment_id, recorded_by, kind, text, memo)
-                     VALUES ($1,$2,$3,'入金',$4,NULL)`,
-            [cid, pid, who,
-             `CSVから ${yen(amount)}円 を取り込み（${r.日付}・振込人：${r.振込人 || '—'}）`
-             + (al.余り ? `。余り ${yen(al.余り)}円` : '')]);
-          await sql(`INSERT INTO payer_alias (normalized_name, customer_id, created_by)
-                     VALUES ($1,$2,$3) ON CONFLICT (normalized_name) DO NOTHING`,
-            [normPayer(r.振込人), cid, who]);
-          取込++;
-        } else {
-          未割当++;
-          残り.push({ 入金id: pid, 日付: r.日付, 付番: r.付番 || '', 金額: amount,
-                      振込人: r.振込人 || '', 理由: match(r.振込人, amount).理由 });
-        }
+           VALUES ${値.join(',')} RETURNING id, import_key`, 引数);
       }
+      const idOf = {};
+      入金.forEach((p) => (idOf[p.import_key] = p.id));
+
+      // 充当は同じ顧客の中では順番が要る（古い回から埋める）。
+      // 別の顧客どうしは関係がないので、顧客ごとにまとめて同時に進める。
+      // 50行を1件ずつ待つと、待ち時間が50回ぶん積み上がる。
+      const 顧客ごと = new Map();
+      for (const x of 入れる) {
+        const pid = idOf[x.key];
+        if (!pid) { 見送り++; continue; }
+        x.pid = pid;
+        if (!x.cid) {
+          未割当++;
+          残り.push({ 入金id: pid, 日付: x.r.日付, 付番: x.r.付番 || '', 金額: x.amount,
+                      振込人: x.r.振込人 || '', 理由: match(x.r.振込人, x.amount).理由 });
+          continue;
+        }
+        if (!顧客ごと.has(x.cid)) 顧客ごと.set(x.cid, []);
+        顧客ごと.get(x.cid).push(x);
+        取込++;
+      }
+
+      const 記録 = [];
+      await Promise.all([...顧客ごと.values()].map(async (組) => {
+        for (const x of 組) {
+          const al = await allocate(sql, x.cid, x.pid, x.amount);
+          記録.push([x.cid, x.pid,
+            `CSVから ${yen(x.amount)}円 を取り込み（${x.r.日付}・振込人：${x.r.振込人 || '—'}）`
+            + (al.余り ? `。余り ${yen(al.余り)}円` : ''),
+            normPayer(x.r.振込人)]);
+        }
+      }));
+
+      // 記録と名寄せ辞書も、それぞれ1回にまとめる
+      if (記録.length) {
+        await Promise.all([
+          sql(`INSERT INTO event (customer_id, payment_id, recorded_by, kind, text)
+               SELECT c, p, $1, '入金', t
+                 FROM unnest($2::int[], $3::int[], $4::text[]) AS u(c, p, t)`,
+            [who, 記録.map((x) => x[0]), 記録.map((x) => x[1]), 記録.map((x) => x[2])]),
+          sql(`INSERT INTO payer_alias (normalized_name, customer_id, created_by)
+               SELECT n, c, $1 FROM unnest($2::text[], $3::int[]) AS u(n, c)
+                WHERE n <> ''
+               ON CONFLICT (normalized_name) DO NOTHING`,
+            [who, 記録.map((x) => x[3]), 記録.map((x) => x[0])]),
+        ]);
+      }
+
       return ok(res, { done: true, 取り込んだ件数: 取込, 見送った件数: 見送り,
                        照合できなかった件数: 未割当, 照合できなかった明細: 残り });
     }

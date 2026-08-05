@@ -99,7 +99,7 @@ export default function App() {
         ) : tab === 'unpaid' ? (
           <Unpaid key={reloadKey} onOpen={setCustomerId} goHistory={goHistory} />
         ) : (
-          <Settings onChanged={refresh} />
+          <Settings onOpen={setCustomerId} onChanged={refresh} />
         )}
       </main>
     </div>

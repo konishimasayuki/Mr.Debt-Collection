@@ -31,19 +31,25 @@ export default async (req, res) => {
 
     if (method === 'GET') {
       const q = query(req);
-      const customers = await sql(
-        `SELECT c.*, a.name AS assignor_name, b.name AS assignee_name
-           FROM customer c
-           LEFT JOIN company a ON a.id = c.assignor_id
-           LEFT JOIN company b ON b.id = c.assignee_id
-          WHERE c.archived = false
-          ORDER BY c.id`);
-      const schedules = await sql(
-        `SELECT id, customer_id, no, due_date, planned_amount, state
-           FROM schedule ORDER BY customer_id, no`);
-      const paidRows = await sql(
-        `SELECT schedule_id, COALESCE(sum(amount),0)::int AS n FROM allocation
-          WHERE schedule_id IS NOT NULL GROUP BY schedule_id`);
+      // 3つは互いに関係がないので、同時に投げる。
+      // データベースは遠くにあり、1回ごとに往復の待ち時間がかかる。
+      // 順に待つと、その待ち時間が3つぶん足し算になる。
+      //
+      // is_test は c.* にも入るが、わざと名指しで書いている。
+      // 列がまだ無いデータベースでは、ここで符号 42703 になって
+      // _db.js が一度だけテーブルを作り直してくれる（画面から何も押さずに追いつく）。
+      const [customers, schedules, paidRows] = await Promise.all([
+        sql(`SELECT c.*, c.is_test, a.name AS assignor_name, b.name AS assignee_name
+               FROM customer c
+               LEFT JOIN company a ON a.id = c.assignor_id
+               LEFT JOIN company b ON b.id = c.assignee_id
+              WHERE c.archived = false
+              ORDER BY c.id`),
+        sql(`SELECT id, customer_id, no, due_date, planned_amount, state
+               FROM schedule ORDER BY customer_id, no`),
+        sql(`SELECT schedule_id, COALESCE(sum(amount),0)::int AS n FROM allocation
+              WHERE schedule_id IS NOT NULL GROUP BY schedule_id`),
+      ]);
       const paidBy = {};
       paidRows.forEach((r) => (paidBy[r.schedule_id] = r.n));
 
@@ -54,7 +60,7 @@ export default async (req, res) => {
         const s = summarize(c, by[c.id] || [], paidBy);
         return {
           id: c.id, 氏名: c.name, よみ: c.kana || '',
-          索引: 索引(c.name, c.kana),
+          索引: 索引(c.name, c.kana), テスト: !!c.is_test,
           債権譲渡会社: c.assignor_name || '', 債権譲渡先: c.assignee_name || '',
           車種: c.car || '', 毎月の支払日: c.pay_day, 金額: c.monthly_amount,
           残り支払い回数: s.残り回数, 残債金額: s.残債,
