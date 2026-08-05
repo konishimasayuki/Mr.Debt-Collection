@@ -108,6 +108,12 @@ tbody tr.test-row>td{background:#F5F2FB}
 .f input,.f select,.f textarea{padding:8px 10px;border:1px solid var(--rule-strong);
   background:#fff;border-radius:2px;width:100%}
 .f input:focus,.f select:focus,.f textarea:focus{outline:2px solid var(--indigo);outline-offset:1px}
+/* 使えない入力欄は、押せないことが見て分かるようにする。
+   iOSは disabled でも見た目を変えないので、こちらで指定する（-webkit-text-fill-color が要る） */
+.f input:disabled,.f select:disabled,.f textarea:disabled,
+input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
+  -webkit-text-fill-color:var(--ink-3);opacity:1;
+  border-color:var(--rule);cursor:default}
 .f textarea{resize:vertical;min-height:70px}
 .f .hint{font-size:12px;color:var(--ink-3)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
@@ -143,7 +149,6 @@ tbody tr.test-row>td{background:#F5F2FB}
 .modal-h{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding-bottom:10px;
   border-bottom:1px solid var(--rule)}
 .modal-h h3{margin:0;font-size:16px;letter-spacing:.06em}
-.modal-h .x{margin-left:auto}
 .modal-foot{display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)}
 .modal-foot .right{margin-left:auto;display:flex;gap:8px}
 
@@ -334,7 +339,14 @@ tbody tr.test-row>td{background:#F5F2FB}
 
   .sec{padding:12px 12px}
   .modal{padding:0}
-  .modal-box{min-height:100%;padding:16px 14px calc(16px + env(safe-area-inset-bottom))}
+  /* 画面いっぱいに出すので、上は時計や電波の帯を避ける。
+     避けないと、いちばん上の題がその下に潜って読めなくなる */
+  .modal-box{min-height:100%;
+    padding:calc(16px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom))}
+  /* 題は上に貼り付けておく。長い入力を下まで送っても、何の画面かが分かる */
+  .modal-h{position:sticky;top:0;z-index:1;background:var(--paper);
+    margin:calc(-16px - env(safe-area-inset-top)) -14px 16px;
+    padding:calc(12px + env(safe-area-inset-top)) 14px 10px}
   .modal-foot{position:sticky;bottom:0;background:var(--paper);margin:16px -14px 0;
     padding:12px 14px calc(12px + env(safe-area-inset-bottom))}
   .modal-foot .btn{flex:1}

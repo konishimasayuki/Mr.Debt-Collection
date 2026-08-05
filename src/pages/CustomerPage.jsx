@@ -466,7 +466,8 @@ function DayBox({ iso, 顧客, 予定, 印, editing, setEditing, onClose, onDone
             <div className="f">
               <label>いつまで</label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <label style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 13.5 }}>
+                <label style={{ display: 'flex', gap: 5, alignItems: 'center',
+                                fontSize: 13.5, whiteSpace: 'nowrap' }}>
                   <input type="checkbox" checked={v.終日} style={{ width: 'auto' }}
                          onChange={(e) => set('終日')(e.target.checked)} />
                   終日

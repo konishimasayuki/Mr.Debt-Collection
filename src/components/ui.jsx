@@ -16,9 +16,10 @@ export function Modal({ title, onClose, children, foot, wide }) {
   return (
     <div className="modal" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={'modal-box' + (wide ? ' wide' : '')} ref={box} role="dialog" aria-modal="true">
+        {/* 右上の「閉じる」は置かない。スマホでは題と重なって読めなくなる。
+            閉じるのは下の「キャンセル」。どのモーダルにも必ず置いてある */}
         <div className="modal-h">
           <h3>{title}</h3>
-          <button className="btn btn-sm x" onClick={onClose}>閉じる</button>
         </div>
         {children}
         {foot && <div className="modal-foot">{foot}</div>}
