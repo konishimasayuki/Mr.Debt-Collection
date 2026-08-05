@@ -245,6 +245,15 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .rec-r.now{box-shadow:inset 3px 0 0 var(--indigo)}
 
 /* 回ごとのメモ（支払いの記録の各回の下） */
+/* その回に入った入金（回の行のすぐ下）。列は回の行にそろえる */
+.rec-p{display:grid;grid-template-columns:44px 1fr auto;gap:6px;
+  padding:5px 10px;border-bottom:1px solid var(--rule);
+  background:#F3F8F4;font-size:12.5px;color:var(--paid)}
+.rec-p-d{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.rec-p-w{white-space:nowrap}
+.rec-p-a{font-variant-numeric:tabular-nums;white-space:nowrap}
+.rec-p-late{color:var(--overdue)}
+
 .rec-ms{border-bottom:1px solid var(--rule);background:#FCFBF8;padding:2px 10px 6px 10px}
 .rec-m{display:flex;align-items:flex-start;gap:6px;padding:4px 0 4px 8px;
   border-left:2px solid var(--rule-strong);font-size:12.5px;line-height:1.6}

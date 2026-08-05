@@ -36,7 +36,7 @@ export default async (req, res) => {
       // データベースは遠くにあり、1回ごとに往復の待ち時間がかかるため、
       // 順に待つと、その待ち時間が7つぶん足し算になって画面が出るまで待たされる。
       // 充当も、この顧客のぶんだけに絞る（全件を集計しない）。
-      const [[c], rows, paidRows, payments, promises, memos, events] = await Promise.all([
+      const [[c], rows, paidRows, 充当明細, payments, promises, memos, events] = await Promise.all([
         sql(`SELECT c.*, a.name AS assignor_name, b.name AS assignee_name
                FROM customer c
                LEFT JOIN company a ON a.id = c.assignor_id
@@ -49,6 +49,14 @@ export default async (req, res) => {
                JOIN schedule s ON s.id = a.schedule_id
               WHERE s.customer_id=$1
               GROUP BY a.schedule_id`, [id]),
+        // その回に「いつ・いくら」入ったか。
+        // 期日だけでは、遅れて払われたのか期日どおりだったのかが分からない。
+        sql(`SELECT a.schedule_id, a.amount, p.paid_on, p.method, p.source
+               FROM allocation a
+               JOIN schedule s ON s.id = a.schedule_id
+               JOIN payment p  ON p.id = a.payment_id
+              WHERE s.customer_id=$1
+              ORDER BY p.paid_on, p.id`, [id]),
         sql(`SELECT p.id, p.paid_on, p.amount, p.method, p.source, p.ref_no, p.memo,
                     p.payer_name, p.recorded_by, p.created_at
                FROM payment p WHERE p.customer_id=$1
@@ -65,6 +73,14 @@ export default async (req, res) => {
 
       const paidBy = {};
       paidRows.forEach((r) => (paidBy[r.schedule_id] = r.n));
+
+      // 回ごとの入金の明細（古い順）
+      const 入金明細 = {};
+      充当明細.forEach((r) => {
+        (入金明細[r.schedule_id] = 入金明細[r.schedule_id] || []).push({
+          日付: isoOf(r.paid_on), 金額: r.amount, 入金方法: r.method, 区分: r.source,
+        });
+      });
 
       const 回メモ = {};
       memos.forEach((m) => {
@@ -99,6 +115,7 @@ export default async (req, res) => {
         支払予定: rows.map((s) => ({
           回次: s.no, 期日: isoOf(s.due_date), 請求: s.planned_amount,
           入金: paidBy[s.id] || 0, 状態: s.state,
+          入金明細: 入金明細[s.id] || [],  // いつ・いくら入ったか（古い順）
           メモ: 回メモ[s.no] || [],       // 新しい順
         })),
         入金: payments.map((p) => ({
