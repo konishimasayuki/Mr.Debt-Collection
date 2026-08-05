@@ -3,19 +3,28 @@ import { api, yen, ymd, jpDate, 本日 } from '../api';
 import { Modal, Text, Money, Select, Picker, Err, Note, Empty } from '../components/ui';
 
 // CSVは銀行によって Shift-JIS のことも UTF-8 のこともある。
-// 両方で読んでみて、文字化け（置換文字）の少ないほうを採る。
+//
+// 先に UTF-8 で読んでみて、化けが無ければ UTF-8 と決める。
+// UTF-8 はバイトの並びに決まりがあり、そうでないものを入れると必ず化ける。
+// 逆に Shift-JIS はどんなバイトでもだいたい何かの字として読めてしまうので、
+// 「化けの少ないほう」で選ぶと、UTF-8 のファイルを Shift-JIS と取り違える。
+// 取り違えると見出しの日本語が壊れ、列を見つけられずに位置で読むことになり、
+// 列の並びが違うファイルでは中身がまるごとずれる。
 async function readText(file) {
   const buf = new Uint8Array(await file.arrayBuffer());
-  const tries = [];
-  for (const enc of ['shift_jis', 'utf-8']) {
+  const 読む = (enc) => {
     try {
-      const t = new TextDecoder(enc).decode(buf);
-      tries.push({ enc, t, 化け: (t.match(/�/g) || []).length });
-    } catch { /* この文字コードでは読めない */ }
-  }
-  if (!tries.length) throw new Error('ファイルを文字として読めませんでした。');
-  tries.sort((a, b) => a.化け - b.化け);
-  return tries[0].t;
+      const t = new TextDecoder(enc, { fatal: false }).decode(buf);
+      return { t, 化け: (t.match(/�/g) || []).length };
+    } catch { return null; }
+  };
+  const u = 読む('utf-8');
+  if (u && u.化け === 0) return u.t;
+  const s = 読む('shift_jis');
+  if (!u && !s) throw new Error('ファイルを文字として読めませんでした。');
+  if (!s) return u.t;
+  if (!u) return s.t;
+  return s.化け <= u.化け ? s.t : u.t;
 }
 
 export default function PaymentEntry({ onChanged, goHistory }) {
@@ -103,6 +112,37 @@ export default function PaymentEntry({ onChanged, goHistory }) {
               </b></>
             )}
           </Note>
+
+          {/* 読めなかった行は必ず見せる。黙って落とすと、
+              入っていない入金を未入金として督促してしまう */}
+          {preview.読み飛ばし && preview.読み飛ばし.件数 > 0 && (
+            <Note kind="warn">
+              <b>{preview.読み飛ばし.件数}行は取り込みません。</b>{' '}
+              {preview.読み飛ばし.内訳.map((x) => `${x.理由}（${x.件数}行）`).join('、')}。
+              <br />
+              出金や訂正の行なら、そのままで構いません。
+              入金のはずの行が入っていたら、ファイルの列の並びをお確かめください。
+              <details style={{ marginTop: 6 }}>
+                <summary>読み飛ばした行を見る</summary>
+                <table className="skip-tbl">
+                  <tbody>
+                    {preview.読み飛ばし.明細.map((x, i) => (
+                      <tr key={i}>
+                        <td className="num">{x.行}行目</td>
+                        <td>{x.理由}</td>
+                        <td className="mono">{x.中身}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {preview.読み飛ばし.件数 > preview.読み飛ばし.明細.length && (
+                  <p style={{ margin: '6px 0 0' }}>
+                    ほか {preview.読み飛ばし.件数 - preview.読み飛ばし.明細.length}行。
+                  </p>
+                )}
+              </details>
+            </Note>
+          )}
 
           <div className="card tw" style={{ maxHeight: 460, overflowY: 'auto' }}>
             <table>
