@@ -56,6 +56,11 @@ export const api = {
   patchCompany: (body) => call('/api/companies', { method: 'PATCH', body }),
   deleteCompany: (id) => call('/api/companies' + q({ id }), { method: 'DELETE' }),
   setup: (body) => call('/api/setup', { method: 'POST', body: body || {} }),
+
+  // 動作を試すための顧客
+  testCustomer: () => call('/api/testcustomer'),
+  makeTestCustomer: () => call('/api/testcustomer', { method: 'POST' }),
+  deleteTestCustomer: () => call('/api/testcustomer', { method: 'DELETE' }),
 };
 
 // ── 表示用の小道具 ────────────────────────────

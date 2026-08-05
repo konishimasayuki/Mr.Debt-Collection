@@ -78,7 +78,8 @@ export default async (req, res) => {
 
       return ok(res, {
         顧客: {
-          id: c.id, 氏名: c.name, よみ: c.kana || '', 性別: c.gender || '',
+          id: c.id, 氏名: c.name, よみ: c.kana || '', テスト: !!c.is_test,
+          性別: c.gender || '',
           生年月日: isoOf(c.birthday), 住所: c.address || '', 電話番号: c.tel || '',
           契約日: isoOf(c.contract_date), 車種: c.car || '',
           債権譲渡会社: c.assignor_name || '', 債権譲渡先: c.assignee_name || '',

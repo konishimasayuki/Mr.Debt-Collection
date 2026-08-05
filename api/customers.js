@@ -31,8 +31,11 @@ export default async (req, res) => {
 
     if (method === 'GET') {
       const q = query(req);
+      // is_test は c.* にも入るが、わざと名指しで書いている。
+      // 列がまだ無いデータベースでは、ここで符号 42703 になって
+      // _db.js が一度だけテーブルを作り直してくれる（画面から何も押さずに追いつく）。
       const customers = await sql(
-        `SELECT c.*, a.name AS assignor_name, b.name AS assignee_name
+        `SELECT c.*, c.is_test, a.name AS assignor_name, b.name AS assignee_name
            FROM customer c
            LEFT JOIN company a ON a.id = c.assignor_id
            LEFT JOIN company b ON b.id = c.assignee_id
@@ -54,7 +57,7 @@ export default async (req, res) => {
         const s = summarize(c, by[c.id] || [], paidBy);
         return {
           id: c.id, 氏名: c.name, よみ: c.kana || '',
-          索引: 索引(c.name, c.kana),
+          索引: 索引(c.name, c.kana), テスト: !!c.is_test,
           債権譲渡会社: c.assignor_name || '', 債権譲渡先: c.assignee_name || '',
           車種: c.car || '', 毎月の支払日: c.pay_day, 金額: c.monthly_amount,
           残り支払い回数: s.残り回数, 残債金額: s.残債,

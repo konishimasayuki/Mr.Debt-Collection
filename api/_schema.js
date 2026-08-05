@@ -33,11 +33,14 @@ const STATEMENTS = [
      start_date      date NOT NULL,
      total_amount    integer NOT NULL,
      memo            text,
+     is_test         boolean NOT NULL DEFAULT false,   -- 動作を試すための顧客
      archived        boolean NOT NULL DEFAULT false,
      created_at      timestamptz NOT NULL DEFAULT now(),
      updated_at      timestamptz NOT NULL DEFAULT now()
    )`,
   `CREATE INDEX IF NOT EXISTS customer_kana_idx ON customer (kana)`,
+  // すでに作ってあるデータベースにも足す（列を増やしたときはここに書く）
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS is_test boolean NOT NULL DEFAULT false`,
 
   // ── 支払予定 ────────────────────────────
   // 契約登録時に回数ぶん自動生成する。期日は固定で、約束では動かさない。
@@ -143,8 +146,16 @@ const STATEMENTS = [
    )`,
   `CREATE INDEX IF NOT EXISTS event_customer_idx ON event (customer_id, id DESC)`,
 
+  // 動作を試すための顧客(is_test)の記録だけは、片づけられるようにする。
+  // 顧客の行より先に記録を消すこと。顧客を消してから消すと、
+  // ここの EXISTS がもう当たらず、追記のみに引っかかる。
   `CREATE OR REPLACE FUNCTION event_append_only() RETURNS trigger AS $$
    BEGIN
+     IF TG_OP = 'DELETE' AND OLD.customer_id IS NOT NULL
+        AND EXISTS (SELECT 1 FROM customer
+                     WHERE id = OLD.customer_id AND is_test) THEN
+       RETURN OLD;
+     END IF;
      RAISE EXCEPTION '記録は追記のみです。訂正は「取消」を足してください。';
    END;
    $$ LANGUAGE plpgsql`,

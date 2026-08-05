@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { Modal, Text, Err, Note, Empty, Loading } from '../components/ui';
 
-export default function Settings({ onChanged }) {
+export default function Settings({ onOpen, onChanged }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [open, setOpen] = useState(false);
@@ -67,6 +67,8 @@ export default function Settings({ onChanged }) {
         </div>
       </div>
 
+      <TestCustomer onOpen={onOpen} onChanged={onChanged} />
+
       {(open || edit) && (
         <CompanyForm
           c={edit}
@@ -75,6 +77,70 @@ export default function Settings({ onChanged }) {
         />
       )}
     </>
+  );
+}
+
+// ── 動作を試すための顧客 ─────────────────────────
+// 本物の顧客で練習させないために置く。
+// おかしくなったら作り直せばよい、と分かる場所に置いておく。
+function TestCustomer({ onOpen, onChanged }) {
+  const [t, setT] = useState(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = () => api.testCustomer().then(setT).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, []);
+
+  const 用意する = async () => {
+    if (t && t.ある && !confirm(
+      `「${t.氏名}」を作り直します。\n`
+      + '今入っている入金・約束・メモはすべて消えます。よろしいですか。')) return;
+    setBusy(true); setErr('');
+    try {
+      const d = await api.makeTestCustomer();
+      await load();
+      onChanged && onChanged();
+      alert(`${d.氏名}さんを用意しました。\n`
+        + `${d.初回} から ${d.最終回} まで、全12回。\n`
+        + `1回目は入金済み、2回目は一部入金、${d.約束日} に入金約束が入っています。`);
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const 消す = async () => {
+    if (!confirm(`「${t.氏名}」と、その入金・約束・メモをすべて消します。\n`
+      + 'よろしいですか。')) return;
+    setBusy(true); setErr('');
+    try { await api.deleteTestCustomer(); await load(); onChanged && onChanged(); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="sec">
+      <h3>動作を試すための顧客</h3>
+      <Note>
+        本物の顧客で練習しなくて済むように、試しに使える顧客を1件だけ置けます。
+        顧客一覧では <span className="tag t-test">テスト</span> の印が付き、
+        入金・入金約束・メモ・CSVの取り込みを自由に試せます。
+        分からなくなったら、作り直してください。
+      </Note>
+      <Err>{err}</Err>
+
+      <div className="row-btn">
+        {t && t.ある && (
+          <button className="btn" onClick={() => onOpen(t.id)}>
+            {t.氏名} の顧客ページを開く
+          </button>
+        )}
+        <button className="btn btn-main" onClick={用意する} disabled={busy}>
+          {t && t.ある ? '最初の状態に戻す' : 'テスト用の顧客を用意する'}
+        </button>
+        {t && t.ある && (
+          <button className="btn btn-danger" onClick={消す} disabled={busy}>削除</button>
+        )}
+      </div>
+    </div>
   );
 }
 

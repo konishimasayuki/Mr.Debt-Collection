@@ -73,8 +73,15 @@ export default function CustomerPage({ id, onChanged }) {
 
       <div className="cust-head">
         <h2 className="cust-name">{c.氏名}</h2>
+        {c.テスト && <span className="tag t-test">テスト</span>}
         <button className="btn btn-sm" onClick={() => setEditCustomer(true)}>顧客情報を編集</button>
       </div>
+      {c.テスト && (
+        <Note>
+          動作を試すための顧客です。本物の顧客ではありません。
+          入金・約束・メモを自由に試してください。設定タブから作り直せます。
+        </Note>
+      )}
       <div className="cust-sub">
         {c.よみ && <span>{c.よみ}</span>}
         {c.車種 && <span>{c.車種}</span>}

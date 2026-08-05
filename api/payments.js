@@ -28,7 +28,7 @@ export default async (req, res) => {
       const rows = await sql(
         `SELECT p.id, p.paid_on, p.amount, p.method, p.source, p.ref_no, p.memo,
                 p.payer_name, p.recorded_by, p.customer_id,
-                c.name AS customer_name, c.kana AS customer_kana
+                c.name AS customer_name, c.kana AS customer_kana, c.is_test
            FROM payment p LEFT JOIN customer c ON c.id = p.customer_id
           ORDER BY p.paid_on DESC, p.id DESC
           LIMIT $1`, [limit + 2000]);
@@ -43,7 +43,7 @@ export default async (req, res) => {
 
       const list = rows.filter(hit).slice(0, limit).map((p) => ({
         id: p.id, 日付: isoOf(p.paid_on), 顧客id: p.customer_id,
-        顧客名: p.customer_name || '（未割当）', 金額: p.amount,
+        顧客名: p.customer_name || '（未割当）', テスト: !!p.is_test, 金額: p.amount,
         入金方法: p.method, 区分: p.source, 付番: p.ref_no || '',
         振込人: p.payer_name || '', メモ: p.memo || '', 記録者: p.recorded_by,
       }));

@@ -171,9 +171,11 @@ export default function Customers({ onOpen, onChanged }) {
                   </th>
                 </tr>
                 {人.map((r) => (
-                  <tr key={r.id} className="clickable" onClick={() => onOpen(r.id)}>
+                  <tr key={r.id} className={'clickable' + (r.テスト ? ' test-row' : '')}
+                      onClick={() => onOpen(r.id)}>
                     <td className="nm">
                       <b>{r.氏名}</b>
+                      {r.テスト && <span className="tag t-test">テスト</span>}
                       {r.よみ && <span className="yomi">{r.よみ}</span>}
                     </td>
                     <td data-label="債権譲渡会社">

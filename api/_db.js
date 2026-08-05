@@ -9,16 +9,18 @@ let 作り直した = false;   // 1つの処理の中で、作り直しは一度
 // 検査のときだけ、別の接続に差し替えられるようにする
 function setDb(fn) { sql = (t, p) => withSetup(fn, t, p); 作り直した = false; }
 
-// テーブルが無いと言われたら、一度だけ作り直してやり直す。
-// テーブルを増やしたあと、画面から「用意する」を押さなくても追いつくため。
-// 42P01 = undefined_table。ふだんは通らない道なので、速さには響かない。
+// テーブルや列が足りないと言われたら、一度だけ作り直してやり直す。
+// 増やしたあと、画面から「用意する」を押さなくても追いつくため。
+// 42P01 = テーブルが無い / 42703 = 列が無い。
+// ふだんは通らない道なので、速さには響かない。
+const 足りない = new Set(['42P01', '42703']);
 async function withSetup(run, t, p) {
   try {
     return await run(t, p);
   } catch (e) {
-    if ((e && e.code) !== '42P01' || 作り直した) throw e;
+    if (!足りない.has(e && e.code) || 作り直した) throw e;
     作り直した = true;
-    console.warn('[db] テーブルが足りないので作り直します:', e.message);
+    console.warn('[db] テーブルか列が足りないので作り直します:', e.message);
     for (const stmt of STATEMENTS) await run(stmt);
     return run(t, p);
   }
