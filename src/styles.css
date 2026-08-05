@@ -152,6 +152,12 @@ tbody tr.test-row>td{background:#F5F2FB}
   font-size:13.5px;line-height:1.7;margin-bottom:14px}
 .note.warn{border-left-color:var(--overdue);background:#FBF1EF}
 .note.ok{border-left-color:var(--paid);background:#F0F5F1}
+/* 読み飛ばした行の一覧（取り込み前の確認） */
+.note summary{cursor:pointer}
+.skip-tbl{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px}
+.skip-tbl td{padding:3px 8px 3px 0;vertical-align:top;border:0}
+.skip-tbl td.mono{font-family:var(--mono);color:var(--ink-2);
+  word-break:break-all;white-space:normal}
 .err{color:var(--overdue);font-size:13.5px;white-space:pre-wrap;margin:8px 0}
 
 /* ── ログイン ──────────────────────── */

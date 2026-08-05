@@ -12,7 +12,11 @@ export default function Unpaid({ onOpen, goHistory }) {
       .catch((e) => { setRows([]); setErr(e.message); });
   }, []);
 
-  const 合計 = (rows || []).reduce((s, r) => s + r.この回の残り, 0);
+  // 合計には、動作を試すための顧客を入れない。
+  // 経営者が見る数字なので、試し打ちの金額が混ざってはいけない。
+  const 本物 = (rows || []).filter((r) => !r.テスト);
+  const テスト数 = (rows || []).length - 本物.length;
+  const 合計 = 本物.reduce((s, r) => s + r.この回の残り, 0);
 
   return (
     <>
@@ -20,7 +24,7 @@ export default function Unpaid({ onOpen, goHistory }) {
         <h2>未入金</h2>
         {rows && (
           <span className="sub">
-            {rows.length}名 ／ 今の回の未入金 合計 {yen(合計)}円
+            {本物.length}名 ／ 今の回の未入金 合計 {yen(合計)}円
           </span>
         )}
       </div>
@@ -28,6 +32,10 @@ export default function Unpaid({ onOpen, goHistory }) {
       <Note>
         支払期日までに入金できていない顧客を、あいうえお順で出しています。
         行を押すと、入金履歴でその方を探した状態になります。
+        {テスト数 > 0 && (
+          <> なお、<span className="tag t-test">テスト</span> の
+          {テスト数}名は上の人数と合計に入れていません。</>
+        )}
       </Note>
       <Err>{err}</Err>
 

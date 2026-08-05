@@ -251,9 +251,20 @@ export default async (req, res) => {
       };
     });
 
+    // 読めなかった行は、理由ごとにまとめて返す。
+    // 明細は多くなりすぎないよう10件まで（出金の行は大量に出るため）。
+    const 飛ばし = parsed.読み飛ばし || [];
+    const 理由ごと = {};
+    飛ばし.forEach((x) => (理由ごと[x.理由] = (理由ごと[x.理由] || 0) + 1));
+
     const sum = 明細.reduce((s, r) => s + r.金額, 0);
     return ok(res, {
       形式: parsed.形式,
+      読み飛ばし: {
+        件数: 飛ばし.length,
+        内訳: Object.entries(理由ごと).map(([理由, 件数]) => ({ 理由, 件数 })),
+        明細: 飛ばし.slice(0, 10),
+      },
       概要: {
         件数: 明細.length,
         照合できた: 明細.filter((r) => r.照合できた).length,

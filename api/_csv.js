@@ -56,8 +56,11 @@ function looksZengin(lines) {
 function parseZengin(lines) {
   const isCsv = lines.some((l) => l.includes(','));
   const out = [];
+  const 読み飛ばし = [];
   let trailer = null;
-  for (const line of lines) {
+  lines.forEach((line, i) => {
+    const 飛ばす = (理由) => 読み飛ばし.push(
+      { 行: i + 1, 理由, 中身: String(line).slice(0, 60) });
     const f = isCsv ? fields(line) : line;
     const kubun = isCsv ? f[0] : line.slice(0, 1);
     if (kubun === '2') {
@@ -70,18 +73,19 @@ function parseZengin(lines) {
         金額 = digits(line.slice(24, 36)); 付番 = line.slice(42, 62).trim();
         名前 = line.slice(81, 129).trim();
       }
-      if (入払 !== '1') continue;        // 入金だけ。出金は取り込まない
-      if (取引 === '19') continue;       // 訂正は取り込まない
+      if (入払 !== '1') return 飛ばす('出金の行です（入金だけ取り込みます）');
+      if (取引 === '19') return 飛ばす('訂正の行です');
       const iso = wareki(勘定日);
-      if (!iso || !+金額) continue;
+      if (!iso) return 飛ばす('日付が読み取れません');
+      if (!+金額) return 飛ばす('金額が読み取れません');
       out.push({ 日付: iso, 付番: String(付番).trim(), 金額: +金額, 振込人: String(名前).trim() });
     } else if (kubun === '8') {
       trailer = isCsv
         ? { 件数: +digits(f[1]), 合計: +digits(f[2]) }
         : { 件数: +digits(line.slice(1, 7)), 合計: +digits(line.slice(7, 20)) };
     }
-  }
-  return { 明細: out, トレーラ: trailer, 形式: '全銀協規定形式' };
+  });
+  return { 明細: out, トレーラ: trailer, 形式: '全銀協規定形式', 読み飛ばし };
 }
 
 // 見出しから列を探す。見つからなければ位置で拾う
@@ -108,19 +112,28 @@ function parsePlain(lines) {
   const c = hasHead ? col : { 日付: 0, 付番: 1, 金額: 2, 振込人: 3 };
 
   const out = [];
-  for (const f of body) {
-    if (!f.length || f.every((x) => !x)) continue;
+  // 読めない行は落とすが、黙って落とさない。
+  // 列がずれていると全部落ちる。件数しか見ていないと気づけず、
+  // 入っていない入金を未入金として督促してしまう。
+  const 読み飛ばし = [];
+  body.forEach((f, i) => {
+    const 行番号 = i + (hasHead ? 2 : 1);
+    if (!f.length || f.every((x) => !x)) return;      // 空行は数えない
+    const 飛ばす = (理由) => 読み飛ばし.push(
+      { 行: 行番号, 理由, 中身: f.join(',').slice(0, 60) });
     const iso = anyDate(c.日付 >= 0 ? f[c.日付] : '');
     const amount = +digits(c.金額 >= 0 ? f[c.金額] : '');
-    if (!iso || !amount || amount <= 0) continue;      // 読めない行は落とす
+    if (!iso) return 飛ばす('日付が読み取れません');
+    if (!amount || amount <= 0) return 飛ばす('金額が読み取れません');
     out.push({
       日付: iso,
       付番: c.付番 >= 0 ? String(f[c.付番] || '').trim() : '',
       金額: amount,
       振込人: c.振込人 >= 0 ? String(f[c.振込人] || '').trim() : '',
     });
-  }
-  return { 明細: out, トレーラ: null, 形式: hasHead ? '見出しつきCSV' : 'CSV（見出しなし）' };
+  });
+  return { 明細: out, トレーラ: null, 読み飛ばし,
+    形式: hasHead ? '見出しつきCSV' : 'CSV（見出しなし）' };
 }
 
 function parseCsv(text) {
@@ -128,7 +141,14 @@ function parseCsv(text) {
     .filter((l) => l.trim().length);
   if (!lines.length) throw new Error('中身が空です。');
   const r = looksZengin(lines) ? parseZengin(lines) : parsePlain(lines);
-  if (!r.明細.length) throw new Error('入金の行が1件も読み取れませんでした。');
+  if (!r.明細.length) {
+    // なぜ読めなかったかを言う。「0件でした」だけでは、
+    // 列の並びが違うのか、そもそも入金が無いのかが分からない。
+    const 理由 = (r.読み飛ばし || []).slice(0, 3)
+      .map((x) => `${x.行}行目：${x.理由}`).join(' / ');
+    throw new Error('入金の行が1件も読み取れませんでした。'
+      + (理由 ? `（${理由}）` : ''));
+  }
   return r;
 }
 
