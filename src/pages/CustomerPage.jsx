@@ -195,6 +195,17 @@ export default function CustomerPage({ id, onChanged }) {
                     </span>
                     <span className="amt">{yen(s.請求)}</span>
                   </div>
+                  {/* その回に、いつ・いくら入ったか。
+                      期日だけでは、遅れて払われたのかが分からない */}
+                  {s.入金明細.map((p, i) => (
+                    <div className="rec-p" key={i}>
+                      <span className="rec-p-d">{md(p.日付)}</span>
+                      <span className="rec-p-w">
+                        入金{p.日付 > s.期日 && <span className="rec-p-late">（期日より後）</span>}
+                      </span>
+                      <span className="rec-p-a">{yen(p.金額)}</span>
+                    </div>
+                  ))}
                   <RecMemos
                     顧客id={c.id} 回次={s.回次} メモ={s.メモ}
                     onDone={() => { load(); onChanged && onChanged(); }}
