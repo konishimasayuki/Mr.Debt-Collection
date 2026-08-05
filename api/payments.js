@@ -25,29 +25,36 @@ export default async (req, res) => {
     if (method === 'GET') {
       const q = query(req);
       const limit = Math.min(Math.max(Number(q['件数']) || 30, 1), 500);
-      const rows = await sql(
-        `SELECT p.id, p.paid_on, p.amount, p.method, p.source, p.ref_no, p.memo,
-                p.payer_name, p.recorded_by, p.customer_id,
-                c.name AS customer_name, c.kana AS customer_kana, c.is_test
-           FROM payment p LEFT JOIN customer c ON c.id = p.customer_id
-          ORDER BY p.paid_on DESC, p.id DESC
-          LIMIT $1`, [limit + 2000]);
 
       // 検索は、かな・全角カナ・半角カナ・半角英字・全角英字のどれで打っても当たる。
       // 打った文字と、氏名・よみ・振込人名の両方を同じ形にそろえてから含むかを見る。
+      // そろえ方(norm)はJavaScript側にしかないので、絞り込みもこちらで行う。
+      // ただし全件を持ってくると重いので、検索していないときは要る件数だけ取る。
       const key = norm(q['検索'] || '');
       const hit = (r) => !key
         || norm(r.customer_name).includes(key)
         || norm(r.customer_kana).includes(key)
         || norm(r.payer_name).includes(key);
 
-      const list = rows.filter(hit).slice(0, limit).map((p) => ({
+      const [rows, 総数] = await Promise.all([
+        sql(`SELECT p.id, p.paid_on, p.amount, p.method, p.source, p.ref_no, p.memo,
+                    p.payer_name, p.recorded_by, p.customer_id,
+                    c.name AS customer_name, c.kana AS customer_kana, c.is_test
+               FROM payment p LEFT JOIN customer c ON c.id = p.customer_id
+              ORDER BY p.paid_on DESC, p.id DESC
+              LIMIT $1`, [key ? 5000 : limit]),
+        key ? Promise.resolve(null) : sql('SELECT count(*)::int AS n FROM payment'),
+      ]);
+
+      const 当たり = rows.filter(hit);
+      const list = 当たり.slice(0, limit).map((p) => ({
         id: p.id, 日付: isoOf(p.paid_on), 顧客id: p.customer_id,
         顧客名: p.customer_name || '（未割当）', テスト: !!p.is_test, 金額: p.amount,
         入金方法: p.method, 区分: p.source, 付番: p.ref_no || '',
         振込人: p.payer_name || '', メモ: p.memo || '', 記録者: p.recorded_by,
       }));
-      return ok(res, { 入金: list, 件数: list.length, 全件: rows.filter(hit).length, 本日: today() });
+      return ok(res, { 入金: list, 件数: list.length,
+        全件: 総数 ? 総数[0].n : 当たり.length, 本日: today() });
     }
 
     const b = await readBody(req);

@@ -4,25 +4,31 @@ import { neon } from '@neondatabase/serverless';
 import { STATEMENTS } from './_schema.js';
 
 let sql = null;
-let 作り直した = false;   // 1つの処理の中で、作り直しは一度だけ
+let 作り直し = null;   // 1つの処理の中で、作り直しは一度だけ（同時に走らせない）
 
 // 検査のときだけ、別の接続に差し替えられるようにする
-function setDb(fn) { sql = (t, p) => withSetup(fn, t, p); 作り直した = false; }
+function setDb(fn) { sql = (t, p) => withSetup(fn, t, p); 作り直し = null; }
 
 // テーブルや列が足りないと言われたら、一度だけ作り直してやり直す。
 // 増やしたあと、画面から「用意する」を押さなくても追いつくため。
 // 42P01 = テーブルが無い / 42703 = 列が無い。
 // ふだんは通らない道なので、速さには響かない。
+// 同時に投げた問い合わせが揃って足りないと言うこともあるので、
+// 作り直しは1つにまとめ、みんなで同じものを待つ。
 const 足りない = new Set(['42P01', '42703']);
 async function withSetup(run, t, p) {
   try {
     return await run(t, p);
   } catch (e) {
-    if (!足りない.has(e && e.code) || 作り直した) throw e;
-    作り直した = true;
-    console.warn('[db] テーブルか列が足りないので作り直します:', e.message);
-    for (const stmt of STATEMENTS) await run(stmt);
-    return run(t, p);
+    if (!足りない.has(e && e.code)) throw e;
+    if (!作り直し) {
+      console.warn('[db] テーブルか列が足りないので作り直します:', e.message);
+      作り直し = (async () => {
+        for (const stmt of STATEMENTS) await run(stmt);
+      })();
+    }
+    await 作り直し;
+    return run(t, p);   // やり直しは一度だけ(ここで駄目ならそのまま知らせる)
   }
 }
 

@@ -1,6 +1,6 @@
 // サーバーとのやり取り。エラーはここで日本語にそろえる。
 
-async function call(path, { method = 'GET', body } = {}) {
+async function 送る(path, method, body) {
   let r;
   try {
     r = await fetch(path, {
@@ -16,6 +16,49 @@ async function call(path, { method = 'GET', body } = {}) {
   if (r.status === 401) { const e = new Error('ログインが必要です。'); e.未ログイン = true; throw e; }
   if (!r.ok || d.error) throw new Error(d.理由 ? `${d.error}\n${d.理由}` : (d.error || `サーバーが ${r.status} を返しました。`));
   return d;
+}
+
+// ── 同じものを何度も取りに行かない ────────────────
+// サーバーは遠くにあり、1回の問い合わせに待ち時間がかかる。
+// タブを行き来するたびに同じ一覧を取りに行くと、そのたび待たされる。
+//
+// 1) 同じ問い合わせが同時に走ったら、1つにまとめる
+// 2) 一度取ったものは、ごく短い間だけ覚えておく
+// 3) 書き込み（登録・変更・削除）があったら、覚えているものは全部捨てる
+//    ─ 古い数字を出さないため。金額を扱うので、ここは短めにしておく。
+//
+// 「世代」で捨てる。取りに行っている最中に書き込みが起きると、
+// 返ってきた中身はもう古い。捨てたあとにそれが控えへ入らないよう、
+// 送るときの世代と、返ってきたときの世代が同じときだけ覚える。
+const 覚えておく時間 = 5000;
+const 控え = new Map();
+const 進行中 = new Map();
+let 世代 = 0;
+const 全部捨てる = () => { 世代++; 控え.clear(); 進行中.clear(); };
+
+function call(path, { method = 'GET', body } = {}) {
+  const 読み取り = method === 'GET';
+  if (読み取り) {
+    const c = 控え.get(path);
+    if (c && Date.now() - c.時刻 < 覚えておく時間) return Promise.resolve(c.中身);
+    const 先客 = 進行中.get(path);
+    if (先客) return 先客;
+  } else {
+    全部捨てる();   // 書き込みが始まった時点で、覚えているものは古い
+  }
+
+  const いまの世代 = 世代;
+  const p = 送る(path, method, body);
+  if (読み取り) {
+    進行中.set(path, p);
+    p.then(
+      (d) => { if (世代 === いまの世代) 控え.set(path, { 時刻: Date.now(), 中身: d }); },
+      () => {})
+      .then(() => { if (進行中.get(path) === p) 進行中.delete(path); });
+  } else {
+    p.then(() => {}, () => {}).then(全部捨てる);
+  }
+  return p;
 }
 
 const q = (o) => {

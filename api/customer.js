@@ -32,35 +32,40 @@ export default async (req, res) => {
     if (method === 'GET') {
       const id = Number(query(req).id);
       if (!id) return bad(res, '顧客が指定されていません。');
-      const c = (await sql(
-        `SELECT c.*, a.name AS assignor_name, b.name AS assignee_name
-           FROM customer c
-           LEFT JOIN company a ON a.id = c.assignor_id
-           LEFT JOIN company b ON b.id = c.assignee_id
-          WHERE c.id=$1`, [id]))[0];
+      // 顧客ページは見るものが多い。互いに関係のない問い合わせなので同時に投げる。
+      // データベースは遠くにあり、1回ごとに往復の待ち時間がかかるため、
+      // 順に待つと、その待ち時間が7つぶん足し算になって画面が出るまで待たされる。
+      // 充当も、この顧客のぶんだけに絞る（全件を集計しない）。
+      const [[c], rows, paidRows, payments, promises, memos, events] = await Promise.all([
+        sql(`SELECT c.*, a.name AS assignor_name, b.name AS assignee_name
+               FROM customer c
+               LEFT JOIN company a ON a.id = c.assignor_id
+               LEFT JOIN company b ON b.id = c.assignee_id
+              WHERE c.id=$1`, [id]),
+        sql(`SELECT id, no, due_date, planned_amount, state FROM schedule
+              WHERE customer_id=$1 ORDER BY no`, [id]),
+        sql(`SELECT a.schedule_id, COALESCE(sum(a.amount),0)::int AS n
+               FROM allocation a
+               JOIN schedule s ON s.id = a.schedule_id
+              WHERE s.customer_id=$1
+              GROUP BY a.schedule_id`, [id]),
+        sql(`SELECT p.id, p.paid_on, p.amount, p.method, p.source, p.ref_no, p.memo,
+                    p.payer_name, p.recorded_by, p.created_at
+               FROM payment p WHERE p.customer_id=$1
+              ORDER BY p.paid_on DESC, p.id DESC`, [id]),
+        sql(`SELECT id, promised_on, until_time, schedule_no, amount, memo, done, created_by
+               FROM promise WHERE customer_id=$1 ORDER BY promised_on, id`, [id]),
+        sql(`SELECT id, schedule_no, text, auto, created_by, created_at
+               FROM schedule_memo WHERE customer_id=$1
+              ORDER BY schedule_no, id DESC`, [id]),
+        sql(`SELECT id, occurred_at, recorded_by, kind, text, memo
+               FROM event WHERE customer_id=$1 ORDER BY id DESC LIMIT 200`, [id]),
+      ]);
       if (!c) { res.statusCode = 404; return res.end(JSON.stringify({ error: '顧客が見つかりません。' })); }
 
-      const rows = await sql(
-        `SELECT id, no, due_date, planned_amount, state FROM schedule
-          WHERE customer_id=$1 ORDER BY no`, [id]);
-      const paidRows = await sql(
-        `SELECT a.schedule_id, COALESCE(sum(a.amount),0)::int AS n
-           FROM allocation a WHERE a.schedule_id IS NOT NULL
-          GROUP BY a.schedule_id`);
       const paidBy = {};
       paidRows.forEach((r) => (paidBy[r.schedule_id] = r.n));
 
-      const payments = await sql(
-        `SELECT p.id, p.paid_on, p.amount, p.method, p.source, p.ref_no, p.memo,
-                p.payer_name, p.recorded_by, p.created_at
-           FROM payment p WHERE p.customer_id=$1
-          ORDER BY p.paid_on DESC, p.id DESC`, [id]);
-      const promises = await sql(
-        `SELECT id, promised_on, until_time, schedule_no, amount, memo, done, created_by
-           FROM promise WHERE customer_id=$1 ORDER BY promised_on, id`, [id]);
-      const memos = await sql(
-        `SELECT id, schedule_no, text, auto, created_by, created_at
-           FROM schedule_memo WHERE customer_id=$1 ORDER BY schedule_no, id DESC`, [id]);
       const 回メモ = {};
       memos.forEach((m) => {
         (回メモ[m.schedule_no] = 回メモ[m.schedule_no] || []).push({
@@ -68,10 +73,6 @@ export default async (req, res) => {
           日時: new Date(m.created_at).toISOString().slice(0, 16).replace('T', ' '),
         });
       });
-
-      const events = await sql(
-        `SELECT id, occurred_at, recorded_by, kind, text, memo
-           FROM event WHERE customer_id=$1 ORDER BY id DESC LIMIT 200`, [id]);
 
       const cur = rows.find((s) => s.state !== '入金済み') || null;
       const 入金合計 = rows.reduce((a, s) => a + (paidBy[s.id] || 0), 0);
