@@ -98,6 +98,8 @@ tbody tr.off td{text-decoration:line-through}
 /* 動作を試すための顧客。本物と見間違えないよう、ほかの印と色を分けて塗りつぶす */
 .t-test{background:#4A3B7A;border-color:#4A3B7A;color:#fff;font-weight:600}
 tbody tr.test-row>td{background:#F5F2FB}
+/* 行の右端に置く操作。ボタンが増えても崩れないように */
+td.act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 
 /* ボタンを横に並べる。画面が狭ければ折り返す */
 .row-btn{display:flex;gap:8px;flex-wrap:wrap}
@@ -306,8 +308,10 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
   /* パソコン用の幅の上限は、札では邪魔になる（メモが早く折り返す）*/
   .cards td.memo{max-width:none;font-size:13.5px}
   .cards td.mono,.cards td.who{font-size:12.5px}
-  /* 札の下に置く操作。横いっぱいにして押しやすくする */
-  .cards td.act{order:2;padding:10px 14px 0;margin-top:6px;border-top:1px solid var(--rule)}
+  /* 札の下に置く操作。横いっぱいにして押しやすくする。
+     2つ以上あるときは縦に積む（横に並べると1つ1つが細くなり押しにくい）*/
+  .cards td.act{order:2;padding:10px 14px 0;margin-top:6px;border-top:1px solid var(--rule);
+    display:flex;flex-direction:column;gap:8px}
   .cards td.act::before{display:none}
   .cards td.act .btn{width:100%;min-height:40px}
   .cards td:empty{display:none}

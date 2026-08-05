@@ -36,6 +36,23 @@ export default function CustomerPage({ id, onChanged }) {
   if (!d) return <Loading 件数={2} 行={6} />;
 
   const c = d.顧客;
+
+  // 支払いの記録に出ている「約束の写し」から、約束そのものを開く。
+  // 写しの文だけ直しても約束は変わらないので、カレンダー側の編集へ送る。
+  const 開く約束 = (m) => {
+    const p = d.約束.find((x) => x.id === m.約束id);
+    if (!p) return;
+    const [y, mo] = p.日付.split('-').map(Number);
+    setMonth({ y, m: mo });
+    setDay(p.日付);
+    setEditing(p);
+    // カレンダーは画面の上のほうにある。押した場所から遠いので、そこまで送る
+    setTimeout(() => {
+      const el = document.querySelector('.cal-wrap') || document.querySelector('.sec');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  };
+
   const move = (n) => {
     if (!n) { setMonth(null); setDay(null); return; }
     const t = ym.y * 12 + (ym.m - 1) + n;
@@ -107,7 +124,7 @@ export default function CustomerPage({ id, onChanged }) {
       <div className="cols">
         {/* ── 左7割：月カレンダー ── */}
         <div>
-          <div className="sec">
+          <div className="sec cal-wrap">
             <h3>入金カレンダー</h3>
             <div className="cal-bar">
               <button className="btn btn-sm" onClick={() => move(-1)}>◀ 前の月</button>
@@ -208,6 +225,7 @@ export default function CustomerPage({ id, onChanged }) {
                   ))}
                   <RecMemos
                     顧客id={c.id} 回次={s.回次} メモ={s.メモ}
+                    約束を開く={開く約束}
                     onDone={() => { load(); onChanged && onChanged(); }}
                   />
                 </div>
@@ -224,7 +242,7 @@ export default function CustomerPage({ id, onChanged }) {
 // ── 回ごとのメモ（支払いの記録の各回の下）─────────────
 // 新しい順に3件まで出し、それより古いものは折りたたむ。
 // 入金約束を入れたときなどに自動で足され、あとから編集・削除できる。
-function RecMemos({ 顧客id, 回次, メモ, onDone }) {
+function RecMemos({ 顧客id, 回次, メモ, 約束を開く, onDone }) {
   const [開く, set開く] = useState(false);
   const [編集, set編集] = useState(null);   // {id, 本文}
   const [busy, setBusy] = useState(false);
@@ -271,8 +289,18 @@ function RecMemos({ 顧客id, 回次, メモ, onDone }) {
         <span className="rec-m-t">{m.本文}</span>
         <span className="rec-m-d">{m.日時.slice(5, 10)}</span>
         <div className="rec-m-btn">
-          <button className="btn btn-sm" onClick={() => set編集({ id: m.id, 本文: m.本文 })}>編集</button>
-          <button className="btn btn-sm btn-danger" onClick={() => remove(m)} disabled={busy}>削除</button>
+          {m.約束id ? (
+            // これは約束の写し。ここの文だけ直しても約束は変わらないので、
+            // 文は直させず、カレンダーの約束そのものを開く
+            <button className="btn btn-sm" onClick={() => 約束を開く(m)}>約束を変更</button>
+          ) : (
+            <>
+              <button className="btn btn-sm"
+                      onClick={() => set編集({ id: m.id, 本文: m.本文 })}>編集</button>
+              <button className="btn btn-sm btn-danger"
+                      onClick={() => remove(m)} disabled={busy}>削除</button>
+            </>
+          )}
         </div>
       </div>
     )

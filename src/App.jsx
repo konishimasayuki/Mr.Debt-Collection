@@ -97,7 +97,8 @@ export default function App() {
             onChanged={refresh}
           />
         ) : tab === 'unpaid' ? (
-          <Unpaid key={reloadKey} onOpen={setCustomerId} goHistory={goHistory} />
+          <Unpaid key={reloadKey} onOpen={setCustomerId} goHistory={goHistory}
+                  onChanged={refresh} />
         ) : (
           <Settings onOpen={setCustomerId} onChanged={refresh} />
         )}

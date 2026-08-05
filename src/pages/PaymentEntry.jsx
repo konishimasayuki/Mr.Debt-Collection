@@ -310,9 +310,12 @@ function ImportResult({ d, onClose, onChanged, goHistory }) {
 }
 
 // ── 手動入金 ────────────────────────────────
-function ManualPayment({ onClose, onDone }) {
+// 未入金タブからも開くので、名前を付けて外へ出す。
+// 初期顧客id を渡すと、その方が選ばれた状態で開く（未入金から来たとき）。
+export function ManualPayment({ onClose, onDone, 初期顧客id }) {
   const [customers, setCustomers] = useState([]);
-  const [v, setV] = useState({ 日付: 本日(), 顧客id: '', 金額: '', 入金方法: '振込', メモ: '' });
+  const [v, setV] = useState({ 日付: 本日(), 顧客id: 初期顧客id ? String(初期顧客id) : '',
+    金額: '', 入金方法: '振込', メモ: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k) => (val) => setV((o) => ({ ...o, [k]: val }));
