@@ -2,14 +2,26 @@ import { useEffect, useRef, useState } from 'react';
 import { norm } from '../api';
 
 // ── モーダル ────────────────────────────────
-// Escで閉じ、外側を押しても閉じる。開いたら最初の入力へ行く。
+// Escで閉じ、外側を押しても閉じる。
+//
+// 開いたときに入力欄へ自動で移るのは、キーボードのある端末だけにする。
+// 日付や時刻の欄へ移ると、端末の日付選びが勝手にせり上がってくる。
+// 指で操作する端末では、そもそも移らない（開いた瞬間にキーボードが出て、
+// 下の「登録する」が隠れてしまう）。
+const 自動で移らない = 'date,time,month,week,datetime-local,file,checkbox,radio';
+const 移る先 = `input:not([type=${自動で移らない.split(',').join(']):not([type=')}]),textarea`;
+
 export function Modal({ title, onClose, children, foot, wide }) {
   const box = useRef(null);
   useEffect(() => {
     const esc = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', esc);
-    const el = box.current && box.current.querySelector('input,select,textarea');
-    if (el) el.focus();
+    const 指で操作 = typeof window.matchMedia === 'function'
+      && window.matchMedia('(hover: none)').matches;
+    if (!指で操作) {
+      const el = box.current && box.current.querySelector(移る先);
+      if (el) el.focus();
+    }
     return () => document.removeEventListener('keydown', esc);
   }, [onClose]);
 
