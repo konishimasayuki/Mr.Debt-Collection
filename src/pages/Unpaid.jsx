@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, yen, ymd } from '../api';
 import { Err, Empty, Note, Loading } from '../components/ui';
+import { ManualPayment } from './PaymentEntry';
 
-export default function Unpaid({ onOpen, goHistory }) {
+export default function Unpaid({ onOpen, goHistory, onChanged }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
+  const [入金する, set入金する] = useState(null);   // 手動入金を入れる顧客
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api.customers({ 未入金: 1 })
       .then((d) => setRows(d.顧客))
       .catch((e) => { setRows([]); setErr(e.message); });
   }, []);
+  useEffect(load, [load]);
 
   // 合計には、動作を試すための顧客を入れない。
   // 経営者が見る数字なので、試し打ちの金額が混ざってはいけない。
@@ -85,12 +88,26 @@ export default function Unpaid({ onOpen, goHistory }) {
                     className="btn btn-sm"
                     onClick={(e) => { e.stopPropagation(); onOpen(r.id); }}
                   >顧客ページを開く</button>
+                  {/* 電話中にその場で入金を入れられるように。
+                      入金登録タブへ行って名前を探し直さなくて済む */}
+                  <button
+                    className="btn btn-sm btn-main"
+                    onClick={(e) => { e.stopPropagation(); set入金する(r); }}
+                  >手動入金登録</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {入金する && (
+        <ManualPayment
+          初期顧客id={入金する.id}
+          onClose={() => set入金する(null)}
+          onDone={() => { set入金する(null); load(); onChanged && onChanged(); }}
+        />
+      )}
     </>
   );
 }

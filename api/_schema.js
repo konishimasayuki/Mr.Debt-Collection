@@ -116,12 +116,18 @@ const STATEMENTS = [
      schedule_no integer NOT NULL CHECK (schedule_no > 0),
      text        text NOT NULL,
      auto        boolean NOT NULL DEFAULT false,   -- 約束などから自動で入ったもの
+     promise_id  integer REFERENCES promise(id) ON DELETE SET NULL,  -- どの約束の写しか
      created_by  text NOT NULL,
      created_at  timestamptz NOT NULL DEFAULT now(),
      updated_at  timestamptz NOT NULL DEFAULT now()
    )`,
   `CREATE INDEX IF NOT EXISTS schedule_memo_idx
      ON schedule_memo (customer_id, schedule_no, id DESC)`,
+  // すでに作ってあるデータベースにも足す
+  `ALTER TABLE schedule_memo ADD COLUMN IF NOT EXISTS promise_id integer
+     REFERENCES promise(id) ON DELETE SET NULL`,
+  `CREATE INDEX IF NOT EXISTS schedule_memo_promise_idx
+     ON schedule_memo (promise_id)`,
 
   // ── 名寄せ辞書(CSVの振込人名 → 顧客)──────────────
   `CREATE TABLE IF NOT EXISTS payer_alias (

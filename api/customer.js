@@ -16,10 +16,32 @@ const jp = (d) => String(d).replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1年$2月$3�
 
 // 支払いの記録の、その回の下に出るメモ。約束を入れたときなどに自動で足す。
 // 回が決まっていない約束は、どの回に出すか決められないので足さない。
-const 回メモを足す = (sql, id, no, text, who, auto = true) => (no
-  ? sql(`INSERT INTO schedule_memo (customer_id, schedule_no, text, auto, created_by)
-         VALUES ($1,$2,$3,$4,$5)`, [id, Number(no), text, auto, who])
+const 回メモを足す = (sql, id, no, text, who, auto = true, 約束id = null) => (no
+  ? sql(`INSERT INTO schedule_memo (customer_id, schedule_no, text, auto, promise_id, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6)`, [id, Number(no), text, auto, 約束id, who])
   : Promise.resolve());
+
+// 約束から出るメモの文面。作るときも直すときも、必ずここを通す。
+// 別々に組み立てると、直したときに文面と約束が食い違う。
+const 約束の文 = (day, 時刻, amount, memo) =>
+  `${jp(day)}${時刻 ? ` ${時刻}まで` : '（終日）'} に ${yen(amount)}円 の入金約束`
+  + (memo ? ` — ${memo}` : '');
+
+// 約束を直したら、その写しのメモも書き換える。
+// メモは約束の「今の姿」を映すもの。文だけ直しても約束は変わらないので、
+// 画面ではこのメモを直接は編集させず、約束のほうを直してもらう。
+async function 約束のメモを合わせる(sql, 顧客id, 約束id, no, text, who) {
+  const 有 = await sql(
+    'SELECT id FROM schedule_memo WHERE promise_id=$1 AND customer_id=$2',
+    [約束id, 顧客id]);
+  if (有.length) {
+    await sql(`UPDATE schedule_memo SET text=$1, schedule_no=$2, updated_at=now()
+                WHERE id=$3`, [text, Number(no) || 有[0].schedule_no, 有[0].id]);
+    return;
+  }
+  // 回を決めずに作った約束に、あとから回を付けたときはここへ来る
+  await 回メモを足す(sql, 顧客id, no, text, who, true, 約束id);
+}
 
 export default async (req, res) => {
   if (!requireSession(req, res)) return;
@@ -63,9 +85,14 @@ export default async (req, res) => {
               ORDER BY p.paid_on DESC, p.id DESC`, [id]),
         sql(`SELECT id, promised_on, until_time, schedule_no, amount, memo, done, created_by
                FROM promise WHERE customer_id=$1 ORDER BY promised_on, id`, [id]),
-        sql(`SELECT id, schedule_no, text, auto, created_by, created_at
-               FROM schedule_memo WHERE customer_id=$1
-              ORDER BY schedule_no, id DESC`, [id]),
+        // 約束の写しのメモは、その約束の日も一緒に返す。
+        // 画面から約束そのものを直せるようにするため（メモの文だけ直しても約束は変わらない）
+        sql(`SELECT m.id, m.schedule_no, m.text, m.auto, m.promise_id,
+                    m.created_by, m.created_at, p.promised_on
+               FROM schedule_memo m
+               LEFT JOIN promise p ON p.id = m.promise_id
+              WHERE m.customer_id=$1
+              ORDER BY m.schedule_no, m.id DESC`, [id]),
         sql(`SELECT id, occurred_at, recorded_by, kind, text, memo
                FROM event WHERE customer_id=$1 ORDER BY id DESC LIMIT 200`, [id]),
       ]);
@@ -86,6 +113,7 @@ export default async (req, res) => {
       memos.forEach((m) => {
         (回メモ[m.schedule_no] = 回メモ[m.schedule_no] || []).push({
           id: m.id, 本文: m.text, 自動: m.auto, 記録者: m.created_by,
+          約束id: m.promise_id || null, 約束日: isoOf(m.promised_on),
           日時: new Date(m.created_at).toISOString().slice(0, 16).replace('T', ' '),
         });
       });
@@ -207,9 +235,8 @@ export default async (req, res) => {
                    VALUES ($1,$2,'約束',$3,$4)`,
           [id, who, `${day}${時刻 ? ` ${時刻}まで` : '（終日）'} に ${yen(amount)}円`
             + (no ? `（${no}回目ぶん）` : '') + ' の入金約束', memo]);
-        await 回メモを足す(sql, id, no,
-          `${jp(day)}${時刻 ? ` ${時刻}まで` : '（終日）'} に ${yen(amount)}円 の入金約束`
-          + (memo ? ` — ${memo}` : ''), who);
+        await 回メモを足す(sql, id, no, 約束の文(day, 時刻, amount, memo),
+          who, true, ins[0].id);
         return ok(res, { done: true, id: ins[0].id });
       }
 
@@ -234,9 +261,11 @@ export default async (req, res) => {
         await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                    VALUES ($1,$2,'約束',$3,$4)`,
           [id, who, `約束を動かした（${変更.length ? 変更.join('、') : 'メモだけ更新'}）`, memo]);
-        await 回メモを足す(sql, id, b.回次 ? Number(b.回次) : pr.schedule_no,
-          `入金約束を変更（${変更.length ? 変更.join('、') : 'メモだけ更新'}）`
-          + (memo ? ` — ${memo}` : ''), who);
+        // 経緯は記録(event)に残す。回メモのほうは行を増やさず、今の姿に書き換える。
+        // 増やすと、同じ約束の古い金額がいつまでも並び、どれが本当か分からなくなる。
+        const 新回 = b.回次 ? Number(b.回次) : pr.schedule_no;
+        await 約束のメモを合わせる(sql, id, pid, 新回,
+          約束の文(day, 時刻, amount, memo !== null ? memo : pr.memo), who);
         return ok(res, { done: true, もとの日: 前.日, もとの金額: 前.額 });
       }
 
@@ -244,14 +273,19 @@ export default async (req, res) => {
         const pid = Number(b.約束id);
         const pr = (await sql('SELECT * FROM promise WHERE id=$1 AND customer_id=$2', [pid, id]))[0];
         if (!pr) return bad(res, 'その約束が見つかりません。');
+        // 写しのメモを片づけて、「取り消し」の1行に置き換える。
+        // 書き換えではなく入れ直すのは、取り消しがいま起きたことだから。
+        // 書き換えると元の位置に留まり、古い約束のぶんは折りたたみに隠れて見えない。
+        // 行数は増えない（1件消して1件足す）。
+        const 取消文 = `${jp(isoOf(pr.promised_on))} の入金約束（${yen(pr.amount)}円）を取り消し`
+          + (memo ? ` — ${memo}` : '');
+        await sql('DELETE FROM schedule_memo WHERE promise_id=$1 AND customer_id=$2', [pid, id]);
+        await 回メモを足す(sql, id, pr.schedule_no, 取消文, who);
         await sql('DELETE FROM promise WHERE id=$1', [pid]);
         // 約束そのものは消すが、消したことは記録に残す
         await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                    VALUES ($1,$2,'約束',$3,$4)`,
           [id, who, `${isoOf(pr.promised_on)} の約束（${yen(pr.amount)}円）を取り消した`, memo]);
-        await 回メモを足す(sql, id, pr.schedule_no,
-          `${jp(isoOf(pr.promised_on))} の入金約束（${yen(pr.amount)}円）を取り消し`
-          + (memo ? ` — ${memo}` : ''), who);
         return ok(res, { done: true });
       }
 
