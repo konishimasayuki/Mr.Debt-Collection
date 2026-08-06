@@ -58,7 +58,8 @@ export default async (req, res) => {
       // データベースは遠くにあり、1回ごとに往復の待ち時間がかかるため、
       // 順に待つと、その待ち時間が7つぶん足し算になって画面が出るまで待たされる。
       // 充当も、この顧客のぶんだけに絞る（全件を集計しない）。
-      const [[c], rows, paidRows, 充当明細, payments, promises, memos, events] = await Promise.all([
+      const [[c], rows, paidRows, 充当明細, payments, promises, memos, events, troubles]
+        = await Promise.all([
         sql(`SELECT c.*, a.name AS assignor_name, b.name AS assignee_name
                FROM customer c
                LEFT JOIN company a ON a.id = c.assignor_id
@@ -96,6 +97,12 @@ export default async (req, res) => {
               ORDER BY m.schedule_no, m.id DESC`, [id]),
         sql(`SELECT id, occurred_at, recorded_by, kind, text, memo
                FROM event WHERE customer_id=$1 ORDER BY id DESC LIMIT 200`, [id]),
+        // トラブル。解消したものも残す（何度もめているかが分かるように）。
+        // 日付は日本時間の文字どおりで返す。UTCのまま切ると、夜の記録が前日になる
+        sql(`SELECT id, kind, memo, resolved, created_by, resolved_by,
+                    to_char(created_at  AT TIME ZONE 'Asia/Tokyo', 'YYYY/MM/DD') AS at,
+                    to_char(resolved_at AT TIME ZONE 'Asia/Tokyo', 'YYYY/MM/DD') AS done_at
+               FROM trouble WHERE customer_id=$1 ORDER BY resolved, id DESC`, [id]),
       ]);
       if (!c) { res.statusCode = 404; return res.end(JSON.stringify({ error: '顧客が見つかりません。' })); }
 
@@ -174,6 +181,11 @@ export default async (req, res) => {
         記録: events.map((e) => ({
           id: e.id, 日時: new Date(e.occurred_at).toISOString().slice(0, 16).replace('T', ' '),
           記録者: e.recorded_by, 種類: e.kind, 内容: e.text, メモ: e.memo || '',
+        })),
+        トラブル: troubles.map((x) => ({
+          id: x.id, 種類: x.kind, 内容: x.memo || '', 解消: x.resolved,
+          記録者: x.created_by, 記録日: x.at,
+          解消者: x.resolved_by || '', 解消日: x.done_at,
         })),
         本日: today(),
       });
@@ -417,6 +429,52 @@ export default async (req, res) => {
         await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                    VALUES ($1,$2,'メモ',$3,$4)`,
           [id, who, `${m.schedule_no}回目のメモを消した`, m.text]);
+        return ok(res, { done: true });
+      }
+
+      // ── トラブル ──────────────────────────
+      // 「携帯が繋がらない」「支払いに応じない」など、督促が進まない事情。
+      // 未入金かどうかとは別に持つ。払えていても連絡が付かないことはある
+      if (b.種類 === 'トラブル') {
+        const 種 = String(b.内容の種類 || '').trim();
+        if (!種) return bad(res, 'トラブルの種類を選んでください。');
+        if (種.length > 60) return bad(res, 'トラブルの種類が長すぎます。', '60文字までにしてください');
+        const ins = await sql(
+          `INSERT INTO trouble (customer_id, kind, memo, created_by)
+           VALUES ($1,$2,$3,$4) RETURNING id`, [id, 種, memo, who]);
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'トラブル',$3,$4)`,
+          [id, who, `トラブルを記録：${種}`, memo]);
+        return ok(res, { done: true, id: ins[0].id });
+      }
+
+      // 解消しても消さない。いつから何度もめているかが分かるようにしておく
+      if (b.種類 === 'トラブル解消') {
+        const tid = Number(b.トラブルid);
+        if (!tid) return bad(res, 'どのトラブルかを指定してください。');
+        const x = (await sql(
+          'SELECT kind, resolved FROM trouble WHERE id=$1 AND customer_id=$2', [tid, id]))[0];
+        if (!x) return bad(res, 'そのトラブルが見つかりません。');
+        if (x.resolved) return bad(res, 'そのトラブルはもう解消しています。');
+        await sql(`UPDATE trouble SET resolved=true, resolved_by=$1, resolved_at=now()
+                    WHERE id=$2`, [who, tid]);
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'トラブル',$3,$4)`,
+          [id, who, `トラブルを解消：${x.kind}`, memo]);
+        return ok(res, { done: true });
+      }
+
+      // 記録そのものを消せるのは、間違って入れたときだけ。
+      // 解消したものは残す（上の「トラブル解消」を使う）
+      if (b.種類 === 'トラブル削除') {
+        const tid = Number(b.トラブルid);
+        if (!tid) return bad(res, 'どのトラブルかを指定してください。');
+        const x = (await sql(
+          'DELETE FROM trouble WHERE id=$1 AND customer_id=$2 RETURNING kind, memo', [tid, id]))[0];
+        if (!x) return bad(res, 'そのトラブルが見つかりません。');
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'トラブル',$3,$4)`,
+          [id, who, `トラブルの記録を消した：${x.kind}`, x.memo]);
         return ok(res, { done: true });
       }
 

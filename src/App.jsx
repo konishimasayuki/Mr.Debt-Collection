@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, jpDate, 本日 } from './api';
 import { Err, Loading } from './components/ui';
 import Customers from './pages/Customers';
+import Dashboard from './pages/Dashboard';
 import CustomerPage from './pages/CustomerPage';
 import PaymentEntry from './pages/PaymentEntry';
 import History from './pages/History';
@@ -12,6 +13,7 @@ import Debug from './pages/Debug';
 
 const TABS = [
   { key: 'customers', label: '顧客一覧' },
+  { key: 'dash', label: 'ダッシュボード' },
   { key: 'entry', label: '入金登録' },
   { key: 'history', label: '入金履歴' },
   { key: 'unpaid', label: '未入金' },
@@ -135,6 +137,8 @@ export default function App() {
           <CustomerPage id={customerId} onChanged={refresh} />
         ) : tab === 'customers' ? (
           <Customers key={reloadKey} onOpen={setCustomerId} onChanged={refresh} />
+        ) : tab === 'dash' ? (
+          <Dashboard key={reloadKey} onOpen={setCustomerId} />
         ) : tab === 'entry' ? (
           <PaymentEntry onChanged={refresh} goHistory={goHistory} />
         ) : tab === 'history' ? (

@@ -112,6 +112,9 @@ export const api = {
   deleteCompany: (id) => call('/api/companies' + q({ id }), { method: 'DELETE' }),
   setup: (body) => call('/api/setup', { method: 'POST', body: body || {} }),
 
+  // ダッシュボード
+  dashboard: () => call('/api/dashboard'),
+
   // デバッグ依頼
   debugList: () => call('/api/debug'),
   debugOne: (id) => call('/api/debug' + q({ id })),

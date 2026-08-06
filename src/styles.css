@@ -548,3 +548,86 @@ button.att-i:hover{border-color:var(--indigo)}
 /* 依頼を消す。取り消せないので、いちばん下に小さく置く */
 .dbg-del{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
 .dbg-del .hint{font-size:12px;color:var(--ink-3)}
+
+/* ── ダッシュボード ──────────────────── */
+/* いちばん上の数字。回収率だけ大きくする */
+.dash-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  border:1px solid var(--rule);border-width:1px 0 0 1px;background:var(--paper-2);
+  margin-bottom:14px}
+.dash-rate,.dash-s{display:flex;flex-direction:column;gap:2px;padding:12px 16px;
+  border:1px solid var(--rule);border-width:0 1px 1px 0;background:var(--paper)}
+.dash-rate b{font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums}
+.dash-rate i{font-style:normal;font-size:12.5px;color:var(--ink-2)}
+.dash-rate.good b{color:var(--paid)}
+.dash-rate.bad b{color:var(--overdue)}
+.dash-s b{font-size:17px;font-variant-numeric:tabular-nums}
+.dash-s i{font-style:normal;font-size:11.5px;color:var(--ink-2)}
+
+/* 月ごとの見出し */
+.dash-m{padding-bottom:8px}
+.dash-h{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+.dash-h h3{margin:0;padding:0;border:0;font-size:15px;flex:0 0 auto}
+.dash-p{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.dash-p.good{color:var(--paid)}
+.dash-p.bad{color:var(--overdue)}
+.dash-x{font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.dash-x b{color:var(--ink);font-size:13.5px}
+
+/* 未回収の顧客の行。押すと顧客ページへ */
+.dash-rows{display:flex;flex-direction:column}
+.dash-r{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;
+  width:100%;text-align:left;font-family:inherit;font-size:14px;
+  padding:9px 10px;background:transparent;border:0;border-bottom:1px solid var(--rule);
+  cursor:pointer}
+.dash-r:last-child{border-bottom:0}
+.dash-r:hover{background:var(--paper-2)}
+/* 2か月以上ためている人。いちばん先に電話する相手 */
+.dash-r.dup{background:#FBEDEA}
+.dash-r.dup:hover{background:#F6E3DF}
+.dash-nm{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.dash-amt{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.dash-amt i{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3)}
+.dash-pr{min-width:0;text-align:right}
+.dash-tr{display:flex;flex-direction:column;gap:2px;text-align:right;min-width:0}
+.dash-tr b{font-size:13px}
+.dash-tr i{font-style:normal;font-size:12px;color:var(--ink-2);white-space:normal}
+.dash-tr em{font-style:normal;font-size:11px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums}
+
+/* 折りたたみの見出し */
+.dash-fold{display:flex;align-items:baseline;gap:8px;width:100%;text-align:left;
+  font-family:inherit;font-size:14px;font-weight:700;background:transparent;border:0;
+  padding:2px 0 8px;cursor:pointer;border-bottom:1px solid var(--rule)}
+.dash-fold b{white-space:nowrap}
+.dash-fold i{font-style:normal;font-weight:400;font-size:12px;color:var(--ink-3)}
+.dash-caret{color:var(--ink-3);font-weight:400}
+.dash-fold:hover{color:var(--indigo)}
+
+/* ── トラブル（顧客ページ）───────────────── */
+.trb-list{display:flex;flex-direction:column;gap:8px}
+.trb{border:1px solid var(--rule);border-left:3px solid var(--overdue);
+  background:#FBF1EF;padding:9px 12px}
+.trb.done{border-left-color:var(--rule-strong);background:var(--paper-2);opacity:.75}
+.trb-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.trb-h b{font-size:14px}
+.trb-d{margin-left:auto;font-size:11.5px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.trb-b{margin:5px 0 0;font-size:13px;color:var(--ink-2);line-height:1.7;
+  white-space:pre-wrap;word-break:break-word}
+.trb-btn{display:flex;gap:6px;margin-top:7px}
+
+@media (max-width:760px){
+  .dash-top{grid-template-columns:1fr 1fr}
+  .dash-rate b{font-size:26px}
+  /* 行は縦に積む。3列のままだと名前が潰れる */
+  .dash-r{grid-template-columns:1fr;gap:4px;padding:10px 8px}
+  .dash-amt,.dash-pr,.dash-tr{text-align:left}
+  .dash-amt i{display:inline;margin-left:8px}
+  .dash-h{gap:10px}
+  .dash-p{font-size:18px}
+  .trb-d{margin-left:0;width:100%}
+  /* 折りたたみの見出し。説明は次の行に落とす */
+  .dash-fold{flex-wrap:wrap}
+  .dash-fold i{flex:1 1 100%}
+}

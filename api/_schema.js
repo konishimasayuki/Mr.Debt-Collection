@@ -226,6 +226,27 @@ const STATEMENTS = [
   `CREATE TRIGGER event_no_update BEFORE UPDATE OR DELETE ON event
      FOR EACH ROW EXECUTE FUNCTION event_append_only()`,
 
+  // ── トラブル ─────────────────────────────
+  // 「携帯が繋がらない」「支払いに応じない」など、督促がうまく進まない事情。
+  // 未入金かどうかとは別に持つ。払えていても連絡が付かないことはあるし、
+  // 遅れているだけで話は通じている人もいる。ダッシュボードで数を見る。
+  //
+  // 解消したら消さずに resolved を立てる。
+  // いつから何度もめているかが分かるようにしておく。
+  `CREATE TABLE IF NOT EXISTS trouble (
+     id          serial PRIMARY KEY,
+     customer_id integer NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
+     kind        text NOT NULL,
+     memo        text,
+     resolved    boolean NOT NULL DEFAULT false,
+     created_by  text NOT NULL,
+     created_at  timestamptz NOT NULL DEFAULT now(),
+     resolved_by text,
+     resolved_at timestamptz
+   )`,
+  `CREATE INDEX IF NOT EXISTS trouble_idx ON trouble (customer_id, id)`,
+  `CREATE INDEX IF NOT EXISTS trouble_open_idx ON trouble (resolved, id)`,
+
   // ── デバッグ依頼 ───────────────────────────
   // 使っていて困ったことを、画面からそのまま出せるようにする。
   // 台帳の数字とは関わりが無いので、顧客や入金とは結び付けない。
