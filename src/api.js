@@ -100,6 +100,10 @@ export const api = {
   deleteCompany: (id) => call('/api/companies' + q({ id }), { method: 'DELETE' }),
   setup: (body) => call('/api/setup', { method: 'POST', body: body || {} }),
 
+  // 名簿から電話番号をまとめて入れる
+  telPreview: (text) => call('/api/tel', { method: 'POST', body: { text } }),
+  telCommit: (明細) => call('/api/tel', { method: 'POST', body: { 実行: true, 明細 } }),
+
   // 動作を試すための顧客
   testCustomer: () => call('/api/testcustomer'),
   makeTestCustomer: () => call('/api/testcustomer', { method: 'POST' }),
