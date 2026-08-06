@@ -98,11 +98,35 @@ tbody tr.off td{text-decoration:line-through}
 /* 動作を試すための顧客。本物と見間違えないよう、ほかの印と色を分けて塗りつぶす */
 .t-test{background:#4A3B7A;border-color:#4A3B7A;color:#fff;font-weight:600}
 tbody tr.test-row>td{background:#F5F2FB}
+/* 車両を回収した顧客 */
+.t-taken{background:#F6E3DF;border-color:#D4A99F;color:#8C2F26}
+
+/* 終わった取引。顧客一覧では薄いグレーにして、目立たせない */
+tbody tr.fin-row>td{background:#F1F0EE;color:var(--ink-2)}
+tbody tr.fin-row:hover>td{background:#E9E7E4}
+/* 終了タブでは、回収は朱色・完済は薄い黄色で分ける */
+tbody tr.taken-row>td{background:#FBEDEA}
+tbody tr.taken-row:hover>td{background:#F6E3DF}
+tbody tr.done-row>td{background:#FCF6E2}
+tbody tr.done-row:hover>td{background:#F8EFD2}
 /* 行の右端に置く操作。ボタンが増えても崩れないように */
 td.act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 
 /* ボタンを横に並べる。画面が狭ければ折り返す */
 .row-btn{display:flex;gap:8px;flex-wrap:wrap}
+
+/* 口座振替・取引の状態を選ぶ札。押すだけで決まるようにする */
+.dbt-pick{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;
+  margin-bottom:12px}
+.dbt-o{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;
+  padding:10px 12px;border:1px solid var(--rule-strong);background:var(--paper);
+  border-radius:2px;cursor:pointer;font-family:inherit}
+.dbt-o b{font-size:14px}
+.dbt-o i{font-style:normal;font-size:12px;color:var(--ink-3)}
+.dbt-o:hover{background:var(--paper-2)}
+.dbt-o.on{border-color:var(--indigo);background:#EEF2F8;box-shadow:inset 0 0 0 1px var(--indigo)}
+.dbt-o.taken.on{border-color:var(--overdue);background:#FBEDEA;
+  box-shadow:inset 0 0 0 1px var(--overdue)}
 
 /* ── 入力 ───────────────────────── */
 .f{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
@@ -189,6 +213,12 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .strip .s i{font-style:normal;font-size:11.5px;color:var(--ink-2)}
 .strip .s.bad b{color:var(--overdue)}
 .strip .s.good b{color:var(--paid)}
+.strip .s.taken b{color:var(--overdue)}
+/* 押して変えられる枠（口座振替）。押せることが分かるようにする */
+.strip button.s{font-family:inherit;text-align:left;background:var(--paper-2);cursor:pointer;
+  align-items:flex-start}
+.strip button.s:hover{background:#EAE7DE}
+.strip button.s i::after{content:' ▸'}
 
 .cols{display:grid;grid-template-columns:7fr 3fr;gap:22px;align-items:start}
 @media (max-width:980px){.cols{grid-template-columns:1fr}}
@@ -197,6 +227,11 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
   border-bottom:1px solid var(--rule)}
 
 /* ── カレンダー ─────────────────────── */
+/* 見出しと月の操作を同じ行に置く。カレンダーの上を1段ぶん詰める */
+.cal-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+.cal-top h3{margin:0;padding:0;border:0;flex:0 0 auto}
+.cal-top .cal-bar{margin:0 0 0 auto}
 .cal-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .cal-title{font-size:16px;min-width:120px;text-align:center}
 .cal{border:1px solid var(--rule-strong);background:var(--paper)}
