@@ -8,6 +8,7 @@ import History from './pages/History';
 import Unpaid from './pages/Unpaid';
 import Finished from './pages/Finished';
 import Settings from './pages/Settings';
+import Debug from './pages/Debug';
 
 const TABS = [
   { key: 'customers', label: '顧客一覧' },
@@ -16,6 +17,7 @@ const TABS = [
   { key: 'unpaid', label: '未入金' },
   { key: 'finished', label: '終了' },
   { key: 'settings', label: '設定' },
+  { key: 'debug', label: 'デバッグ依頼' },
 ];
 
 // 前にこの端末でログインできていたか。
@@ -147,6 +149,8 @@ export default function App() {
                   onChanged={refresh} />
         ) : tab === 'finished' ? (
           <Finished key={reloadKey} onOpen={setCustomerId} />
+        ) : tab === 'debug' ? (
+          <Debug />
         ) : (
           <Settings onOpen={setCustomerId} onChanged={refresh} />
         )}

@@ -225,6 +225,50 @@ const STATEMENTS = [
   `DROP TRIGGER IF EXISTS event_no_update ON event`,
   `CREATE TRIGGER event_no_update BEFORE UPDATE OR DELETE ON event
      FOR EACH ROW EXECUTE FUNCTION event_append_only()`,
+
+  // ── デバッグ依頼 ───────────────────────────
+  // 使っていて困ったことを、画面からそのまま出せるようにする。
+  // 台帳の数字とは関わりが無いので、顧客や入金とは結び付けない。
+  // 消せる（記録 event と違って追記のみにしない）。
+  // 顧客の名前が写り込んだ画像を間違えて上げたとき、消せないと困る。
+  `CREATE TABLE IF NOT EXISTS debug_ticket (
+     id         serial PRIMARY KEY,
+     title      text NOT NULL,
+     body       text,
+     state      text NOT NULL DEFAULT '未対応'
+                CHECK (state IN ('未対応','対応中','直した')),
+     created_by text NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT now(),
+     updated_at timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS debug_ticket_idx ON debug_ticket (id DESC)`,
+
+  // 返信。依頼を消したら一緒に消える
+  `CREATE TABLE IF NOT EXISTS debug_message (
+     id         serial PRIMARY KEY,
+     ticket_id  integer NOT NULL REFERENCES debug_ticket(id) ON DELETE CASCADE,
+     body       text,
+     created_by text NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS debug_message_idx ON debug_message (ticket_id, id)`,
+
+  // 画像。外の置き場を使わず、ここに入れる。
+  // 置き場を増やすと設定と料金がもう1つ増え、動かなくなったときの原因が分かりにくい。
+  // 画面側で長辺1600pxまで小さくしてから送るので、1枚は数百KBに収まる。
+  // thumb は一覧に並べる小さい版（長辺320px）。一覧で原寸を何枚も読ませない。
+  // message_id が NULL なら依頼そのものに付いた画像、入っていれば返信の画像。
+  `CREATE TABLE IF NOT EXISTS debug_image (
+     id         serial PRIMARY KEY,
+     ticket_id  integer NOT NULL REFERENCES debug_ticket(id) ON DELETE CASCADE,
+     message_id integer REFERENCES debug_message(id) ON DELETE CASCADE,
+     mime       text NOT NULL,
+     name       text,
+     bytes      bytea NOT NULL,
+     thumb      bytea NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS debug_image_idx ON debug_image (ticket_id, id)`,
 ];
 
 export { STATEMENTS };
