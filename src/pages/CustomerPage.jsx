@@ -81,7 +81,7 @@ export default function CustomerPage({ id, onChanged }) {
   const marks = {};
   const put = (iso, o) => { if (iso) (marks[iso] = marks[iso] || []).push(o); };
   d.支払予定.forEach((s) => put(s.期日, {
-    t: 'due', 回次: s.回次, 済み: s.状態 === '入金済み',
+    t: 'due', 回次: s.回次, 種類: s.種類, 済み: s.状態 === '入金済み',
     残り: Math.max(0, s.請求 - s.入金), 請求: s.請求,
   }));
   d.約束.forEach((p) => put(p.日付, { t: 'prom', ...p }));
@@ -133,8 +133,21 @@ export default function CustomerPage({ id, onChanged }) {
       <div className="strip">
         <div className="s"><b>{yen(c.月々の金額)}円</b><i>月々の金額</i></div>
         <div className="s"><b>{c.次の期日 ? jpDate(c.次の期日) : '—'}</b><i>次の支払期日</i></div>
-        {/* 回次と残り回数は同じことを言っているので1つにまとめた */}
-        <div className="s"><b>{c.回次}回目 / 全{c.回数}回</b><i>いまの回（残り {c.残り回数}回）</i></div>
+        {/* 回次と残り回数は同じことを言っているので1つにまとめた。
+            いま追いかけているのがボーナスの回なら、そう分かるように出す。
+            金額が違うので、通常の回と取り違えると電話で話が食い違う */}
+        <div className={'s' + (c.回の種類 === 'ボーナス' ? ' bns' : '')}>
+          <b>
+            {c.回の種類 === 'ボーナス'
+              ? `ボーナス${c.回次}回目 / 全${c.ボーナス回数}回`
+              : `${c.回次}回目 / 全${c.回数}回`}
+          </b>
+          <i>
+            いまの回（残り {c.回の種類 === 'ボーナス' ? c.ボーナス残り : c.残り回数}回）
+            {c.ボーナス回数 > 0 && c.回の種類 !== 'ボーナス'
+              && ` ／ ボーナス 残${c.ボーナス残り}回`}
+          </i>
+        </div>
         <div className="s"><b>{yen(c.残債)}円</b><i>残債金額</i></div>
         {/* 押すと口座振替の状態を変えられる。トラブルが多いので、すぐ見えて、すぐ直せる */}
         <button className={'s dbt' + (c.引き落とし === '口座振替開始' ? ' good'
@@ -192,8 +205,11 @@ export default function CustomerPage({ id, onChanged }) {
                       <button className={cls} key={di} onClick={() => { setDay(iso); setEditing(null); }}>
                         <span className="cal-d">{dd}</span>
                         {ev.map((e, i) => e.t === 'due' ? (
-                          <span key={i} className={'chip c-due' + (e.済み ? ' done' : '')}>
-                            <b>{e.回次}回目</b><i>{e.済み ? '済' : yen(e.残り)}</i>
+                          <span key={i} className={
+                            'chip ' + (e.種類 === 'ボーナス' ? 'c-bonus' : 'c-due')
+                            + (e.済み ? ' done' : '')}>
+                            <b>{e.種類 === 'ボーナス' ? `賞与${e.回次}回目` : `${e.回次}回目`}</b>
+                            <i>{e.済み ? '済' : yen(e.残り)}</i>
                           </span>
                         ) : e.t === 'prom' ? (
                           <span key={i} className="chip c-prom">
@@ -213,6 +229,7 @@ export default function CustomerPage({ id, onChanged }) {
 
             <div className="legend">
               <span><i className="c-due" />支払期日（固定）</span>
+              {c.ボーナス回数 > 0 && <span><i className="c-bonus" />ボーナス払い</span>}
               <span><i className="c-prom" />入金約束日</span>
               <span><i className="c-paid" />入金</span>
               <span style={{ color: 'var(--ink-3)' }}>日を押すと、その日に入金約束を入れられます。</span>
@@ -233,16 +250,20 @@ export default function CustomerPage({ id, onChanged }) {
 
         {/* ── 右3割：支払いの記録 ── */}
         <div className="sec">
-          <h3>支払いの記録（全{c.回数}回）</h3>
+          <h3>
+            支払いの記録（全{c.回数}回{c.ボーナス回数 > 0 && ` + ボーナス${c.ボーナス回数}回`}）
+          </h3>
           <div className="rec">
             {d.支払予定.map((s) => {
               const late = s.状態 !== '入金済み' && s.期日 < today;
+              const ボ = s.種類 === 'ボーナス';
+              const いま = s.回次 === c.回次 && s.種類 === (c.回の種類 || '通常');
               const cls = ['rec-r', s.状態 === '入金済み' ? 'paid' : s.状態 === '一部入金' ? 'part' : '',
-                late ? 'late' : '', s.回次 === c.回次 ? 'now' : ''].filter(Boolean).join(' ');
+                late ? 'late' : '', いま ? 'now' : '', ボ ? 'bonus' : ''].filter(Boolean).join(' ');
               return (
-                <div key={s.回次}>
+                <div key={s.種類 + s.回次}>
                   <div className={cls}>
-                    <span className="no">{s.回次}回</span>
+                    <span className="no">{ボ ? `賞与${s.回次}` : `${s.回次}回`}</span>
                     <span>{md(s.期日)}
                       {s.状態 === '一部入金' &&
                         <span style={{ color: 'var(--today)', marginLeft: 6, fontSize: 12 }}>
@@ -445,6 +466,8 @@ function EditCustomer({ c, onClose, onDone }) {
     債権譲渡会社: c.債権譲渡会社id ? String(c.債権譲渡会社id) : '',
     債権譲渡先: c.債権譲渡先id ? String(c.債権譲渡先id) : '',
     状態: c.状態 || '通常', 状態日: c.状態日 || 本日(),
+    ボーナス月: c.ボーナス月 || [], ボーナス日: c.ボーナス日 || 27,
+    ボーナス金額: c.ボーナス金額 || '',
   });
   const [companies, setCompanies] = useState([]);
   const [err, setErr] = useState('');
@@ -500,6 +523,48 @@ function EditCustomer({ c, onClose, onDone }) {
                 placeholder={opts.length ? '選択しない' : '設定タブで登録してください'}
                 options={opts} disabled={!opts.length} />
       </div>
+      {/* ボーナス払い。月は複数選べる。日と金額は共通。
+          予定は追加されるだけで、通常の回には影響しない */}
+      <div className="f">
+        <label>ボーナス払い（払う月を押して選びます。何月でも選べます）</label>
+        <div className="mon-pick">
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <button
+              key={m}
+              className={'mon' + (v.ボーナス月.includes(m) ? ' on' : '')}
+              onClick={() => set('ボーナス月')(v.ボーナス月.includes(m)
+                ? v.ボーナス月.filter((x) => x !== m)
+                : [...v.ボーナス月, m].sort((a, b) => a - b))}
+            >{m}月</button>
+          ))}
+        </div>
+      </div>
+      {v.ボーナス月.length > 0 && (
+        <>
+          <div className="grid2">
+            <Text label="ボーナスの支払日" type="number" min="1" max="31"
+                  value={v.ボーナス日} onChange={(x) => set('ボーナス日')(Number(x) || '')}
+                  hint="その月に無い日は末日にします" />
+            <Money label="1回あたりのボーナス金額" value={v.ボーナス金額}
+                   onChange={set('ボーナス金額')} placeholder="100,000" />
+          </div>
+          <Note kind="ok">
+            {v.ボーナス月.join('月・')}月の{v.ボーナス日}日に
+            <b> {yen(v.ボーナス金額 || 0)}円</b>。
+            契約の期間（{c.開始日} 〜 全{c.回数}回）に入るぶんだけ作ります。
+            <br />
+            <b>すでに入金が充てられているボーナスの回は動かしません。</b>
+            通常の{c.回数}回には影響しません。
+          </Note>
+        </>
+      )}
+      {v.ボーナス月.length === 0 && c.ボーナス回数 > 0 && (
+        <Note kind="warn">
+          月をすべて外すと、<b>ボーナス払いをやめます</b>。
+          入金が入っているボーナスの回は残ります。
+        </Note>
+      )}
+
       {/* 車両を回収したら、督促も請求も止める。取り違えると回収済みの方へ
           督促の電話をかけてしまうので、何が起きるかをその場に書いておく */}
       <div className="f">

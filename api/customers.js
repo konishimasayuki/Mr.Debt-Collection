@@ -4,7 +4,8 @@
 // POST /api/customers          … 新規登録。支払予定も同時に作る
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
-import { readBody, query, isoOf, today, dueOf, yen, norm, summarize, makeSchedule } from './_lib.js';
+import { readBody, query, isoOf, today, dueOf, yen, norm, summarize, makeSchedule,
+         remakeBonus } from './_lib.js';
 import { 並び読み, 索引 } from './_yomi_dict.js';
 
 const bad = (res, msg, why) => {
@@ -45,8 +46,8 @@ export default async (req, res) => {
                LEFT JOIN company b ON b.id = c.assignee_id
               WHERE c.archived = false
               ORDER BY c.id`),
-        sql(`SELECT id, customer_id, no, due_date, planned_amount, state
-               FROM schedule ORDER BY customer_id, no`),
+        sql(`SELECT id, customer_id, no, kind, due_date, planned_amount, state
+               FROM schedule ORDER BY customer_id, due_date, kind, no`),
         sql(`SELECT schedule_id, COALESCE(sum(amount),0)::int AS n FROM allocation
               WHERE schedule_id IS NOT NULL GROUP BY schedule_id`),
       ]);
@@ -71,6 +72,9 @@ export default async (req, res) => {
           残り支払い回数: s.残り回数, 残債金額: s.残債,
           支払い回数: s.支払い回数, 支払い期日: s.次の期日, 回次: s.回次,
           この回の残り: s.この回の残り, 遅れ: s.遅れ, 遅れ日数: s.遅れ日数, 完済: s.完済,
+          // ボーナス払い。未入金では名前の横に印を出す
+          ボーナス回数: s.ボーナス回数, ボーナス残り: s.ボーナス残り,
+          ボーナス総額: s.ボーナス総額, ボーナス中: s.ボーナス中, 回の種類: s.回の種類,
           電話番号: c.tel || '',
         };
       });
@@ -153,6 +157,23 @@ export default async (req, res) => {
       const id = ins[0].id;
 
       await makeSchedule(sql, id, y0, m0, payDay, term, monthly);
+
+      // ボーナス払いの指定があれば、その予定も作って支払総額に足す
+      const ボ月 = [...new Set((b.ボーナス月 || []).map(Number)
+        .filter((m) => m >= 1 && m <= 12))].sort((x, y) => x - y);
+      const ボ日 = Number(b.ボーナス日) || null;
+      const ボ額 = Math.round(Number(b.ボーナス金額)) || null;
+      if (ボ月.length) {
+        if (!ボ日 || ボ日 < 1 || ボ日 > 31) return bad(res, 'ボーナスの支払日を1〜31で入れてください。');
+        if (!ボ額 || ボ額 <= 0) return bad(res, 'ボーナスの金額を入れてください。');
+        await remakeBonus(sql, id, y0, m0, payDay, term, ボ月, ボ日, ボ額);
+        const ボ合計 = (await sql(
+          `SELECT COALESCE(sum(planned_amount),0)::int AS n FROM schedule
+            WHERE customer_id=$1 AND kind='ボーナス'`, [id]))[0].n;
+        await sql(`UPDATE customer SET bonus_months=$1, bonus_day=$2, bonus_amount=$3,
+                     total_amount=$4 WHERE id=$5`,
+          [ボ月, ボ日, ボ額, total + ボ合計, id]);
+      }
       if (b.よみ) {
         await sql(`INSERT INTO payer_alias (normalized_name, customer_id, created_by)
                    VALUES ($1,$2,$3) ON CONFLICT (normalized_name) DO NOTHING`,
