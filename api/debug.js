@@ -8,6 +8,7 @@
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
 import { readBody, query } from './_lib.js';
+import { notifyKonichat } from './_konichat.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -148,7 +149,7 @@ export default async (req, res) => {
         if (!本文 && !検査.画像.length) {
           return bad(res, '返信が空です。', 'メッセージか画像のどちらかを入れてください');
         }
-        const ある = await sql('SELECT id FROM debug_ticket WHERE id=$1', [依頼id]);
+        const ある = await sql('SELECT id, title FROM debug_ticket WHERE id=$1', [依頼id]);
         if (!ある.length) return bad(res, 'その依頼は見つかりませんでした。');
 
         const ins = await sql(
@@ -156,6 +157,8 @@ export default async (req, res) => {
           [依頼id, 本文 || null, who]);
         await 画像を入れる(sql, 依頼id, ins[0].id, 検査.画像);
         await sql('UPDATE debug_ticket SET updated_at=now() WHERE id=$1', [依頼id]);
+        // スーパーコニチャットの「デバック依頼」チャンネルへ転送（テキストのみ・失敗しても投稿は成功扱い）
+        await notifyKonichat({ kind: 'reply', threadTitle: ある[0].title, body: 本文, authorName: who });
         return ok(res, { done: true, 依頼: 依頼id, id: ins[0].id });
       }
 
@@ -169,6 +172,8 @@ export default async (req, res) => {
         `INSERT INTO debug_ticket (title, body, created_by) VALUES ($1,$2,$3) RETURNING id`,
         [題名, 本文 || null, who]);
       await 画像を入れる(sql, ins[0].id, null, 検査.画像);
+      // スーパーコニチャットの「デバック依頼」チャンネルへ転送（テキストのみ・失敗しても投稿は成功扱い）
+      await notifyKonichat({ kind: 'thread', title: 題名, body: 本文, authorName: who });
       return ok(res, { done: true, id: ins[0].id, 題名 });
     }
 

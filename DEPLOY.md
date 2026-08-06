@@ -38,9 +38,15 @@ Vercel で動かすための構成。
 | `LEDGER_USER` | ログインの利用者名 | `a` になる |
 | `LEDGER_PASS` | ログインのパスワード | `a` になる |
 | `SESSION_SECRET` | クッキーの合鍵のもと。長い当てずっぽうの文字列 | 既定値になる |
+| `KONICHAT_INGEST_URL` | スーパーコニチャットへデバッグ依頼を転送する先。例) `https://xxxx.supabase.co/functions/v1/debug-inbox` | 転送しない(依頼は普通に動く) |
+| `KONICHAT_INGEST_SECRET` | 転送先の Edge Function の `DEBUG_INBOX_SECRET` と同じ値 | 転送先で拒否される |
 
 Vercel の Project → Settings → Environment Variables に入れる。
-読んでいるのは `api/_auth.js`(利用者名・パスワード・合鍵)と `api/_db.js`(接続先)。
+読んでいるのは `api/_auth.js`(利用者名・パスワード・合鍵)と `api/_db.js`(接続先)、
+`api/_konichat.js`(コニチャットへの転送先URL・シークレット)。
+
+デバッグ依頼(`api/debug.js`)に新規依頼・返信が来ると、テキストのみをスーパーコニチャットの
+「デバック依頼」チャンネルへ転送する。`KONICHAT_INGEST_URL` を入れるまでは何もしない(既存挙動は不変)。
 
 **`LEDGER_PASS` を入れないと、誰でも `a` / `a` で入れる。**
 実顧客の氏名・債務額・滞納状況が入るので、必ず入れること。
