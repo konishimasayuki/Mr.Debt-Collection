@@ -67,8 +67,6 @@ export default function Settings({ onOpen, onChanged }) {
         </div>
       </div>
 
-      <TelImport onChanged={onChanged} />
-
       <TestCustomer onOpen={onOpen} onChanged={onChanged} />
 
       {(open || edit) && (
@@ -79,127 +77,6 @@ export default function Settings({ onOpen, onChanged }) {
         />
       )}
     </>
-  );
-}
-
-// ── 名簿から電話番号をまとめて入れる ────────────────
-// 54名を1件ずつ顧客ページで打ち直すのは現実的でない。
-// ただし「誰に何が入るか」を必ず見せてから入れる。取り違えると、
-// 別の方へ督促の電話をかけてしまう。
-function TelImport({ onChanged }) {
-  const [text, setText] = useState('');
-  const [d, setD] = useState(null);      // 照合の結果
-  const [残す, set残す] = useState({});   // 行番号 → 入れるか
-  const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [済, set済] = useState(null);
-
-  const 照合 = async () => {
-    setBusy(true); setErr(''); set済(null);
-    try {
-      const r = await api.telPreview(text);
-      setD(r);
-      const k = {};
-      r.明細.forEach((x) => { k[x.行] = x.当たった; });
-      set残す(k);
-    } catch (e) { setErr(e.message); setD(null); }
-    finally { setBusy(false); }
-  };
-
-  const 入れる = async () => {
-    const rows = d.明細.filter((x) => 残す[x.行] && x.当たった);
-    if (!rows.length) { setErr('入れる行がありません。'); return; }
-    setBusy(true); setErr('');
-    try {
-      const r = await api.telCommit(rows);
-      set済(r); setD(null); setText('');
-      onChanged && onChanged();
-    } catch (e) { setErr(e.message); }
-    finally { setBusy(false); }
-  };
-
-  const 入る数 = d ? d.明細.filter((x) => 残す[x.行] && x.当たった).length : 0;
-
-  return (
-    <div className="sec">
-      <h3>電話番号をまとめて入れる</h3>
-      <Note>
-        名簿を貼り付けると、氏名で台帳の顧客に当てて、電話番号をまとめて入れます。
-        「様」や全角の空白が混ざっていても当たります。
-        <b>入れる前に、誰にどの番号が入るかを必ず確かめてください。</b>
-      </Note>
-      <Err>{err}</Err>
-
-      {済 && (
-        <Note kind="ok">
-          <b>{済.入れた件数}名</b>の電話番号を入れました。顧客ページで確かめられます。
-        </Note>
-      )}
-
-      {!d && (
-        <>
-          <div className="f">
-            <label>名簿（1行に「氏名」＋「電話番号」）</label>
-            <textarea
-              value={text} onChange={(e) => setText(e.target.value)} rows={8}
-              placeholder={'山田 太郎\t090-0000-0000\n鈴木 花子\t080-0000-0000'}
-            />
-            <span className="hint">
-              表計算から貼り付けられます。タブ区切りでも、空白区切りでも読みます。
-            </span>
-          </div>
-          <button className="btn btn-main" onClick={照合} disabled={busy || !text.trim()}>
-            {busy ? '照合しています…' : '照合する（まだ入れません）'}
-          </button>
-        </>
-      )}
-
-      {d && (
-        <>
-          <Note kind={d.概要.当たらない ? 'warn' : 'ok'}>
-            {d.概要.件数}行のうち <b>{d.概要.当たった}行</b>が台帳の顧客に当たりました。
-            {d.概要.当たらない > 0 && <> 当たらない <b>{d.概要.当たらない}行</b>は入れられません。</>}
-            {d.概要.書き換え > 0 && <> すでに番号が入っている <b>{d.概要.書き換え}名</b>は書き換わります。</>}
-            {d.名簿に無い顧客.length > 0 && (
-              <><br />名簿に出てこなかった顧客 {d.名簿に無い顧客.length}名：
-                {d.名簿に無い顧客.join('、')}</>
-            )}
-          </Note>
-
-          <div className="card tw" style={{ maxHeight: 420, overflowY: 'auto' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th style={{ width: 44 }}>入れる</th>
-                  <th>名簿の氏名</th><th>電話番号</th><th>台帳の顧客</th><th>どうなるか</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.明細.map((r) => (
-                  <tr key={r.行} className={r.当たった ? (残す[r.行] ? '' : 'off') : 'dupdone'}>
-                    <td>
-                      <input type="checkbox" checked={!!残す[r.行]} disabled={!r.当たった}
-                             onChange={(e) => set残す((o) => ({ ...o, [r.行]: e.target.checked }))} />
-                    </td>
-                    <td>{r.もとの名前}</td>
-                    <td className="mono">{r.電話番号 || '—'}</td>
-                    <td>{r.顧客名 || <span className="none">—</span>}</td>
-                    <td style={{ whiteSpace: 'normal', fontSize: 13 }}>{r.判断}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="row-btn" style={{ marginTop: 12 }}>
-            <button className="btn btn-main" onClick={入れる} disabled={busy || !入る数}>
-              {busy ? '入れています…' : `${入る数}名に入れる`}
-            </button>
-            <button className="btn" onClick={() => { setD(null); setErr(''); }}>キャンセル</button>
-          </div>
-        </>
-      )}
-    </div>
   );
 }
 
