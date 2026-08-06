@@ -112,11 +112,23 @@ export const api = {
   deleteCompany: (id) => call('/api/companies' + q({ id }), { method: 'DELETE' }),
   setup: (body) => call('/api/setup', { method: 'POST', body: body || {} }),
 
+  // デバッグ依頼
+  debugList: () => call('/api/debug'),
+  debugOne: (id) => call('/api/debug' + q({ id })),
+  addDebug: (body) => call('/api/debug', { method: 'POST', body }),
+  patchDebug: (body) => call('/api/debug', { method: 'PATCH', body }),
+  deleteDebug: (id) => call('/api/debug' + q({ id }), { method: 'DELETE' }),
+
   // 動作を試すための顧客
   testCustomer: () => call('/api/testcustomer'),
   makeTestCustomer: () => call('/api/testcustomer', { method: 'POST' }),
   deleteTestCustomer: () => call('/api/testcustomer', { method: 'DELETE' }),
 };
+
+// デバッグ依頼に付いた画像の場所。<img src> にそのまま入れる。
+// ログインしていないと返ってこない（合鍵はクッキーで一緒に飛ぶ）。
+export const 画像URL = (id, 小) =>
+  '/api/debugimage?' + new URLSearchParams(小 ? { id, 小: 1 } : { id }).toString();
 
 // ── 表示用の小道具 ────────────────────────────
 export const yen = (n) => Number(n || 0).toLocaleString('ja-JP');
