@@ -33,6 +33,14 @@ const STATEMENTS = [
      start_date      date NOT NULL,
      total_amount    integer NOT NULL,
      memo            text,
+     -- 取引の状態。回収は「車両を回収して終わり」。督促も請求もしない。
+     -- 完済はここに入れない。入金から決まるものなので、二重に持つとずれる。
+     status          text NOT NULL DEFAULT '通常' CHECK (status IN ('通常','回収')),
+     status_date     date,                             -- 回収した日
+     -- 口座振替（自動引き落とし）の手続きの状態。全員まず「未申込」。
+     debit_state     text NOT NULL DEFAULT '未申込'
+                     CHECK (debit_state IN ('未申込','口座振替申込','口座振替開始','口座振替停止')),
+     debit_date      date,                             -- 申込日 / 開始日
      is_test         boolean NOT NULL DEFAULT false,   -- 動作を試すための顧客
      archived        boolean NOT NULL DEFAULT false,
      created_at      timestamptz NOT NULL DEFAULT now(),
@@ -41,6 +49,21 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS customer_kana_idx ON customer (kana)`,
   // すでに作ってあるデータベースにも足す（列を増やしたときはここに書く）
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS is_test boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT '通常'`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS status_date date`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS debit_state text NOT NULL DEFAULT '未申込'`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS debit_date date`,
+  // 制約はあとから足す。すでに列がある場合は CHECK が付いていないため
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='customer_status_ck') THEN
+       ALTER TABLE customer ADD CONSTRAINT customer_status_ck
+         CHECK (status IN ('通常','回収'));
+     END IF;
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='customer_debit_ck') THEN
+       ALTER TABLE customer ADD CONSTRAINT customer_debit_ck
+         CHECK (debit_state IN ('未申込','口座振替申込','口座振替開始','口座振替停止'));
+     END IF;
+   END $$`,
 
   // ── 支払予定 ────────────────────────────
   // 契約登録時に回数ぶん自動生成する。期日は固定で、約束では動かさない。

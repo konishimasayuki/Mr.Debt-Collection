@@ -124,6 +124,8 @@ export default async (req, res) => {
       return ok(res, {
         顧客: {
           id: c.id, 氏名: c.name, よみ: c.kana || '', テスト: !!c.is_test,
+          状態: c.status || '通常', 状態日: isoOf(c.status_date),
+          引き落とし: c.debit_state || '未申込', 引き落とし日: isoOf(c.debit_date),
           性別: c.gender || '',
           生年月日: isoOf(c.birthday), 住所: c.address || '', 電話番号: c.tel || '',
           契約日: isoOf(c.contract_date), 車種: c.car || '',
@@ -189,6 +191,28 @@ export default async (req, res) => {
       if (b.性別 !== undefined) put('gender', String(b.性別).trim() || null);
       if (b.生年月日 !== undefined) put('birthday', b.生年月日 || null);
       if (b.契約日 !== undefined) put('contract_date', b.契約日 || null);
+
+      // 取引の状態（通常 / 回収）。回収にすると督促の対象から外れる
+      const 状態一覧 = ['通常', '回収'];
+      if (b.状態 !== undefined) {
+        if (!状態一覧.includes(b.状態)) {
+          return bad(res, '取引の状態が正しくありません。', 状態一覧.join(' / '));
+        }
+        put('status', b.状態);
+        put('status_date', b.状態 === '回収' ? (b.状態日 || today()) : null);
+      }
+
+      // 口座振替（自動引き落とし）の手続き。日がいるのは申込と開始だけ
+      const 振替一覧 = ['未申込', '口座振替申込', '口座振替開始', '口座振替停止'];
+      if (b.引き落とし !== undefined) {
+        if (!振替一覧.includes(b.引き落とし)) {
+          return bad(res, '口座振替の状態が正しくありません。', 振替一覧.join(' / '));
+        }
+        const 日が要る = b.引き落とし === '口座振替申込' || b.引き落とし === '口座振替開始';
+        put('debit_state', b.引き落とし);
+        put('debit_date', 日が要る ? (b.引き落とし日 || today()) : null);
+      }
+
       // 会社の指定があれば実在を確かめる
       for (const [key, col] of [['債権譲渡会社', 'assignor_id'], ['債権譲渡先', 'assignee_id']]) {
         if (b[key] === undefined) continue;
@@ -207,9 +231,22 @@ export default async (req, res) => {
                    VALUES ($1,$2,$3) ON CONFLICT (normalized_name) DO NOTHING`,
           [norm(b.よみ), id, who]);
       }
+      // 何を変えたかが分かるように残す。状態と口座振替は名指しで書く
+      let 何を = b.顧客メモ !== undefined ? '顧客のメモを更新した' : '顧客の情報を変更した';
+      if (b.状態 !== undefined) {
+        何を = b.状態 === '回収'
+          ? `車両を回収した扱いにした（${b.状態日 || today()}）。督促の対象から外れる`
+          : '取引の状態を「通常」に戻した。督促の対象に戻る';
+      } else if (b.引き落とし !== undefined) {
+        const 日 = b.引き落とし日 || today();
+        何を = b.引き落とし === '未申込' ? '口座振替を「未申込」にした'
+          : b.引き落とし === '口座振替停止' ? '口座振替を「停止」にした'
+          : `口座振替を「${b.引き落とし}」にした（${日}）`;
+      }
       await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
-                 VALUES ($1,$2,'メモ',$3,NULL)`,
-        [id, who, b.顧客メモ !== undefined ? '顧客のメモを更新した' : '顧客の情報を変更した']);
+                 VALUES ($1,$2,$3,$4,NULL)`,
+        [id, who,
+         b.状態 !== undefined || b.引き落とし !== undefined ? '設定' : 'メモ', 何を]);
       return ok(res, { done: true });
     }
 

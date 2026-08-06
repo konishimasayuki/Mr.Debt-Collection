@@ -1,10 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, yen, jpDate, md, 本日 } from '../api';
+import { api, yen, jpDate, md, ymd, 本日 } from '../api';
 import { Modal, Text, Money, Select, Err, Note, Empty, Loading } from '../components/ui';
 
 const p2 = (n) => String(n).padStart(2, '0');
 const isoOf = (y, m, d) => `${y}-${p2(m)}-${p2(d)}`;
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+
+// 生年月日から歳を出す。誕生日が来ていなければ1つ引く
+function 年齢(生年月日) {
+  const [y, m, d] = String(生年月日).split('-').map(Number);
+  const t = new Date();
+  let n = t.getFullYear() - y;
+  if (t.getMonth() + 1 < m || (t.getMonth() + 1 === m && t.getDate() < d)) n -= 1;
+  return n;
+}
+
+// 口座振替の状態を1行で表す。日がいるのは申込と開始だけ
+const 振替の文 = (状態, 日) => (
+  状態 === '口座振替申込' ? `${日 ? ymd(日) + ' ' : ''}口座振替申込`
+  : 状態 === '口座振替開始' ? `${日 ? ymd(日) + ' ' : ''}口座振替開始`
+  : 状態 === '口座振替停止' ? '口座振替停止'
+  : '未申込');
 
 export default function CustomerPage({ id, onChanged }) {
   const [d, setD] = useState(null);
@@ -13,6 +29,7 @@ export default function CustomerPage({ id, onChanged }) {
   const [day, setDay] = useState(null);       // 開いている日
   const [editing, setEditing] = useState(null); // 編集中の約束
   const [editCustomer, setEditCustomer] = useState(false);
+  const [振替, set振替] = useState(false);   // 口座振替の状態を変える欄
 
   const load = useCallback(() => {
     setErr('');
@@ -99,38 +116,62 @@ export default function CustomerPage({ id, onChanged }) {
           入金・約束・メモを自由に試してください。設定タブから作り直せます。
         </Note>
       )}
+      {/* 顧客情報。電話中に見たいものをここに並べる */}
       <div className="cust-sub">
         {c.よみ && <span>{c.よみ}</span>}
+        {c.性別 && <span>{c.性別}</span>}
+        {c.生年月日 && <span>{jpDate(c.生年月日)}（{年齢(c.生年月日)}歳）</span>}
+        {c.電話番号 && <a href={`tel:${c.電話番号.replace(/-/g, '')}`}>{c.電話番号}</a>}
+        {c.住所 && <span>{c.住所}</span>}
         {c.車種 && <span>{c.車種}</span>}
+        {c.契約日 && <span>契約 {jpDate(c.契約日)}</span>}
         {c.債権譲渡会社 && <span>譲渡会社：{c.債権譲渡会社}</span>}
         {c.債権譲渡先 && <span>譲渡先：{c.債権譲渡先}</span>}
-        {c.電話番号 && <a href={`tel:${c.電話番号.replace(/-/g, '')}`}>{c.電話番号}</a>}
       </div>
 
       {/* 大事な数字。スマホでも折り返して全部見えるようにする（横に流さない） */}
       <div className="strip">
         <div className="s"><b>{yen(c.月々の金額)}円</b><i>月々の金額</i></div>
         <div className="s"><b>{c.次の期日 ? jpDate(c.次の期日) : '—'}</b><i>次の支払期日</i></div>
-        <div className="s"><b>{c.回次}回目 / 全{c.回数}回</b><i>いま追いかけている回</i></div>
-        <div className="s"><b>{c.残り回数}回</b><i>残り支払い回数</i></div>
+        {/* 回次と残り回数は同じことを言っているので1つにまとめた */}
+        <div className="s"><b>{c.回次}回目 / 全{c.回数}回</b><i>いまの回（残り {c.残り回数}回）</i></div>
         <div className="s"><b>{yen(c.残債)}円</b><i>残債金額</i></div>
+        {/* 押すと口座振替の状態を変えられる。トラブルが多いので、すぐ見えて、すぐ直せる */}
+        <button className={'s dbt' + (c.引き落とし === '口座振替開始' ? ' good'
+          : c.引き落とし === '口座振替停止' ? ' bad' : '')}
+                onClick={() => set振替(true)}>
+          <b>{振替の文(c.引き落とし, c.引き落とし日)}</b>
+          <i>口座振替（押すと変えられます）</i>
+        </button>
         {c.この回の入金 > 0 && (
           <div className="s bad"><b>{yen(c.この回の残り)}円</b>
             <i>この回の残り（請求 {yen(c.この回の請求)}円 / 入金 {yen(c.この回の入金)}円）</i></div>
         )}
+        {c.状態 === '回収' && (
+          <div className="s taken"><b>車両を回収</b>
+            <i>{c.状態日 ? `${jpDate(c.状態日)} に回収。` : ''}督促の対象から外れています</i></div>
+        )}
         {c.完済 && <div className="s good"><b>完済</b><i>お支払いは終わっています</i></div>}
       </div>
+
+      {振替 && (
+        <DebitBox c={c} onClose={() => set振替(false)}
+                  onDone={() => { set振替(false); load(); onChanged && onChanged(); }} />
+      )}
 
       <div className="cols">
         {/* ── 左7割：月カレンダー ── */}
         <div>
           <div className="sec cal-wrap">
-            <h3>入金カレンダー</h3>
-            <div className="cal-bar">
-              <button className="btn btn-sm" onClick={() => move(-1)}>◀ 前の月</button>
-              <b className="cal-title">{ym.y}年{ym.m}月</b>
-              <button className="btn btn-sm" onClick={() => move(1)}>次の月 ▶</button>
-              <button className="btn btn-sm" onClick={() => move(0)}>今月</button>
+            {/* 月を動かす操作は見出しの右へ。カレンダーの上を1段ぶん詰める */}
+            <div className="cal-top">
+              <h3>入金カレンダー</h3>
+              <div className="cal-bar">
+                <button className="btn btn-sm" onClick={() => move(-1)}>◀ 前の月</button>
+                <b className="cal-title">{ym.y}年{ym.m}月</b>
+                <button className="btn btn-sm" onClick={() => move(1)}>次の月 ▶</button>
+                <button className="btn btn-sm" onClick={() => move(0)}>今月</button>
+              </div>
             </div>
 
             <div className="cal">
@@ -329,12 +370,81 @@ function RecMemos({ 顧客id, 回次, メモ, 約束を開く, onDone }) {
 // ── 顧客情報の編集 ────────────────────────────
 // 月々の金額・支払回数・毎月の支払日・開始月はここでは変えられない。
 // 変えると支払予定を作り直すことになり、すでに充てた入金の行き先が消えるため。
+// ── 口座振替（自動引き落とし）の状態を変える ──────────────
+// 電話中に「引き落としの手続きはどうなっていますか」と聞かれる。
+// トラブルが多いので、4つから選ぶだけ・押した数だけで終わるようにする。
+const 振替の並び = [
+  { 値: '未申込', 説明: 'まだ申し込んでいない', 日: false },
+  { 値: '口座振替申込', 説明: '申し込んだ日', 日: true },
+  { 値: '口座振替開始', 説明: '引き落としが始まる日', 日: true },
+  { 値: '口座振替停止', 説明: '引き落としを止めた', 日: false },
+];
+
+function DebitBox({ c, onClose, onDone }) {
+  const [状態, set状態] = useState(c.引き落とし || '未申込');
+  // 日はいつも既定で当日。前に入れた日があればそれを出す
+  const [日, set日] = useState(c.引き落とし日 || 本日());
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const 日が要る = 振替の並び.find((x) => x.値 === 状態).日;
+
+  const save = async () => {
+    setBusy(true); setErr('');
+    try {
+      await api.patchCustomer({ id: c.id, 引き落とし: 状態, 引き落とし日: 日が要る ? 日 : null });
+      onDone();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal
+      title="口座振替（自動引き落とし）"
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn" onClick={onClose}>キャンセル</button>
+          <div className="right">
+            <button className="btn btn-main" onClick={save} disabled={busy}>
+              {busy ? '保存しています…' : '保存する'}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <div className="dbt-pick">
+        {振替の並び.map((x) => (
+          <button
+            key={x.値}
+            className={'dbt-o' + (状態 === x.値 ? ' on' : '')}
+            onClick={() => set状態(x.値)}
+          >
+            <b>{x.値}</b>
+            <i>{x.説明}</i>
+          </button>
+        ))}
+      </div>
+      {/* 日付の欄は、スマホなら端末のホイール、パソコンなら年/月/日 の直接入力になる */}
+      {日が要る && (
+        <Text label={状態 === '口座振替申込' ? '申し込んだ日' : '引き落としが始まる日'}
+              type="date" value={日} onChange={set日}
+              hint="はじめは今日の日付が入っています" />
+      )}
+      <Note>
+        いま：<b>{振替の文(c.引き落とし, c.引き落とし日)}</b>
+        {状態 !== c.引き落とし && <> → 変更後：<b>{振替の文(状態, 日が要る ? 日 : null)}</b></>}
+      </Note>
+      <Err>{err}</Err>
+    </Modal>
+  );
+}
+
 function EditCustomer({ c, onClose, onDone }) {
   const [v, setV] = useState({
     名前: c.氏名, よみ: c.よみ, 性別: c.性別, 生年月日: c.生年月日 || '',
     住所: c.住所, 電話番号: c.電話番号, 契約日: c.契約日 || '', 車種: c.車種,
     債権譲渡会社: c.債権譲渡会社id ? String(c.債権譲渡会社id) : '',
     債権譲渡先: c.債権譲渡先id ? String(c.債権譲渡先id) : '',
+    状態: c.状態 || '通常', 状態日: c.状態日 || 本日(),
   });
   const [companies, setCompanies] = useState([]);
   const [err, setErr] = useState('');
@@ -390,6 +500,32 @@ function EditCustomer({ c, onClose, onDone }) {
                 placeholder={opts.length ? '選択しない' : '設定タブで登録してください'}
                 options={opts} disabled={!opts.length} />
       </div>
+      {/* 車両を回収したら、督促も請求も止める。取り違えると回収済みの方へ
+          督促の電話をかけてしまうので、何が起きるかをその場に書いておく */}
+      <div className="f">
+        <label>取引の状態</label>
+        <div className="dbt-pick">
+          <button className={'dbt-o' + (v.状態 === '通常' ? ' on' : '')}
+                  onClick={() => set('状態')('通常')}>
+            <b>通常</b><i>ふだんどおり請求します</i>
+          </button>
+          <button className={'dbt-o taken' + (v.状態 === '回収' ? ' on' : '')}
+                  onClick={() => set('状態')('回収')}>
+            <b>車両を回収</b><i>ここで終わり。督促も請求もしません</i>
+          </button>
+        </div>
+      </div>
+      {v.状態 === '回収' && (
+        <>
+          <Text label="回収した日" type="date" value={v.状態日} onChange={set('状態日')} />
+          <Note kind="warn">
+            回収にすると、この方は<b>未入金タブに出なくなり</b>、督促の対象から外れます。
+            顧客一覧では背景が薄いグレーになり、<b>終了タブ</b>に並びます。
+            もとに戻すときは「通常」を選び直してください。
+          </Note>
+        </>
+      )}
+
       <Note>
         月々の金額 {yen(c.月々の金額)}円 ／ 全{c.回数}回 ／ 毎月{c.支払日}日 ／
         {c.開始日} から。

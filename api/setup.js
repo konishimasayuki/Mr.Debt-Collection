@@ -78,16 +78,19 @@ export default async (req, res) => {
       // 旧台帳の総額はボーナス加算を含むため、新しい台帳では月額×回数で入れ直す
       const total = c.monthly * term;
 
+      // 旧台帳で「回収」だった人は、はじめから回収あつかいにする。
+      // 通常のまま入れると、期日が来たとたんに未入金へ出て督促してしまう。
       const ins = await sql(
         `INSERT INTO customer (name, car, monthly_amount, term_count, pay_day,
-                               start_date, total_amount, memo)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+                               start_date, total_amount, memo, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
         [c.name, c.car || null, c.monthly, term, payDay,
          dueOf(y0, m0, payDay, 1), total,
          [c.note || null,
           c.kaishu ? '旧台帳で「回収」あつかい' : null,
           c.bonus ? `旧台帳のボーナス見込み ${yen(c.bonus)}円（新しい台帳は月額のみで管理）` : null,
-         ].filter(Boolean).join(' / ') || null]);
+         ].filter(Boolean).join(' / ') || null,
+         c.kaishu ? '回収' : '通常']);
       const id = ins[0].id;
       追加++;
 

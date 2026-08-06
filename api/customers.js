@@ -39,7 +39,7 @@ export default async (req, res) => {
       // 列がまだ無いデータベースでは、ここで符号 42703 になって
       // _db.js が一度だけテーブルを作り直してくれる（画面から何も押さずに追いつく）。
       const [customers, schedules, paidRows] = await Promise.all([
-        sql(`SELECT c.*, c.is_test, a.name AS assignor_name, b.name AS assignee_name
+        sql(`SELECT c.*, c.is_test, c.status, a.name AS assignor_name, b.name AS assignee_name
                FROM customer c
                LEFT JOIN company a ON a.id = c.assignor_id
                LEFT JOIN company b ON b.id = c.assignee_id
@@ -61,6 +61,11 @@ export default async (req, res) => {
         return {
           id: c.id, 氏名: c.name, よみ: c.kana || '',
           索引: 索引(c.name, c.kana), テスト: !!c.is_test,
+          状態: c.status || '通常', 状態日: isoOf(c.status_date),
+          引き落とし: c.debit_state || '未申込', 引き落とし日: isoOf(c.debit_date),
+          // 終わった取引（回収・完済）。督促の対象から外し、終了タブに出す
+          終了: (c.status === '回収') || s.完済,
+          終了理由: c.status === '回収' ? '回収' : (s.完済 ? '完済' : ''),
           債権譲渡会社: c.assignor_name || '', 債権譲渡先: c.assignee_name || '',
           車種: c.car || '', 毎月の支払日: c.pay_day, 金額: c.monthly_amount,
           残り支払い回数: s.残り回数, 残債金額: s.残債,
@@ -71,16 +76,15 @@ export default async (req, res) => {
       });
 
       if (q['未入金']) {
-        // 期日を過ぎて、その回にまだ残りがある人。あいうえお順で出す
-        list = list.filter((r) => r.遅れ && r.この回の残り > 0);
-        list.sort((a, b) => byKana(
-          { kana: a.よみ, name: a.氏名, id: a.id },
-          { kana: b.よみ, name: b.氏名, id: b.id }));
-      } else {
-        list.sort((a, b) => byKana(
-          { kana: a.よみ, name: a.氏名, id: a.id },
-          { kana: b.よみ, name: b.氏名, id: b.id }));
+        // 期日を過ぎて、その回にまだ残りがある人。あいうえお順で出す。
+        // 終わった取引（回収・完済）は外す。回収した方に督促の電話はしない。
+        list = list.filter((r) => !r.終了 && r.遅れ && r.この回の残り > 0);
+      } else if (q['終了']) {
+        list = list.filter((r) => r.終了);
       }
+      list.sort((a, b) => byKana(
+        { kana: a.よみ, name: a.氏名, id: a.id },
+        { kana: b.よみ, name: b.氏名, id: b.id }));
       return ok(res, { 顧客: list, 本日: today() });
     }
 
