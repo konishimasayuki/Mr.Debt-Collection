@@ -1,0 +1,160 @@
+// ダッシュボード。いま何が回収できていないかを、月ごとに積み上げて見せる。
+//
+// 経営者が見る数字であり、担当者が朝いちばんに開く画面でもある。
+// 「どの月が、どれだけ残っていて、誰に電話すればいいか」がここで分かるようにする。
+//
+// 決めごと
+// ・期日が今日以前の回だけを数える。まだ期日の来ていない回は未回収ではない
+// ・100%回収できた月は出さない。残っている月は、どれだけ古くても出し続ける
+// ・車を回収した方と、動作を試すための顧客は入れない
+import { useCallback, useEffect, useState } from 'react';
+import { api, yen, ymd, md } from '../api';
+import { Err, Empty, Note, Loading } from '../components/ui';
+
+// 回収率の色。7割を切ったら赤、9割以上なら緑
+const 率の色 = (n) => (n >= 90 ? 'good' : n < 70 ? 'bad' : '');
+
+export default function Dashboard({ onOpen }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState('');
+  const [トラブルを開く, setトラブルを開く] = useState(false);
+
+  const load = useCallback(() => {
+    setErr('');
+    api.dashboard().then(setD).catch((e) => { setD({ 月: [], トラブル: [] }); setErr(e.message); });
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  if (!d) {
+    return (
+      <>
+        <div className="bar"><h2>ダッシュボード</h2></div>
+        <Loading 件数={3} />
+      </>
+    );
+  }
+
+  const 合計 = d.合計 || { 全件: 0, 回収済み: 0, 率: 100, 未回収額: 0, 未回収人数: 0 };
+
+  return (
+    <>
+      <div className="bar">
+        <h2>ダッシュボード</h2>
+        <span className="sub">{ymd(d.本日)} 時点</span>
+      </div>
+
+      <Err>{err}</Err>
+
+      {/* 全体の回収率。月ごとの内訳はこの下に積む */}
+      <div className="dash-top">
+        <div className={'dash-rate ' + 率の色(合計.率)}>
+          <b>{合計.率}%</b>
+          <i>{合計.回収済み}/{合計.全件} 回収</i>
+        </div>
+        <div className="dash-s">
+          <b>{yen(合計.未回収額)}円</b>
+          <i>未回収額</i>
+        </div>
+        <div className="dash-s">
+          <b>{合計.未回収人数}名</b>
+          <i>未回収の顧客</i>
+        </div>
+        <div className="dash-s">
+          <b>{d.トラブル.length}件</b>
+          <i>トラブル</i>
+        </div>
+      </div>
+
+      <Note>
+        支払期日が過ぎた回だけを数えています。まだ期日の来ていない回は入りません。
+        <b>全部回収できた月は消えます。</b>残っている月は、古くても出し続けます。
+        車両を回収した方と、動作を試すための顧客は入れていません。
+      </Note>
+
+      {d.月.length === 0 && (
+        <div className="card"><Empty>
+          期日の過ぎた支払いは、すべて回収できています。
+        </Empty></div>
+      )}
+
+      {d.月.map((m) => (
+        <div className="sec dash-m" key={m.年月}>
+          <div className="dash-h">
+            <h3>{m.見出し}</h3>
+            <span className={'dash-p ' + 率の色(m.率)}>{m.率}%</span>
+            <span className="dash-x">{m.回収済み}/{m.全件} 回収</span>
+            <span className="dash-x">未回収 <b>{yen(m.未回収額)}円</b></span>
+            {m.後回し数 > 0 && <span className="dash-x">後回し {m.後回し数}件</span>}
+          </div>
+
+          <div className="dash-rows">
+            {m.行.map((r) => (
+              <button
+                type="button"
+                key={`${r.顧客id}-${r.回の種類}-${r.回次}`}
+                className={'dash-r' + (r.重複 ? ' dup' : '')}
+                onClick={() => onOpen(r.顧客id)}
+              >
+                <span className="dash-nm">
+                  {r.氏名}
+                  {r.回の種類 === 'ボーナス' && <span className="tag t-bonus">ボーナス</span>}
+                  {/* 2か月以上ためている人は、いちばん先に電話する相手 */}
+                  {r.重複 && <span className="tag t-late">{r.重なった月数}か月 未回収</span>}
+                </span>
+                <span className="dash-amt">
+                  {yen(r.料金)}円
+                  {r.入金済み > 0 && <i>残り {yen(r.残り)}円</i>}
+                </span>
+                <span className="dash-pr">
+                  {r.後回し ? (
+                    <span className="tag t-dup">
+                      後回し
+                      {r.後回し.件数 > 1 && ` 1/${r.後回し.件数}`}
+                      {' '}{md(r.後回し.日)}
+                      {r.後回し.時刻 ? ` ${r.後回し.時刻}まで` : ''}
+                      {' '}{yen(r.後回し.金額)}円
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* トラブルは折りたたみ。ふだんは数だけ見えていればよい */}
+      <div className="sec">
+        <button
+          type="button"
+          className="dash-fold"
+          onClick={() => setトラブルを開く((v) => !v)}
+        >
+          <span className="dash-caret">{トラブルを開く ? '▾' : '▸'}</span>
+          <b>トラブル {d.トラブル.length}件</b>
+          <i>（携帯が繋がらない、支払いに応じない など）</i>
+        </button>
+
+        {トラブルを開く && (
+          d.トラブル.length === 0 ? (
+            <Empty>いま抱えているトラブルはありません。</Empty>
+          ) : (
+            <div className="dash-rows">
+              {d.トラブル.map((x) => (
+                <button type="button" key={x.id} className="dash-r"
+                        onClick={() => onOpen(x.顧客id)}>
+                  <span className="dash-nm">{x.氏名}</span>
+                  <span className="dash-amt">{yen(x.料金)}円</span>
+                  <span className="dash-tr">
+                    <b>{x.種類}</b>
+                    {x.内容 && <i>{x.内容}</i>}
+                    <em>{x.日時}</em>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )
+        )}
+      </div>
+    </>
+  );
+}
