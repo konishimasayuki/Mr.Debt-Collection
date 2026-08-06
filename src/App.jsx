@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, jpDate, 本日 } from './api';
-import { Err } from './components/ui';
+import { Err, Loading } from './components/ui';
 import Customers from './pages/Customers';
 import CustomerPage from './pages/CustomerPage';
 import PaymentEntry from './pages/PaymentEntry';
@@ -18,14 +18,43 @@ const TABS = [
   { key: 'settings', label: '設定' },
 ];
 
+// 前にこの端末でログインできていたか。
+// 開いた直後、サーバーの返事を待たずに台帳の枠を出すために使う。
+// 待ってから決めると、その間ずっと真っ白になる。
+// これは見た目のための覚え書きで、合鍵ではない。
+// 中身を見せるかどうかは、必ずサーバーの返事で決める。
+const 覚えの鍵 = '入金管理台帳:前回ログインできた';
+const 前回ログインできた = () => {
+  try { return localStorage.getItem(覚えの鍵) === '1'; } catch { return false; }
+};
+const 覚える = (できた) => {
+  try {
+    if (できた) localStorage.setItem(覚えの鍵, '1');
+    else localStorage.removeItem(覚えの鍵);
+  } catch { /* 端末の設定で使えないことがある。覚えられなくても動く */ }
+};
+
 export default function App() {
   const [me, setMe] = useState(null);          // null=確認中
   const [tab, setTab] = useState('customers');
   const [customerId, setCustomerId] = useState(null);   // 顧客ページを開いているとき
   const [jump, setJump] = useState(null);      // 未入金などから飛んできたときの検索語
   const [reloadKey, setReloadKey] = useState(0);
+  // 描き始めの一度だけ読む。あとから変わっても画面を切り替えない
+  const [枠を先に出す] = useState(前回ログインできた);
 
-  useEffect(() => { api.me().then(setMe).catch(() => setMe({ ログイン中: false })); }, []);
+  useEffect(() => {
+    let 生きている = true;
+    const 決める = (d) => {
+      if (!生きている) return;
+      覚える(!!d.ログイン中);
+      setMe(d);
+    };
+    // 通信そのものが失敗したときは覚え書きを触らない。
+    // 電波が悪かっただけで、次に開いたときまた真っ白になるのは困る。
+    api.me().then(決める).catch(() => { if (生きている) setMe({ ログイン中: false }); });
+    return () => { 生きている = false; };
+  }, []);
 
   // ヘッダーの高さを測って CSS へ渡す。
   // 索引バーをこの下に貼り付けたいが、高さは端末と文字サイズで変わるため、
@@ -56,8 +85,13 @@ export default function App() {
 
   const goTab = (key) => { setCustomerId(null); setTab(key); };
 
-  if (me === null) return <div className="login"><div className="login-box">読み込んでいます…</div></div>;
-  if (!me.ログイン中) return <Login onDone={setMe} />;
+  const 確認中 = me === null;
+  // はじめて開いた端末だけは、ログイン画面と台帳のどちらを出すか分からない。
+  // 出してから入れ替えると画面が飛ぶので、ここだけは返事を待つ。
+  if (確認中 && !枠を先に出す) {
+    return <div className="login"><div className="login-box">読み込んでいます…</div></div>;
+  }
+  if (!確認中 && !me.ログイン中) return <Login onDone={(d) => { 覚える(true); setMe(d); }} />;
 
   return (
     <div className="app">
@@ -66,10 +100,12 @@ export default function App() {
           <h1 className="brand">入金管理台帳</h1>
           <span className="head-date">{jpDate(本日())}</span>
           <div className="head-right">
-            <span className="head-date">{me.利用者}</span>
+            <span className="head-date">{確認中 ? '' : me.利用者}</span>
             <button
               className="btn btn-sm"
-              onClick={() => api.logout().then(() => setMe({ ログイン中: false }))}
+              disabled={確認中}
+              onClick={() => api.logout()
+                .then(() => { 覚える(false); setMe({ ログイン中: false }); })}
             >ログアウト</button>
           </div>
         </div>
@@ -85,7 +121,15 @@ export default function App() {
       </header>
 
       <main className="main">
-        {customerId ? (
+        {/* 確認が終わるまでは骨組みだけ。
+            先に中身を出すと、まだ合鍵が確かめられていないので
+            どの表も「ログインが必要です」で埋まってしまう */}
+        {確認中 ? (
+          <>
+            <div className="bar"><h2>顧客一覧</h2></div>
+            <Loading 件数={6} />
+          </>
+        ) : customerId ? (
           <CustomerPage id={customerId} onChanged={refresh} />
         ) : tab === 'customers' ? (
           <Customers key={reloadKey} onOpen={setCustomerId} onChanged={refresh} />

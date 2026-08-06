@@ -68,9 +68,21 @@ const q = (o) => {
   return t ? `?${t}` : '';
 };
 
+// 別の道で手に入った中身を、控えに入れておく。
+// 取りに行っている間に書き込みが起きていたら（世代が進んでいたら）入れない。
+function 控えておく(path, 中身, いまの世代) {
+  if (世代 === いまの世代) 控え.set(path, { 時刻: Date.now(), 中身 });
+}
+
 export const api = {
-  // ログイン
-  me: () => call('/api/session'),
+  // ログイン。開いた直後は顧客一覧も一緒に受け取り、往復を1回で済ませる。
+  me: () => {
+    const いまの世代 = 世代;
+    return call('/api/session?顧客=1').then((d) => {
+      if (d.顧客) 控えておく('/api/customers', { 顧客: d.顧客, 本日: d.本日 }, いまの世代);
+      return d;
+    });
+  },
   login: (user, pass) => call('/api/session', { method: 'POST', body: { user, pass } }),
   logout: () => call('/api/session', { method: 'DELETE' }),
 
