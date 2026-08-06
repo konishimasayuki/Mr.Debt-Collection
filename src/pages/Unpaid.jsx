@@ -35,6 +35,7 @@ export default function Unpaid({ onOpen, goHistory, onChanged }) {
       <Note>
         支払期日までに入金できていない顧客を、あいうえお順で出しています。
         行を押すと、入金履歴でその方を探した状態になります。
+        <span className="tag t-bonus">ボーナス</span> は、遅れているのがボーナスの回であることを表します。
         {テスト数 > 0 && (
           <> なお、<span className="tag t-test">テスト</span> の
           {テスト数}名は上の人数と合計に入れていません。</>
@@ -69,6 +70,9 @@ export default function Unpaid({ onOpen, goHistory, onChanged }) {
                 <td className="nm">
                   <b>{r.氏名}</b>
                   {r.テスト && <span className="tag t-test">テスト</span>}
+                  {/* 遅れているのがボーナスの回なら、その場で分かるようにする。
+                      金額が大きいので、通常の回と同じ扱いで電話すると話が食い違う */}
+                  {r.ボーナス中 && <span className="tag t-bonus">ボーナス</span>}
                   {r.よみ && <span className="yomi">{r.よみ}</span>}
                   <span className="tag t-late" style={{ marginLeft: 8 }}>{r.遅れ日数}日 遅れ</span>
                   {r.この回の残り !== r.金額 && (
@@ -80,7 +84,9 @@ export default function Unpaid({ onOpen, goHistory, onChanged }) {
                 <td className="num" data-label="月額">{yen(r.金額)}</td>
                 <td data-label="支払い期日">{ymd(r.支払い期日)}</td>
                 <td className="num" data-label="支払日">{r.毎月の支払日}日</td>
-                <td className="num" data-label="支払い回数">{r.支払い回数}回</td>
+                <td className="num" data-label="支払い回数">
+                  {r.支払い回数}回{r.ボーナス回数 > 0 && `（賞与 残${r.ボーナス残り}回）`}
+                </td>
                 <td className="num" data-label="残回数">{r.残り支払い回数}回</td>
                 <td className="num" data-label="残債">{yen(r.残債金額)}</td>
                 <td className="act">

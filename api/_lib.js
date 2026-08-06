@@ -47,12 +47,91 @@ async function makeSchedule(sql, customerId, y0, m0, payDay, term, monthly) {
   for (let k = 1; k <= term; k++) {
     args.push(customerId, k, dueOf(y0, m0, payDay, k), monthly);
     const i = args.length;
-    vals.push(`($${i - 3},$${i - 2},$${i - 1},$${i})`);
+    vals.push(`($${i - 3},$${i - 2},'通常',$${i - 1},$${i})`);
   }
   await sql(
-    `INSERT INTO schedule (customer_id, no, due_date, planned_amount)
-     VALUES ${vals.join(',')} ON CONFLICT (customer_id, no) DO NOTHING`, args);
+    `INSERT INTO schedule (customer_id, no, kind, due_date, planned_amount)
+     VALUES ${vals.join(',')} ON CONFLICT (customer_id, kind, no) DO NOTHING`, args);
   return term;
+}
+
+// ── ボーナス払い ────────────────────────────
+// 「7月と12月の10日に◯円」のように、月を複数選んで足す。
+// 通常の回とは別に数える（画面では「全48回 + ボーナス4回」と出す）。
+// 予定は同じ schedule に入れるので、充当も残債もそのまま動く。
+
+// 契約の期間に入るボーナスの期日を、古い順に出す。
+// 初回の期日から最終回の期日までのあいだにある月だけを拾う。
+function bonusDues(y0, m0, payDay, term, months, day) {
+  const 月 = [...new Set((months || []).map(Number).filter((m) => m >= 1 && m <= 12))]
+    .sort((a, b) => a - b);
+  if (!月.length || !day) return [];
+  const 初回 = dueOf(y0, m0, payDay, 1);
+  const 最終 = dueOf(y0, m0, payDay, term);
+  const out = [];
+  const 始 = y0 * 12 + (m0 - 1);
+  const 終 = 始 + (term - 1);
+  for (let t = 始; t <= 終; t++) {
+    const y = Math.floor(t / 12), m = (t % 12) + 1;
+    if (!月.includes(m)) continue;
+    const d = `${y}-${pad(m)}-${pad(Math.min(day, lastDay(y, m)))}`;
+    // 契約の外に出る日は入れない（初回より前・最終回より後）
+    if (d < 初回 || d > 最終) continue;
+    out.push(d);
+  }
+  return out;
+}
+
+// ボーナスの支払予定を作り直す。
+// **入金が充てられている回は触らない。** 消すと入金の行き先が消えるため。
+// 返すのは {足した, 消した, 直した}。
+async function remakeBonus(sql, customerId, y0, m0, payDay, term, months, day, amount) {
+  const 今 = await sql(
+    `SELECT s.id, s.no, s.due_date, s.planned_amount,
+            COALESCE((SELECT sum(a.amount) FROM allocation a
+                       WHERE a.schedule_id = s.id),0)::int AS paid
+       FROM schedule s
+      WHERE s.customer_id=$1 AND s.kind='ボーナス'
+      ORDER BY s.no`, [customerId]);
+
+  const 欲しい = (months && months.length && day && amount)
+    ? bonusDues(y0, m0, payDay, term, months, day) : [];
+
+  // 入金のある回は残す。残りは作り直す
+  const 残す = 今.filter((s) => s.paid > 0);
+  const 消す = 今.filter((s) => s.paid <= 0);
+  const 残す日 = new Set(残す.map((s) => isoOf(s.due_date)));
+
+  if (消す.length) {
+    await sql('DELETE FROM schedule WHERE id = ANY($1::int[])', [消す.map((s) => s.id)]);
+  }
+
+  // 期日の順に番号を振り直す。入金のある回はそのまま活かす
+  const 全部 = [...new Set([...残す日, ...欲しい])].sort();
+  const 足す = [], 引数 = [], 値 = [];
+  全部.forEach((d, i) => {
+    const 既 = 残す.find((s) => isoOf(s.due_date) === d);
+    if (既) return;                    // 入金がある回はいじらない
+    足す.push({ no: i + 1, due: d });
+  });
+  // 番号は最後にまとめて振り直す（入金のある回も含めて期日順）
+  for (const s of 残す) {
+    const i = 全部.indexOf(isoOf(s.due_date));
+    if (i >= 0 && s.no !== i + 1) {
+      await sql('UPDATE schedule SET no=$1 WHERE id=$2', [i + 1, s.id]);
+    }
+  }
+  足す.forEach((x) => {
+    引数.push(customerId, x.no, x.due, amount);
+    const i = 引数.length;
+    値.push(`($${i - 3},$${i - 2},'ボーナス',$${i - 1},$${i})`);
+  });
+  if (値.length) {
+    await sql(`INSERT INTO schedule (customer_id, no, kind, due_date, planned_amount)
+               VALUES ${値.join(',')}`, 引数);
+  }
+  return { 足した: 足す.length, 消した: 消す.length, 全体: 全部.length,
+    入金があって残した: 残す.length };
 }
 
 // ── 本文の読み取り ─────────────────────────
@@ -105,12 +184,12 @@ async function allocate(sql, customerId, paymentId, amount) {
   const touched = [];
   // 各回の「すでに入っている額」も一緒に持ってくる(回ごとに聞き直さない)
   const rows = await sql(
-    `SELECT s.id, s.no, s.planned_amount,
+    `SELECT s.id, s.no, s.kind, s.planned_amount,
             COALESCE((SELECT sum(a.amount) FROM allocation a
                        WHERE a.schedule_id = s.id),0)::int AS paid
        FROM schedule s
       WHERE s.customer_id=$1 AND s.state <> '入金済み'
-      ORDER BY s.no`, [customerId]);
+      ORDER BY s.due_date, s.kind, s.no`, [customerId]);
 
   const 値 = [], 引数 = [], 済み = [], 一部 = [];
   for (const s of rows) {
@@ -122,7 +201,7 @@ async function allocate(sql, customerId, paymentId, amount) {
     const i = 引数.length;
     値.push(`($${i - 2},$${i - 1},$${i})`);
     (take >= rest ? 済み : 一部).push(s.id);
-    touched.push({ no: s.no, 充てた: take, 残り: rest - take });
+    touched.push({ no: s.no, 種類: s.kind, 充てた: take, 残り: rest - take });
     left -= take;
   }
   if (値.length) {
@@ -152,18 +231,30 @@ async function unallocate(sql, paymentId) {
 // 残り回数・残債・次の期日・遅れているか
 function summarize(cust, rows, paidBy) {
   const term = cust.term_count;
-  const done = rows.filter((s) => s.state === '入金済み').length;
+  // 通常とボーナスは別に数える。「全48回 + ボーナス4回」と出すため
+  const 通常 = rows.filter((s) => (s.kind || '通常') === '通常');
+  const ボ = rows.filter((s) => s.kind === 'ボーナス');
+  const done = 通常.filter((s) => s.state === '入金済み').length;
   const 入金合計 = rows.reduce((a, s) => a + (paidBy[s.id] || 0), 0);
-  const cur = rows.find((s) => s.state !== '入金済み') || null;
+  // 追いかけるのは、期日がいちばん早い未済の回。ボーナスも同じ列に並ぶ
+  const 未済 = rows.filter((s) => s.state !== '入金済み')
+    .sort((a, b) => String(isoOf(a.due_date)).localeCompare(String(isoOf(b.due_date))));
+  const cur = 未済[0] || null;
   const 期日 = cur ? isoOf(cur.due_date) : null;
   const t = today();
   return {
     残り回数: term - done,
     支払い回数: done,
+    ボーナス回数: ボ.length,
+    ボーナス残り: ボ.filter((s) => s.state !== '入金済み').length,
+    ボーナス総額: ボ.reduce((a, s) => a + s.planned_amount, 0),
+    // いま追いかけている回がボーナスかどうか。未入金タブで印を出す
+    ボーナス中: !!(cur && cur.kind === 'ボーナス'),
     残債: Math.max(0, cust.total_amount - 入金合計),
     入金合計,
     次の期日: 期日,
     回次: cur ? cur.no : term,
+    回の種類: cur ? (cur.kind || '通常') : '通常',
     この回の請求: cur ? cur.planned_amount : 0,
     この回の入金: cur ? (paidBy[cur.id] || 0) : 0,
     この回の残り: cur ? Math.max(0, cur.planned_amount - (paidBy[cur.id] || 0)) : 0,
@@ -177,4 +268,5 @@ function summarize(cust, rows, paidBy) {
 export {
   norm, normPayer, pad, iso, isoOf, today, lastDay, dueOf, yen,
   readBody, query, restateMany, allocate, unallocate, summarize, makeSchedule,
+  bonusDues, remakeBonus,
 };

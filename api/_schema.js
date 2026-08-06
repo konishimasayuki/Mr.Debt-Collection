@@ -41,6 +41,10 @@ const STATEMENTS = [
      debit_state     text NOT NULL DEFAULT '未申込'
                      CHECK (debit_state IN ('未申込','口座振替申込','口座振替開始','口座振替停止')),
      debit_date      date,                             -- 申込日 / 開始日
+     -- ボーナス払い。月は複数選べる（例 {7,12}）。日と金額は共通
+     bonus_months    integer[],
+     bonus_day       integer CHECK (bonus_day BETWEEN 1 AND 31),
+     bonus_amount    integer CHECK (bonus_amount > 0),
      is_test         boolean NOT NULL DEFAULT false,   -- 動作を試すための顧客
      archived        boolean NOT NULL DEFAULT false,
      created_at      timestamptz NOT NULL DEFAULT now(),
@@ -53,6 +57,9 @@ const STATEMENTS = [
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS status_date date`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS debit_state text NOT NULL DEFAULT '未申込'`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS debit_date date`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS bonus_months integer[]`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS bonus_day integer`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS bonus_amount integer`,
   // 制約はあとから足す。すでに列がある場合は CHECK が付いていないため
   `DO $$ BEGIN
      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='customer_status_ck') THEN
@@ -67,17 +74,44 @@ const STATEMENTS = [
 
   // ── 支払予定 ────────────────────────────
   // 契約登録時に回数ぶん自動生成する。期日は固定で、約束では動かさない。
+  // kind でボーナス払いを分ける。通常とボーナスで回次(no)は別に数える
+  // （「全48回 + ボーナス4回」と数えるため）。
   `CREATE TABLE IF NOT EXISTS schedule (
      id             serial PRIMARY KEY,
      customer_id    integer NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
      no             integer NOT NULL CHECK (no > 0),
+     kind           text NOT NULL DEFAULT '通常' CHECK (kind IN ('通常','ボーナス')),
      due_date       date NOT NULL,
      planned_amount integer NOT NULL CHECK (planned_amount > 0),
      state          text NOT NULL DEFAULT '未入金'
                     CHECK (state IN ('未入金','一部入金','入金済み')),
-     UNIQUE (customer_id, no)
+     UNIQUE (customer_id, kind, no)
    )`,
   `CREATE INDEX IF NOT EXISTS schedule_due_idx ON schedule (due_date)`,
+  // すでに作ってあるデータベースにも足す
+  `ALTER TABLE schedule ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT '通常'`,
+  // 一意の決まりを (customer_id, no) から (customer_id, kind, no) へ移す。
+  // 移さないと、ボーナス1回目と通常1回目がぶつかって入らない。
+  `DO $$
+   DECLARE c text;
+   BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='schedule_kind_ck') THEN
+       ALTER TABLE schedule ADD CONSTRAINT schedule_kind_ck
+         CHECK (kind IN ('通常','ボーナス'));
+     END IF;
+     SELECT conname INTO c FROM pg_constraint
+      WHERE conrelid='schedule'::regclass AND contype='u'
+        AND pg_get_constraintdef(oid) = 'UNIQUE (customer_id, no)';
+     IF c IS NOT NULL THEN
+       EXECUTE format('ALTER TABLE schedule DROP CONSTRAINT %I', c);
+     END IF;
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                     WHERE conrelid='schedule'::regclass AND contype='u'
+                       AND pg_get_constraintdef(oid) = 'UNIQUE (customer_id, kind, no)') THEN
+       ALTER TABLE schedule ADD CONSTRAINT schedule_customer_kind_no_key
+         UNIQUE (customer_id, kind, no);
+     END IF;
+   END $$`,
 
   // ── 入金 ─────────────────────────────
   // source で CSV と手動を分ける(画面で行の背景を変えるため)。

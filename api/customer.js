@@ -4,7 +4,7 @@
 // POST  /api/customer             … {id, 種類:'約束'|'約束変更'|'約束削除', …}
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
-import { readBody, query, isoOf, today, yen, norm } from './_lib.js';
+import { readBody, query, isoOf, today, yen, norm, remakeBonus } from './_lib.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -64,8 +64,9 @@ export default async (req, res) => {
                LEFT JOIN company a ON a.id = c.assignor_id
                LEFT JOIN company b ON b.id = c.assignee_id
               WHERE c.id=$1`, [id]),
-        sql(`SELECT id, no, due_date, planned_amount, state FROM schedule
-              WHERE customer_id=$1 ORDER BY no`, [id]),
+        // 期日の順に並べる。ボーナスが通常の回のあいだに入るため
+        sql(`SELECT id, no, kind, due_date, planned_amount, state FROM schedule
+              WHERE customer_id=$1 ORDER BY due_date, kind, no`, [id]),
         sql(`SELECT a.schedule_id, COALESCE(sum(a.amount),0)::int AS n
                FROM allocation a
                JOIN schedule s ON s.id = a.schedule_id
@@ -118,14 +119,20 @@ export default async (req, res) => {
         });
       });
 
+      // rows は期日の順。いちばん早い未済が「いま追いかけている回」
       const cur = rows.find((s) => s.state !== '入金済み') || null;
       const 入金合計 = rows.reduce((a, s) => a + (paidBy[s.id] || 0), 0);
+      // 通常とボーナスは別に数える（画面では「全48回 + ボーナス4回」と出す）
+      const 通常 = rows.filter((s) => (s.kind || '通常') === '通常');
+      const ボ = rows.filter((s) => s.kind === 'ボーナス');
 
       return ok(res, {
         顧客: {
           id: c.id, 氏名: c.name, よみ: c.kana || '', テスト: !!c.is_test,
           状態: c.status || '通常', 状態日: isoOf(c.status_date),
           引き落とし: c.debit_state || '未申込', 引き落とし日: isoOf(c.debit_date),
+          ボーナス月: c.bonus_months || [], ボーナス日: c.bonus_day || null,
+          ボーナス金額: c.bonus_amount || null,
           性別: c.gender || '',
           生年月日: isoOf(c.birthday), 住所: c.address || '', 電話番号: c.tel || '',
           契約日: isoOf(c.contract_date), 車種: c.car || '',
@@ -134,8 +141,12 @@ export default async (req, res) => {
           月々の金額: c.monthly_amount, 回数: c.term_count, 支払日: c.pay_day,
           開始日: isoOf(c.start_date), 支払総額: c.total_amount, メモ: c.memo || '',
           残債: Math.max(0, c.total_amount - 入金合計), 入金合計,
-          残り回数: c.term_count - rows.filter((s) => s.state === '入金済み').length,
+          残り回数: c.term_count - 通常.filter((s) => s.state === '入金済み').length,
           回次: cur ? cur.no : c.term_count,
+          回の種類: cur ? (cur.kind || '通常') : '通常',
+          ボーナス回数: ボ.length,
+          ボーナス残り: ボ.filter((s) => s.state !== '入金済み').length,
+          ボーナス総額: ボ.reduce((a, s) => a + s.planned_amount, 0),
           この回の請求: cur ? cur.planned_amount : 0,
           この回の入金: cur ? (paidBy[cur.id] || 0) : 0,
           この回の残り: cur ? Math.max(0, cur.planned_amount - (paidBy[cur.id] || 0)) : 0,
@@ -143,10 +154,12 @@ export default async (req, res) => {
           完済: !cur,
         },
         支払予定: rows.map((s) => ({
-          回次: s.no, 期日: isoOf(s.due_date), 請求: s.planned_amount,
+          回次: s.no, 種類: s.kind || '通常',
+          期日: isoOf(s.due_date), 請求: s.planned_amount,
           入金: paidBy[s.id] || 0, 状態: s.state,
           入金明細: 入金明細[s.id] || [],  // いつ・いくら入ったか（古い順）
-          メモ: 回メモ[s.no] || [],       // 新しい順
+          // 回メモは通常の回にだけ出す。ボーナスと通常で回次の番号がぶつかるため
+          メモ: (s.kind || '通常') === '通常' ? (回メモ[s.no] || []) : [],
         })),
         入金: payments.map((p) => ({
           id: p.id, 日付: isoOf(p.paid_on), 金額: p.amount, 入金方法: p.method,
@@ -213,6 +226,41 @@ export default async (req, res) => {
         put('debit_date', 日が要る ? (b.引き落とし日 || today()) : null);
       }
 
+      // ボーナス払い。月は複数、日と金額は共通。
+      // 予定を作り直すが、**入金が充てられている回は触らない**（remakeBonus）。
+      let ボ結果 = null;
+      if (b.ボーナス月 !== undefined || b.ボーナス日 !== undefined
+          || b.ボーナス金額 !== undefined) {
+        const 月 = b.ボーナス月 !== undefined
+          ? [...new Set((b.ボーナス月 || []).map(Number).filter((m) => m >= 1 && m <= 12))]
+            .sort((x, y) => x - y)
+          : (c.bonus_months || []);
+        const 日 = b.ボーナス日 !== undefined
+          ? (Number(b.ボーナス日) || null) : c.bonus_day;
+        const 額 = b.ボーナス金額 !== undefined
+          ? (Math.round(Number(b.ボーナス金額)) || null) : c.bonus_amount;
+
+        if (月.length && (!日 || 日 < 1 || 日 > 31)) {
+          return bad(res, 'ボーナスの支払日を1〜31で入れてください。');
+        }
+        if (月.length && (!額 || 額 <= 0)) {
+          return bad(res, 'ボーナスの金額を入れてください。');
+        }
+        const 使う月 = 月.length ? 月 : null;
+        put('bonus_months', 使う月);
+        put('bonus_day', 使う月 ? 日 : null);
+        put('bonus_amount', 使う月 ? 額 : null);
+
+        const [y0, m0] = isoOf(c.start_date).split('-').map(Number);
+        ボ結果 = await remakeBonus(sql, id, y0, m0, c.pay_day, c.term_count,
+          使う月, 日, 額);
+        // 支払総額はボーナスを含める。残債はここから引いて出すため
+        const ボ合計 = (await sql(
+          `SELECT COALESCE(sum(planned_amount),0)::int AS n FROM schedule
+            WHERE customer_id=$1 AND kind='ボーナス'`, [id]))[0].n;
+        put('total_amount', c.monthly_amount * c.term_count + ボ合計);
+      }
+
       // 会社の指定があれば実在を確かめる
       for (const [key, col] of [['債権譲渡会社', 'assignor_id'], ['債権譲渡先', 'assignee_id']]) {
         if (b[key] === undefined) continue;
@@ -237,6 +285,12 @@ export default async (req, res) => {
         何を = b.状態 === '回収'
           ? `車両を回収した扱いにした（${b.状態日 || today()}）。督促の対象から外れる`
           : '取引の状態を「通常」に戻した。督促の対象に戻る';
+      } else if (ボ結果) {
+        const 月 = (b.ボーナス月 || []).join('月・');
+        何を = 月
+          ? `ボーナス払いを設定した：${月}月の${b.ボーナス日}日に ${yen(b.ボーナス金額)}円`
+            + `（全${ボ結果.全体}回）`
+          : 'ボーナス払いをやめた';
       } else if (b.引き落とし !== undefined) {
         const 日 = b.引き落とし日 || today();
         何を = b.引き落とし === '未申込' ? '口座振替を「未申込」にした'
@@ -246,7 +300,8 @@ export default async (req, res) => {
       await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                  VALUES ($1,$2,$3,$4,NULL)`,
         [id, who,
-         b.状態 !== undefined || b.引き落とし !== undefined ? '設定' : 'メモ', 何を]);
+         b.状態 !== undefined || b.引き落とし !== undefined || ボ結果 ? '設定' : 'メモ',
+         何を]);
       return ok(res, { done: true });
     }
 
