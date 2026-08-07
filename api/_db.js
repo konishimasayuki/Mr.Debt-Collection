@@ -23,8 +23,18 @@ async function withSetup(run, t, p) {
     if (!足りない.has(e && e.code)) throw e;
     if (!作り直し) {
       console.warn('[db] テーブルか列が足りないので作り直します:', e.message);
+      // 途中の1文でつまずいても、残りの文は流す。
+      // 1文で止めると、そのあとに書いてある「列を足す」文まで届かず、
+      // いつまでも足りないままになる（画面がまるごと開けなくなる）。
       作り直し = (async () => {
-        for (const stmt of STATEMENTS) await run(stmt);
+        for (const stmt of STATEMENTS) {
+          try {
+            await run(stmt);
+          } catch (e2) {
+            console.warn('[db] この文は流せませんでした:',
+              String(stmt).slice(0, 80).replace(/\s+/g, ' '), '→', e2 && e2.message);
+          }
+        }
       })();
     }
     await 作り直し;
