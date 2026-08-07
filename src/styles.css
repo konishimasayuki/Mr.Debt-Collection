@@ -661,3 +661,31 @@ button.att-i:hover{border-color:var(--indigo)}
   .unpaid-cards td.act{padding:7px 12px 0;margin-top:4px;display:flex}
   .unpaid-cards td.act .btn{min-height:38px}
 }
+
+/* ── 支払いの記録：回を押してメモを足す ───────────── */
+.rec-hint{margin:-4px 0 8px;font-size:12px;color:var(--ink-3)}
+/* 回の行をボタンにする。見た目は div のときと変えない */
+button.rec-r{width:100%;text-align:left;font-family:inherit;border-left:0;border-right:0;
+  border-top:0;background:transparent}
+.rec-r.rec-tap{cursor:pointer}
+.rec-r.rec-tap:hover{filter:brightness(.97)}
+/* 開いている回は、下の入力欄とつながって見えるようにする */
+.rec-r.open{box-shadow:inset 3px 0 0 var(--indigo);background:#EEF2F8}
+.rec-r.open.paid,.rec-r.open.part,.rec-r.open.late{background:#EEF2F8}
+
+.rec-add{border-bottom:1px solid var(--rule);background:#F4F7FB;padding:8px 10px 10px}
+.rec-add > label{display:block;font-size:11.5px;color:var(--ink-2);margin-bottom:4px}
+.rec-add textarea{width:100%;padding:7px 9px;border:1px solid var(--rule-strong);
+  background:#fff;border-radius:2px;font-size:13px;resize:vertical;min-height:48px}
+.rec-add textarea:focus{outline:2px solid var(--indigo);outline-offset:1px}
+.rec-add-b{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.rec-add-b .hint{font-size:11.5px;color:var(--ink-3)}
+
+/* ── ダッシュボード：未回収の内訳と、約束を破った人 ───── */
+/* 「2か月 5人 / 3か月 2人」。人数は重複なし（1人は1か所にだけ入る）*/
+.dash-brk{display:flex;gap:8px;flex-wrap:wrap;margin-top:3px}
+.dash-brk em{font-style:normal;font-size:11.5px;color:var(--overdue);
+  background:#F7E6E3;border:1px solid #D9B3AB;border-radius:2px;padding:0 5px;
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+/* 約束を破った人。名指しの1行で出す */
+.break-t{font-size:14px;color:var(--overdue)}

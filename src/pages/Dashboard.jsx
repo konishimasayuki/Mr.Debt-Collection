@@ -36,6 +36,8 @@ export default function Dashboard({ onOpen }) {
 
   const 合計 = d.合計 || { 全件: 0, 回収済み: 0, 率: 100, 未回収額: 0, 未回収人数: 0 };
   const 切れ = d.約束切れ || [];
+  // 2か月以上ためている人だけ出す。1か月は遅れ始めたところで、まだ当たり前
+  const 月数別 = (合計.月数別 || []).filter((x) => x.月数 >= 2);
 
   return (
     <>
@@ -59,6 +61,15 @@ export default function Dashboard({ onOpen }) {
         <div className="dash-s">
           <b>{合計.未回収人数}名</b>
           <i>未回収の顧客</i>
+          {/* 何か月ためているかの内訳。人数は重複なし（1人は1か所にだけ入る）。
+              1か月だけの人は当たり前なので出さない。ためている人だけを出す */}
+          {月数別.length > 0 && (
+            <span className="dash-brk">
+              {月数別.map((x) => (
+                <em key={x.月数}>{x.月数}か月 {x.人数}人</em>
+              ))}
+            </span>
+          )}
         </div>
         <div className={'dash-s' + (切れ.length ? ' alert' : '')}>
           <b>{切れ.length}件</b>
@@ -66,23 +77,24 @@ export default function Dashboard({ onOpen }) {
         </div>
       </div>
 
-      {/* 「今日までに払う」と言った日を過ぎている人。いちばん先に電話する相手。
-          未回収の一覧に埋もれさせず、上に出す */}
+      {/* 「この日に払う」と言った日を過ぎている人。いちばん先に電話する相手。
+          いちばん上の数字のすぐ下に、1人1行で名指しで出す。
+          同じ人は何度も出さない（何度も名前が並ぶと、その人だけで埋まる）*/}
       {切れ.length > 0 && (
         <div className="alert-box">
           <button type="button" className="dash-fold alert-h"
                   onClick={() => set切れを開く((v) => !v)}>
             <span className="dash-caret">{切れを開く ? '▾' : '▸'}</span>
-            <b>入金約束の日を過ぎています {切れ.length}件</b>
+            <b>入金約束の日を過ぎています {切れ.length}名</b>
             <i>（「この日に払う」と言った日を過ぎても入っていません）</i>
           </button>
           {切れを開く && (
             <div className="dash-rows">
               {切れ.map((x) => (
-                <button type="button" key={`${x.顧客id}-${x.約束日}`} className="dash-r"
+                <button type="button" key={x.顧客id} className="dash-r break-r"
                         onClick={() => onOpen(x.顧客id)}>
                   <span className="dash-nm">
-                    {x.氏名}
+                    <b className="break-t">{x.氏名} さんが約束を破りました。</b>
                     <span className="tag t-late">{x.過ぎた日数}日 超過</span>
                     <span className={'tag ' + (x.督促回数 ? 't-done' : 't-warn')}>
                       {x.督促回数 ? `督促 ${md(x.督促日)}` : '未督促'}
