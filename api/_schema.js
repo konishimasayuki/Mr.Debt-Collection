@@ -146,6 +146,7 @@ const STATEMENTS = [
      created_at   timestamptz NOT NULL DEFAULT now(),
      updated_at   timestamptz NOT NULL DEFAULT now()
    )`,
+  // 列を足すのは索引より先（上の schedule_memo と同じ理由）
   `ALTER TABLE payment ADD COLUMN IF NOT EXISTS alloc_kind text`,
   `CREATE INDEX IF NOT EXISTS payment_paid_idx ON payment (paid_on DESC, id DESC)`,
   `CREATE INDEX IF NOT EXISTS payment_customer_idx ON payment (customer_id, paid_on)`,
@@ -193,9 +194,10 @@ const STATEMENTS = [
      created_at  timestamptz NOT NULL DEFAULT now(),
      updated_at  timestamptz NOT NULL DEFAULT now()
    )`,
-  `CREATE INDEX IF NOT EXISTS schedule_memo_idx
-     ON schedule_memo (customer_id, schedule_no, kind, id DESC)`,
-  // すでに作ってあるデータベースにも足す
+  // すでに作ってあるデータベースにも足す。
+  // 列を足す文は、その列を使う索引よりも必ず先に置く。
+  // 索引は名前がすでにあっても中の列を先に見るので、
+  // 足す前に索引を作ろうとすると「列が無い」で止まり、足す文まで届かない。
   `ALTER TABLE schedule_memo ADD COLUMN IF NOT EXISTS promise_id integer
      REFERENCES promise(id) ON DELETE SET NULL`,
   // 回の種類。通常とボーナスで回次の番号がぶつかるので、
@@ -207,6 +209,8 @@ const STATEMENTS = [
          CHECK (kind IN ('通常','ボーナス'));
      END IF;
    END $$`,
+  `CREATE INDEX IF NOT EXISTS schedule_memo_idx
+     ON schedule_memo (customer_id, schedule_no, kind, id DESC)`,
   `CREATE INDEX IF NOT EXISTS schedule_memo_promise_idx
      ON schedule_memo (promise_id)`,
 
