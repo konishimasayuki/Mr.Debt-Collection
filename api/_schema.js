@@ -139,10 +139,14 @@ const STATEMENTS = [
      payer_name   text,
      memo         text,
      import_key   text UNIQUE,
+     -- 入金種類。'通常'(月額)か'ボーナス'を選んで入れた入金は、その種類の回にだけ充てる。
+     -- 空なら期日の古い順に種類を問わず充てる（CSV取り込みなど）
+     alloc_kind   text,
      recorded_by  text NOT NULL,
      created_at   timestamptz NOT NULL DEFAULT now(),
      updated_at   timestamptz NOT NULL DEFAULT now()
    )`,
+  `ALTER TABLE payment ADD COLUMN IF NOT EXISTS alloc_kind text`,
   `CREATE INDEX IF NOT EXISTS payment_paid_idx ON payment (paid_on DESC, id DESC)`,
   `CREATE INDEX IF NOT EXISTS payment_customer_idx ON payment (customer_id, paid_on)`,
 
@@ -181,6 +185,7 @@ const STATEMENTS = [
      id          serial PRIMARY KEY,
      customer_id integer NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
      schedule_no integer NOT NULL CHECK (schedule_no > 0),
+     kind        text NOT NULL DEFAULT '通常' CHECK (kind IN ('通常','ボーナス')),
      text        text NOT NULL,
      auto        boolean NOT NULL DEFAULT false,   -- 約束などから自動で入ったもの
      promise_id  integer REFERENCES promise(id) ON DELETE SET NULL,  -- どの約束の写しか
@@ -189,10 +194,19 @@ const STATEMENTS = [
      updated_at  timestamptz NOT NULL DEFAULT now()
    )`,
   `CREATE INDEX IF NOT EXISTS schedule_memo_idx
-     ON schedule_memo (customer_id, schedule_no, id DESC)`,
+     ON schedule_memo (customer_id, schedule_no, kind, id DESC)`,
   // すでに作ってあるデータベースにも足す
   `ALTER TABLE schedule_memo ADD COLUMN IF NOT EXISTS promise_id integer
      REFERENCES promise(id) ON DELETE SET NULL`,
+  // 回の種類。通常とボーナスで回次の番号がぶつかるので、
+  // どちらの回のメモかをこの列で分ける（古い分はすべて通常）
+  `ALTER TABLE schedule_memo ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT '通常'`,
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='schedule_memo_kind_ck') THEN
+       ALTER TABLE schedule_memo ADD CONSTRAINT schedule_memo_kind_ck
+         CHECK (kind IN ('通常','ボーナス'));
+     END IF;
+   END $$`,
   `CREATE INDEX IF NOT EXISTS schedule_memo_promise_idx
      ON schedule_memo (promise_id)`,
 

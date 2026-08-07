@@ -315,20 +315,39 @@ function ImportResult({ d, onClose, onChanged, goHistory }) {
 export function ManualPayment({ onClose, onDone, 初期顧客id }) {
   const [customers, setCustomers] = useState([]);
   const [v, setV] = useState({ 日付: 本日(), 顧客id: 初期顧客id ? String(初期顧客id) : '',
-    金額: '', 入金方法: '振込', メモ: '' });
+    金額: '', 入金方法: '振込', 入金種類: '', メモ: '' });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k) => (val) => setV((o) => ({ ...o, [k]: val }));
 
-  useEffect(() => { api.customers().then((d) => setCustomers(d.顧客)).catch(() => {}); }, []);
+  // 控えではなく、いまの中身を取り直す。
+  // 入金種類の既定は「いま払えていない回の種類」で決めるため、
+  // 少し前の一覧だと1回ぶんずれて、ボーナスの入金が月額の回へ入ってしまう
+  useEffect(() => { api.customersNow().then((d) => setCustomers(d.顧客)).catch(() => {}); }, []);
+
+  // 選ばれている方
+  const 相手 = customers.find((x) => String(x.id) === String(v.顧客id)) || null;
+  // 入金種類を選べるのは、ボーナス払いの設定がある方だけ
+  const 種類を選ぶ = !!(相手 && 相手.ボーナス回数 > 0);
+
+  // 名前を選んだら、いま払えていない回の種類を最初に入れておく。
+  // 遅れている分から順に埋めるのが普通なので、たいていはこのままでよい
+  useEffect(() => {
+    if (!相手) { if (v.入金種類) set('入金種類')(''); return; }
+    const 既定 = 相手.ボーナス回数 > 0
+      ? (相手.回の種類 === 'ボーナス' ? 'ボーナス' : '月額') : '';
+    set('入金種類')(既定);
+    // 相手が変わったときだけ入れ直す（人が選び直したものは触らない）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [v.顧客id, customers.length]);
 
   const submit = async () => {
     setBusy(true); setErr('');
     try {
-      const d = await api.addPayment(v);
+      const d = await api.addPayment(種類を選ぶ ? v : { ...v, 入金種類: '' });
       const c = customers.find((x) => String(x.id) === String(v.顧客id));
       alert(`${c ? c.氏名 + 'さんの' : ''}入金 ${yen(v.金額)}円 を登録しました。`
-        + (d.充当.length ? `\n${d.充当.map((x) => `${x.no}回目へ ${yen(x.充てた)}円`).join('\n')}` : '')
+        + (d.充当.length ? `\n${d.充当.map((x) => `${x.種類 === 'ボーナス' ? '賞与' : ''}${x.no}回目へ ${yen(x.充てた)}円`).join('\n')}` : '')
         + (d.余り ? `\n余り ${yen(d.余り)}円（充てる予定がありません）` : ''));
       onDone();
     } catch (e) { setErr(e.message); }
@@ -362,6 +381,15 @@ export function ManualPayment({ onClose, onDone, 初期顧客id }) {
       <Select label="入金方法" value={v.入金方法} onChange={set('入金方法')}
               options={[{ value: '振込', label: '振り込み' }, { value: '現金', label: '現金' },
                         { value: 'その他', label: 'その他' }]} />
+      {/* 入金種類は、ボーナス払いの設定がある方にだけ出す。
+          設定が無い方に出しても選びようがなく、迷わせるだけ */}
+      {種類を選ぶ && (
+        <Select label="入金種類" value={v.入金種類} onChange={set('入金種類')}
+                options={[{ value: '月額', label: '月額' },
+                          { value: 'ボーナス', label: 'ボーナス' }]}
+                hint={`払えていない分（${相手.回の種類 === 'ボーナス' ? 'ボーナス' : '月額'}）を入れてあります。`
+                  + 'ボーナスを選ぶと、ボーナスの回にだけ充てます。'} />
+      )}
       <Text label="メモ（手動入金の理由）" value={v.メモ} onChange={set('メモ')}
             placeholder="現金で受け取った、CSVに出てこない振込 など"
             hint="あとから見て理由が分かるように、必ず書いてください" />

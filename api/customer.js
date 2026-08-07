@@ -16,10 +16,15 @@ const jp = (d) => String(d).replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1年$2月$3�
 
 // 支払いの記録の、その回の下に出るメモ。約束を入れたときなどに自動で足す。
 // 回が決まっていない約束は、どの回に出すか決められないので足さない。
-const 回メモを足す = (sql, id, no, text, who, auto = true, 約束id = null) => (no
-  ? sql(`INSERT INTO schedule_memo (customer_id, schedule_no, text, auto, promise_id, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6)`, [id, Number(no), text, auto, 約束id, who])
+// 通常とボーナスで回次の番号がぶつかるので、どちらの回かも一緒に持つ。
+// 約束は通常の回にしか付かないので、既定は '通常'。
+const 回メモを足す = (sql, id, no, text, who, auto = true, 約束id = null, kind = '通常') => (no
+  ? sql(`INSERT INTO schedule_memo (customer_id, schedule_no, kind, text, auto,
+                                    promise_id, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`, [id, Number(no), kind, text, auto, 約束id, who])
   : Promise.resolve());
+// 回の呼び名。ボーナスの3回目は「賞与3回目」。番号だけだと通常の3回目と見分けが付かない
+const 回の名 = (no, kind) => `${kind === 'ボーナス' ? '賞与' : ''}${no}回目`;
 
 // 約束から出るメモの文面。作るときも直すときも、必ずここを通す。
 // 別々に組み立てると、直したときに文面と約束が食い違う。
@@ -91,7 +96,8 @@ export default async (req, res) => {
         // 画面から約束そのものを直せるようにするため（メモの文だけ直しても約束は変わらない）
         // 書いた日と時刻は日本時間の文字どおりで返す。
         // UTCのまま切ると、夜に書いたメモが前日の日付で出る
-        sql(`SELECT m.id, m.schedule_no, m.text, m.auto, m.promise_id, m.created_by,
+        sql(`SELECT m.id, m.schedule_no, COALESCE(m.kind,'通常') AS kind,
+                    m.text, m.auto, m.promise_id, m.created_by,
                     to_char(m.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY/MM/DD HH24:MI') AS at,
                     p.promised_on
                FROM schedule_memo m
@@ -114,9 +120,11 @@ export default async (req, res) => {
         });
       });
 
+      // 回ごとのメモ。鍵は「種類 + 回次」。通常の3回目とボーナスの3回目を分ける
       const 回メモ = {};
       memos.forEach((m) => {
-        (回メモ[m.schedule_no] = 回メモ[m.schedule_no] || []).push({
+        const 鍵 = (m.kind || '通常') + m.schedule_no;
+        (回メモ[鍵] = 回メモ[鍵] || []).push({
           id: m.id, 本文: m.text, 自動: m.auto, 記録者: m.created_by,
           約束id: m.promise_id || null, 約束日: isoOf(m.promised_on),
           日時: m.at,   // 「2026/08/07 09:12」（日本時間）
@@ -162,8 +170,7 @@ export default async (req, res) => {
           期日: isoOf(s.due_date), 請求: s.planned_amount,
           入金: paidBy[s.id] || 0, 状態: s.state,
           入金明細: 入金明細[s.id] || [],  // いつ・いくら入ったか（古い順）
-          // 回メモは通常の回にだけ出す。ボーナスと通常で回次の番号がぶつかるため
-          メモ: (s.kind || '通常') === '通常' ? (回メモ[s.no] || []) : [],
+          メモ: 回メモ[(s.kind || '通常') + s.no] || [],
         })),
         入金: payments.map((p) => ({
           id: p.id, 日付: isoOf(p.paid_on), 金額: p.amount, 入金方法: p.method,
@@ -387,16 +394,21 @@ export default async (req, res) => {
       }
 
       // ── 回ごとのメモ（支払いの記録の各回の下）────────
+      // ボーナスの回にも足せる。通常の3回目とボーナスの3回目は別ものなので、
+      // どちらの回かを一緒に持つ
       if (b.種類 === '回メモ') {
         const no = Number(b.回次);
+        const kind = b.回の種類 === 'ボーナス' ? 'ボーナス' : '通常';
         const text = String(b.本文 || '').trim();
         if (!no) return bad(res, 'どの回かを指定してください。');
         if (!text) return bad(res, 'メモを入れてください。');
-        const s2 = await sql('SELECT id FROM schedule WHERE customer_id=$1 AND no=$2', [id, no]);
+        const s2 = await sql(
+          `SELECT id FROM schedule
+            WHERE customer_id=$1 AND no=$2 AND COALESCE(kind,'通常')=$3`, [id, no, kind]);
         if (!s2.length) return bad(res, 'その回が見つかりません。');
         const r = await sql(
-          `INSERT INTO schedule_memo (customer_id, schedule_no, text, auto, created_by)
-           VALUES ($1,$2,$3,false,$4) RETURNING id`, [id, no, text, who]);
+          `INSERT INTO schedule_memo (customer_id, schedule_no, kind, text, auto, created_by)
+           VALUES ($1,$2,$3,$4,false,$5) RETURNING id`, [id, no, kind, text, who]);
         return ok(res, { done: true, id: r[0].id });
       }
 
@@ -421,7 +433,7 @@ export default async (req, res) => {
         // メモは消せるが、消したことは記録に残す
         await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                    VALUES ($1,$2,'メモ',$3,$4)`,
-          [id, who, `${m.schedule_no}回目のメモを消した`, m.text]);
+          [id, who, `${回の名(m.schedule_no, m.kind)}のメモを消した`, m.text]);
         return ok(res, { done: true });
       }
 
