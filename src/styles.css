@@ -550,18 +550,8 @@ button.att-i:hover{border-color:var(--indigo)}
 .dbg-del .hint{font-size:12px;color:var(--ink-3)}
 
 /* ── ダッシュボード ──────────────────── */
-/* いちばん上の数字。回収率だけ大きくする */
-.dash-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-  border:1px solid var(--rule);border-width:1px 0 0 1px;background:var(--paper-2);
-  margin-bottom:14px}
-.dash-rate,.dash-s{display:flex;flex-direction:column;gap:2px;padding:12px 16px;
-  border:1px solid var(--rule);border-width:0 1px 1px 0;background:var(--paper)}
-.dash-rate b{font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums}
-.dash-rate i{font-style:normal;font-size:12.5px;color:var(--ink-2)}
-.dash-rate.good b{color:var(--paid)}
-.dash-rate.bad b{color:var(--overdue)}
-.dash-s b{font-size:17px;font-variant-numeric:tabular-nums}
-.dash-s i{font-style:normal;font-size:11.5px;color:var(--ink-2)}
+/* 全期間をまとめた数字の帯は置かない（2026-08-07 に外した）。
+   見たいのは「どの月がどれだけ残っているか」で、それは月ごとの見出しに出ている */
 
 /* 月ごとの見出し */
 .dash-m{padding-bottom:8px}
@@ -605,8 +595,6 @@ button.att-i:hover{border-color:var(--indigo)}
 .dash-fold:hover{color:var(--indigo)}
 
 @media (max-width:760px){
-  .dash-top{grid-template-columns:1fr 1fr}
-  .dash-rate b{font-size:26px}
   /* 行は縦に積む。3列のままだと名前が潰れる */
   .dash-r{grid-template-columns:1fr;gap:4px;padding:10px 8px}
   .dash-amt,.dash-pr,.dash-tr{text-align:left}
@@ -631,7 +619,6 @@ button.att-i:hover{border-color:var(--indigo)}
 .alert-h:hover{color:var(--overdue)}
 .alert-box .dash-r{border-bottom-color:#E7CEC8}
 .alert-box .dash-r:hover{background:#F6E3DF}
-.dash-s.alert b{color:var(--overdue)}
 
 /* ── 未入金の札（スマホ）───────────────────── */
 /* 2つずつ横に並べて、1件ぶんの高さを詰める。
@@ -681,13 +668,8 @@ button.rec-r{width:100%;text-align:left;font-family:inherit;border-left:0;border
 .rec-add-b{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
 .rec-add-b .hint{font-size:11.5px;color:var(--ink-3)}
 
-/* ── ダッシュボード：未回収の内訳と、約束を破った人 ───── */
-/* 「2か月 5人 / 3か月 2人」。人数は重複なし（1人は1か所にだけ入る）*/
-.dash-brk{display:flex;gap:8px;flex-wrap:wrap;margin-top:3px}
-.dash-brk em{font-style:normal;font-size:11.5px;color:var(--overdue);
-  background:#F7E6E3;border:1px solid #D9B3AB;border-radius:2px;padding:0 5px;
-  white-space:nowrap;font-variant-numeric:tabular-nums}
-/* 約束切れのまとめ。名前は並べず、月ごとの件数だけを1行で出す */
+/* ── ダッシュボード：約束切れのまとめ ───────────── */
+/* 名前は並べず、月ごとの件数だけを1行で出す */
 .alert-sum{display:flex;flex-direction:column;gap:3px}
 .alert-sum b{font-size:14px;color:var(--overdue)}
 .alert-sum i{font-style:normal;font-size:12px;color:var(--ink-2)}
