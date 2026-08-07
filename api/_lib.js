@@ -176,12 +176,26 @@ async function restateMany(sql, ids) {
                FROM unnest($1::int[]) AS t(x)) p
       WHERE s.id = p.id`, [ids]);
 }
+// 入金種類。画面では「月額」と呼んでいるが、支払予定の kind は '通常'。
+// 打ち間違いを1か所で受け止める。知らない言葉なら null（種類を決めずに充てる）。
+const 入金種類 = (v) => {
+  const t = String(v == null ? '' : v).trim();
+  if (t === '月額' || t === '通常') return '通常';
+  if (t === 'ボーナス' || t === '賞与') return 'ボーナス';
+  return null;
+};
+
 // 入金を、未入金でいちばん古い回から順に充てる。
 // 満額に届いた回だけ「入金済み」にし、途中は「一部入金」のまま残りを持つ。
 // 予定を使い切ってもお金が余ったら、充当せずに余りとして返す(前受)。
-async function allocate(sql, customerId, paymentId, amount) {
+//
+// 種類（'通常' か 'ボーナス'）を渡すと、その種類の回にだけ充てる。
+// 渡さないと期日の古い順に種類を問わず埋めるので、
+// ボーナスのつもりで入れた大きな入金が、古い月額の回に食われてしまう。
+async function allocate(sql, customerId, paymentId, amount, 種類) {
   let left = amount;
   const touched = [];
+  const 絞る = 入金種類(種類);
   // 各回の「すでに入っている額」も一緒に持ってくる(回ごとに聞き直さない)
   const rows = await sql(
     `SELECT s.id, s.no, s.kind, s.planned_amount,
@@ -189,7 +203,9 @@ async function allocate(sql, customerId, paymentId, amount) {
                        WHERE a.schedule_id = s.id),0)::int AS paid
        FROM schedule s
       WHERE s.customer_id=$1 AND s.state <> '入金済み'
-      ORDER BY s.due_date, s.kind, s.no`, [customerId]);
+        ${絞る ? "AND COALESCE(s.kind,'通常') = $2" : ''}
+      ORDER BY s.due_date, s.kind, s.no`,
+    絞る ? [customerId, 絞る] : [customerId]);
 
   const 値 = [], 引数 = [], 済み = [], 一部 = [];
   for (const s of rows) {
@@ -268,5 +284,5 @@ function summarize(cust, rows, paidBy) {
 export {
   norm, normPayer, pad, iso, isoOf, today, lastDay, dueOf, yen,
   readBody, query, restateMany, allocate, unallocate, summarize, makeSchedule,
-  bonusDues, remakeBonus,
+  bonusDues, remakeBonus, 入金種類,
 };

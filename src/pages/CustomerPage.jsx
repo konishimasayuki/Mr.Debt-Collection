@@ -262,12 +262,9 @@ export default function CustomerPage({ id, onChanged }) {
               const いま = s.回次 === c.回次 && s.種類 === (c.回の種類 || '通常');
               const 鍵 = s.種類 + s.回次;
               const 開いている = メモ欄 === 鍵;
-              // メモは通常の回にだけ付けられる。ボーナスと通常で回次の番号がぶつかり、
-              // どちらの回のメモか決められないため（schedule_memo は回次で引いている）
-              const 押せる = !ボ;
               const cls = ['rec-r', s.状態 === '入金済み' ? 'paid' : s.状態 === '一部入金' ? 'part' : '',
                 late ? 'late' : '', いま ? 'now' : '', ボ ? 'bonus' : '',
-                押せる ? 'rec-tap' : '', 開いている ? 'open' : ''].filter(Boolean).join(' ');
+                'rec-tap', 開いている ? 'open' : ''].filter(Boolean).join(' ');
               const 中身 = (
                 <>
                   <span className="no">{ボ ? `賞与${s.回次}` : `${s.回次}回`}</span>
@@ -284,14 +281,12 @@ export default function CustomerPage({ id, onChanged }) {
               );
               return (
                 <div key={鍵}>
-                  {押せる ? (
-                    <button type="button" className={cls}
-                            onClick={() => setメモ欄((k) => (k === 鍵 ? null : 鍵))}>
-                      {中身}
-                    </button>
-                  ) : (
-                    <div className={cls}>{中身}</div>
-                  )}
+                  {/* 通常もボーナスも押せる。メモは種類と回次の両方で持っているので、
+                      通常の3回目とボーナスの3回目が混ざることはない */}
+                  <button type="button" className={cls}
+                          onClick={() => setメモ欄((k) => (k === 鍵 ? null : 鍵))}>
+                    {中身}
+                  </button>
                   {/* その回に、いつ・いくら入ったか。
                       期日だけでは、遅れて払われたのかが分からない */}
                   {s.入金明細.map((p, i) => (
@@ -305,13 +300,13 @@ export default function CustomerPage({ id, onChanged }) {
                   ))}
                   {開いている && (
                     <RecMemoAdd
-                      顧客id={c.id} 回次={s.回次}
+                      顧客id={c.id} 回次={s.回次} 回の種類={s.種類}
                       onClose={() => setメモ欄(null)}
                       onDone={() => { load(); onChanged && onChanged(); }}
                     />
                   )}
                   <RecMemos
-                    顧客id={c.id} 回次={s.回次} メモ={s.メモ}
+                    顧客id={c.id} 回次={s.回次} 回の種類={s.種類} メモ={s.メモ}
                     約束を開く={開く約束}
                     onDone={() => { load(); onChanged && onChanged(); }}
                   />
@@ -328,7 +323,8 @@ export default function CustomerPage({ id, onChanged }) {
 // ── その回にメモを足す欄（回を押すと下に出る）───────────
 // 電話を切った直後に、その回のことをその場で書き足せるようにする。
 // 書いた日と時刻はサーバーが入れる（created_at）。人が入れ間違えない。
-function RecMemoAdd({ 顧客id, 回次, onClose, onDone }) {
+function RecMemoAdd({ 顧客id, 回次, 回の種類, onClose, onDone }) {
+  const 回の名 = `${回の種類 === 'ボーナス' ? '賞与' : ''}${回次}回目`;
   const [本文, set本文] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -338,7 +334,7 @@ function RecMemoAdd({ 顧客id, 回次, onClose, onDone }) {
     if (!text) { setErr('メモを入れてください。'); return; }
     setBusy(true); setErr('');
     try {
-      await api.postCustomer({ id: 顧客id, 種類: '回メモ', 回次, 本文: text });
+      await api.postCustomer({ id: 顧客id, 種類: '回メモ', 回次, 回の種類, 本文: text });
       set本文('');          // 続けて足せるように、欄は開けたまま空にする
       onDone();
     } catch (e) { setErr(e.message); }
@@ -347,7 +343,7 @@ function RecMemoAdd({ 顧客id, 回次, onClose, onDone }) {
 
   return (
     <div className="rec-add">
-      <label>{回次}回目にメモを足す</label>
+      <label>{回の名}にメモを足す</label>
       <textarea
         rows={2} value={本文} autoFocus disabled={busy}
         placeholder="電話で話したこと、約束の事情など"
@@ -374,7 +370,8 @@ function RecMemoAdd({ 顧客id, 回次, onClose, onDone }) {
 // ── 回ごとのメモ（支払いの記録の各回の下）─────────────
 // 新しい順に3件まで出し、それより古いものは折りたたむ。
 // 入金約束を入れたときなどに自動で足され、あとから編集・削除できる。
-function RecMemos({ 顧客id, 回次, メモ, 約束を開く, onDone }) {
+function RecMemos({ 顧客id, 回次, 回の種類, メモ, 約束を開く, onDone }) {
+  const 回の名 = `${回の種類 === 'ボーナス' ? '賞与' : ''}${回次}回目`;
   const [開く, set開く] = useState(false);
   const [編集, set編集] = useState(null);   // {id, 本文}
   const [busy, setBusy] = useState(false);
@@ -396,7 +393,7 @@ function RecMemos({ 顧客id, 回次, メモ, 約束を開く, onDone }) {
   };
 
   const remove = async (m) => {
-    if (!confirm(`${回次}回目のメモを削除します。\n\n${m.本文}\n\nよろしいですか。`)) return;
+    if (!confirm(`${回の名}のメモを削除します。\n\n${m.本文}\n\nよろしいですか。`)) return;
     setBusy(true); setErr('');
     try { await api.postCustomer({ id: 顧客id, 種類: '回メモ削除', メモid: m.id }); onDone(); }
     catch (e) { setErr(e.message); }

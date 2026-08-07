@@ -658,7 +658,8 @@ button.rec-r{width:100%;text-align:left;font-family:inherit;border-left:0;border
 .rec-r.rec-tap:hover{filter:brightness(.97)}
 /* 開いている回は、下の入力欄とつながって見えるようにする */
 .rec-r.open{box-shadow:inset 3px 0 0 var(--indigo);background:#EEF2F8}
-.rec-r.open.paid,.rec-r.open.part,.rec-r.open.late{background:#EEF2F8}
+.rec-r.open.paid,.rec-r.open.part,.rec-r.open.late,
+.rec-r.open.bonus,.rec-r.open.bonus.paid,.rec-r.open.bonus.late{background:#EEF2F8}
 
 .rec-add{border-bottom:1px solid var(--rule);background:#F4F7FB;padding:8px 10px 10px}
 .rec-add > label{display:block;font-size:11.5px;color:var(--ink-2);margin-bottom:4px}

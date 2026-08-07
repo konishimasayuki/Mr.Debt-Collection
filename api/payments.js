@@ -5,7 +5,7 @@
 // DELETE /api/payments?id=1             … 入金を取り消す
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
-import { readBody, query, isoOf, today, yen, norm, allocate, unallocate } from './_lib.js';
+import { readBody, query, isoOf, today, yen, norm, allocate, unallocate, 入金種類 } from './_lib.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -13,6 +13,10 @@ const bad = (res, msg, why) => {
   res.end(JSON.stringify(why ? { error: msg, 理由: why } : { error: msg }));
 };
 const METHODS = ['振込', '現金', 'その他'];
+// 「3回目へ 30,000円」。ボーナスの回は通常と番号がぶつかるので賞与と付ける
+const 充当の文 = (r) => r.充当
+  .map((x) => `${x.種類 === 'ボーナス' ? '賞与' : ''}${x.no}回目へ ${yen(x.充てた)}円`)
+  .join('、');
 
 export default async (req, res) => {
   if (!requireSession(req, res)) return;
@@ -72,23 +76,35 @@ export default async (req, res) => {
       if (!memo) return bad(res, '手動で入れる理由をメモに残してください。',
         '（例：現金で受け取った、CSVに出てこない振込 など）');
       const m = METHODS.includes(b.入金方法) ? b.入金方法 : '振込';
+      // 入金種類。選ばれていれば、その種類の回にだけ充てる。
+      // 選ばれていなければ今までどおり期日の古い順（CSVから来る入金と同じ）
+      const kind = 入金種類(b.入金種類);
+      if (b.入金種類 && !kind) return bad(res, '入金種類は 月額 か ボーナス を選んでください。');
 
       const c = (await sql('SELECT id, name FROM customer WHERE id=$1', [cid]))[0];
       if (!c) return bad(res, 'その顧客が見つかりません。');
+      if (kind === 'ボーナス') {
+        const ボ = await sql(
+          `SELECT 1 FROM schedule WHERE customer_id=$1 AND kind='ボーナス' LIMIT 1`, [cid]);
+        if (!ボ.length) return bad(res, 'この方にはボーナス払いの設定がありません。',
+          '（顧客ページの「支払い条件」でボーナス月を入れてください）');
+      }
 
       const pay = (await sql(
-        `INSERT INTO payment (customer_id, paid_on, amount, method, source, memo, recorded_by)
-         VALUES ($1,$2,$3,$4,'手動',$5,$6) RETURNING id`,
-        [cid, day, amount, m, memo, who]))[0];
-      const r = await allocate(sql, cid, pay.id, amount);
+        `INSERT INTO payment (customer_id, paid_on, amount, method, source, memo,
+                              alloc_kind, recorded_by)
+         VALUES ($1,$2,$3,$4,'手動',$5,$6,$7) RETURNING id`,
+        [cid, day, amount, m, memo, kind, who]))[0];
+      const r = await allocate(sql, cid, pay.id, amount, kind);
 
       await sql(`INSERT INTO event (customer_id, payment_id, recorded_by, kind, text, memo)
                  VALUES ($1,$2,$3,'入金',$4,$5)`,
         [cid, pay.id, who,
-         `手動で ${yen(amount)}円 を登録（${m}・${day}）`
-         + (r.充当.length ? `：${r.充当.map((x) => `${x.no}回目へ ${yen(x.充てた)}円`).join('、')}` : '')
+         `手動で ${yen(amount)}円 を登録（${m}・${day}`
+         + (kind ? `・${kind === 'ボーナス' ? 'ボーナス' : '月額'}分` : '') + '）'
+         + (r.充当.length ? `：${充当の文(r)}` : '')
          + (r.余り ? `。余り ${yen(r.余り)}円`  : ''), memo]);
-      return ok(res, { done: true, id: pay.id, 充当: r.充当, 余り: r.余り });
+      return ok(res, { done: true, id: pay.id, 入金種類: kind, 充当: r.充当, 余り: r.余り });
     }
 
     // ── 入金を直す ───────────────────────────
@@ -105,6 +121,13 @@ export default async (req, res) => {
       const m = b.入金方法 !== undefined
         ? (METHODS.includes(b.入金方法) ? b.入金方法 : p.method) : p.method;
       const memo = b.メモ !== undefined ? String(b.メモ).trim() : (p.memo || '');
+      // 入金種類は、指定が無ければ登録したときのものを引き継ぐ。
+      // 引き継がないと、ボーナスとして入れた入金を直した拍子に
+      // 古い月額の回へ静かに移ってしまう
+      let kind = b.入金種類 !== undefined ? 入金種類(b.入金種類) : (p.alloc_kind || null);
+      if (b.入金種類 !== undefined && b.入金種類 && !kind) {
+        return bad(res, '入金種類は 月額 か ボーナス を選んでください。');
+      }
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return bad(res, '日付を入れてください。');
       if (!amount || amount <= 0) return bad(res, '金額を入れてください。');
@@ -113,18 +136,31 @@ export default async (req, res) => {
         if (!c.length) return bad(res, 'その顧客が見つかりません。');
       }
 
+      // 顧客を移した先にその種類の回が無ければ、種類の指定は外す。
+      // 残したままだと充てる先が1つも無く、全額が余りになってしまう
+      if (kind && cid) {
+        const 有 = await sql(
+          `SELECT 1 FROM schedule WHERE customer_id=$1 AND COALESCE(kind,'通常')=$2 LIMIT 1`,
+          [cid, kind]);
+        if (!有.length) kind = null;
+      }
+
+      const 種類名 = (k) => (k === 'ボーナス' ? 'ボーナス' : k === '通常' ? '月額' : '指定なし');
       const 変更 = [];
       if (isoOf(p.paid_on) !== day) 変更.push(`日付 ${isoOf(p.paid_on)}→${day}`);
       if (p.amount !== amount) 変更.push(`金額 ${yen(p.amount)}→${yen(amount)}円`);
       if (p.customer_id !== cid) 変更.push(`顧客 ${p.customer_id || '未割当'}→${cid || '未割当'}`);
       if (p.method !== m) 変更.push(`入金方法 ${p.method}→${m}`);
+      if ((p.alloc_kind || null) !== (kind || null)) {
+        変更.push(`入金種類 ${種類名(p.alloc_kind)}→${種類名(kind)}`);
+      }
 
       await unallocate(sql, id);
       await sql(`UPDATE payment SET paid_on=$1, amount=$2, customer_id=$3, method=$4,
-                   memo=$5, updated_at=now() WHERE id=$6`,
-        [day, amount, cid, m, memo || null, id]);
+                   memo=$5, alloc_kind=$6, updated_at=now() WHERE id=$7`,
+        [day, amount, cid, m, memo || null, kind, id]);
       let r = { 充当: [], 余り: amount };
-      if (cid) r = await allocate(sql, cid, id, amount);
+      if (cid) r = await allocate(sql, cid, id, amount, kind);
 
       // 顧客を移したときは、移す前の相手にも記録を残す(片方だけに残らないように)
       if (p.customer_id && p.customer_id !== cid) {

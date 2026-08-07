@@ -36,9 +36,12 @@ const 進行中 = new Map();
 let 世代 = 0;
 const 全部捨てる = () => { 世代++; 控え.clear(); 進行中.clear(); };
 
-function call(path, { method = 'GET', body } = {}) {
+// 取り直す:true を渡すと、控えを見ずに必ず聞きに行く。
+// 人がボタンを押して開く画面で、5秒前の中身を見せないため
+// （そこは往復1回ぶん待っても構わない。開いた直後の速さとは別の話）
+function call(path, { method = 'GET', body, 取り直す = false } = {}) {
   const 読み取り = method === 'GET';
-  if (読み取り) {
+  if (読み取り && !取り直す) {
     const c = 控え.get(path);
     if (c && Date.now() - c.時刻 < 覚えておく時間) return Promise.resolve(c.中身);
     const 先客 = 進行中.get(path);
@@ -90,6 +93,9 @@ export const api = {
 
   // 顧客
   customers: (opt) => call('/api/customers' + q(opt)),
+  // 控えを使わずに取り直す。手動入金登録の「入金種類」の既定は、
+  // いま払えていない回の種類で決めるので、5秒前の中身では1回ぶんずれる
+  customersNow: () => call('/api/customers', { 取り直す: true }),
   addCustomer: (body) => call('/api/customers', { method: 'POST', body }),
   patchCustomers: (body) => call('/api/customers', { method: 'PATCH', body }),
   customer: (id) => call('/api/customer' + q({ id })),
