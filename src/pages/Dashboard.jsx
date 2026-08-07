@@ -17,11 +17,11 @@ const 率の色 = (n) => (n >= 90 ? 'good' : n < 70 ? 'bad' : '');
 export default function Dashboard({ onOpen }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
-  const [切れを開く, set切れを開く] = useState(true);   // 急ぐ話なので、はじめから開けておく
 
   const load = useCallback(() => {
     setErr('');
-    api.dashboard().then(setD).catch((e) => { setD({ 月: [], 約束切れ: [] }); setErr(e.message); });
+    api.dashboard().then(setD)
+      .catch((e) => { setD({ 月: [], 約束切れ: { 合計: 0, 月別: [] } }); setErr(e.message); });
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -35,7 +35,7 @@ export default function Dashboard({ onOpen }) {
   }
 
   const 合計 = d.合計 || { 全件: 0, 回収済み: 0, 率: 100, 未回収額: 0, 未回収人数: 0 };
-  const 切れ = d.約束切れ || [];
+  const 切れ = d.約束切れ || { 合計: 0, 月別: [] };
   // 2か月以上ためている人だけ出す。1か月は遅れ始めたところで、まだ当たり前
   const 月数別 = (合計.月数別 || []).filter((x) => x.月数 >= 2);
 
@@ -71,48 +71,20 @@ export default function Dashboard({ onOpen }) {
             </span>
           )}
         </div>
-        <div className={'dash-s' + (切れ.length ? ' alert' : '')}>
-          <b>{切れ.length}件</b>
-          <i>約束切れ</i>
-        </div>
       </div>
 
-      {/* 「この日に払う」と言った日を過ぎている人。いちばん先に電話する相手。
-          いちばん上の数字のすぐ下に、1人1行で名指しで出す。
-          同じ人は何度も出さない（何度も名前が並ぶと、その人だけで埋まる）*/}
-      {切れ.length > 0 && (
-        <div className="alert-box">
-          <button type="button" className="dash-fold alert-h"
-                  onClick={() => set切れを開く((v) => !v)}>
-            <span className="dash-caret">{切れを開く ? '▾' : '▸'}</span>
-            <b>入金約束の日を過ぎています {切れ.length}名</b>
-            <i>（「この日に払う」と言った日を過ぎても入っていません）</i>
-          </button>
-          {切れを開く && (
-            <div className="dash-rows">
-              {切れ.map((x) => (
-                <button type="button" key={x.顧客id} className="dash-r break-r"
-                        onClick={() => onOpen(x.顧客id)}>
-                  <span className="dash-nm">
-                    <b className="break-t">{x.氏名} さんが約束を破りました。</b>
-                    <span className="tag t-late">{x.過ぎた日数}日 超過</span>
-                    <span className={'tag ' + (x.督促回数 ? 't-done' : 't-warn')}>
-                      {x.督促回数 ? `督促 ${md(x.督促日)}` : '未督促'}
-                    </span>
-                  </span>
-                  <span className="dash-amt">
-                    {yen(x.約束金額)}円
-                    <i>{x.見出し}／残り {yen(x.残り)}円</i>
-                  </span>
-                  <span className="dash-pr">
-                    <span className="tag t-late">
-                      約束 {md(x.約束日)}{x.件数 > 1 ? `（${x.件数}件）` : ''}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+      {/* 「この日に払う」と言った日を過ぎている件数。
+          ここには名前を並べない。下の月ごとの一覧と同じ人が二重に出て画面が伸びるため。
+          誰なのかは、その月の一覧でその人の行に付く「◯/◯ 約束切れ」の印で分かる */}
+      {切れ.合計 > 0 && (
+        <div className="alert-box alert-sum">
+          {/* 「約束切れが 6月分に1件、7月分に2件、合計3件あります。」
+              文字をJSXで継ぎ足すと余計な空白が入るので、1つの文字列に組んでから出す */}
+          <b>
+            {`約束切れが ${切れ.月別.map((x) => `${x.見出し}に ${x.件数}件`).join('、')}`
+              + `、合計 ${切れ.合計}件 あります。`}
+          </b>
+          <i>下の一覧で、その人の行に <span className="tag t-late">◯/◯ 約束切れ</span> と付いています。</i>
         </div>
       )}
 
@@ -159,14 +131,21 @@ export default function Dashboard({ onOpen }) {
                 </span>
                 <span className="dash-pr">
                   {r.後回し ? (
-                    <span className={'tag ' + (r.後回し.切れ ? 't-late' : 't-dup')}>
-                      後回し
-                      {r.後回し.件数 > 1 && ` 1/${r.後回し.件数}`}
-                      {' '}{md(r.後回し.日)}
-                      {r.後回し.時刻 ? ` ${r.後回し.時刻}まで` : ''}
-                      {' '}{yen(r.後回し.金額)}円
-                      {r.後回し.切れ ? ' 超過' : ''}
-                    </span>
+                    r.後回し.切れ ? (
+                      // 約束の日を過ぎている。何を言ったかより「破った」ことが先
+                      <span className="tag t-late">
+                        {md(r.後回し.日)} 約束切れ
+                        {r.後回し.件数 > 1 && `（${r.後回し.件数}件）`}
+                      </span>
+                    ) : (
+                      <span className="tag t-dup">
+                        後回し
+                        {r.後回し.件数 > 1 && ` 1/${r.後回し.件数}`}
+                        {' '}{md(r.後回し.日)}
+                        {r.後回し.時刻 ? ` ${r.後回し.時刻}まで` : ''}
+                        {' '}{yen(r.後回し.金額)}円
+                      </span>
+                    )
                   ) : null}
                 </span>
               </button>
