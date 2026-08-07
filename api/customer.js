@@ -89,8 +89,11 @@ export default async (req, res) => {
                FROM promise WHERE customer_id=$1 ORDER BY promised_on, id`, [id]),
         // 約束の写しのメモは、その約束の日も一緒に返す。
         // 画面から約束そのものを直せるようにするため（メモの文だけ直しても約束は変わらない）
-        sql(`SELECT m.id, m.schedule_no, m.text, m.auto, m.promise_id,
-                    m.created_by, m.created_at, p.promised_on
+        // 書いた日と時刻は日本時間の文字どおりで返す。
+        // UTCのまま切ると、夜に書いたメモが前日の日付で出る
+        sql(`SELECT m.id, m.schedule_no, m.text, m.auto, m.promise_id, m.created_by,
+                    to_char(m.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY/MM/DD HH24:MI') AS at,
+                    p.promised_on
                FROM schedule_memo m
                LEFT JOIN promise p ON p.id = m.promise_id
               WHERE m.customer_id=$1
@@ -116,7 +119,7 @@ export default async (req, res) => {
         (回メモ[m.schedule_no] = 回メモ[m.schedule_no] || []).push({
           id: m.id, 本文: m.text, 自動: m.auto, 記録者: m.created_by,
           約束id: m.promise_id || null, 約束日: isoOf(m.promised_on),
-          日時: new Date(m.created_at).toISOString().slice(0, 16).replace('T', ' '),
+          日時: m.at,   // 「2026/08/07 09:12」（日本時間）
         });
       });
 

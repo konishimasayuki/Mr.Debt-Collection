@@ -30,6 +30,7 @@ export default function CustomerPage({ id, onChanged }) {
   const [editing, setEditing] = useState(null); // 編集中の約束
   const [editCustomer, setEditCustomer] = useState(false);
   const [振替, set振替] = useState(false);   // 口座振替の状態を変える欄
+  const [メモ欄, setメモ欄] = useState(null); // メモを足そうとしている回（'通常-3' の形）
 
   const load = useCallback(() => {
     setErr('');
@@ -253,27 +254,44 @@ export default function CustomerPage({ id, onChanged }) {
           <h3>
             支払いの記録（全{c.回数}回{c.ボーナス回数 > 0 && ` + ボーナス${c.ボーナス回数}回`}）
           </h3>
+          <p className="rec-hint">回を押すと、その回にメモを足せます。</p>
           <div className="rec">
             {d.支払予定.map((s) => {
               const late = s.状態 !== '入金済み' && s.期日 < today;
               const ボ = s.種類 === 'ボーナス';
               const いま = s.回次 === c.回次 && s.種類 === (c.回の種類 || '通常');
+              const 鍵 = s.種類 + s.回次;
+              const 開いている = メモ欄 === 鍵;
+              // メモは通常の回にだけ付けられる。ボーナスと通常で回次の番号がぶつかり、
+              // どちらの回のメモか決められないため（schedule_memo は回次で引いている）
+              const 押せる = !ボ;
               const cls = ['rec-r', s.状態 === '入金済み' ? 'paid' : s.状態 === '一部入金' ? 'part' : '',
-                late ? 'late' : '', いま ? 'now' : '', ボ ? 'bonus' : ''].filter(Boolean).join(' ');
+                late ? 'late' : '', いま ? 'now' : '', ボ ? 'bonus' : '',
+                押せる ? 'rec-tap' : '', 開いている ? 'open' : ''].filter(Boolean).join(' ');
+              const 中身 = (
+                <>
+                  <span className="no">{ボ ? `賞与${s.回次}` : `${s.回次}回`}</span>
+                  <span>{md(s.期日)}
+                    {s.状態 === '一部入金' &&
+                      <span style={{ color: 'var(--today)', marginLeft: 6, fontSize: 12 }}>
+                        残 {yen(s.請求 - s.入金)}
+                      </span>}
+                    {late && s.状態 !== '一部入金' &&
+                      <span style={{ color: 'var(--overdue)', marginLeft: 6, fontSize: 12 }}>未入金</span>}
+                  </span>
+                  <span className="amt">{yen(s.請求)}</span>
+                </>
+              );
               return (
-                <div key={s.種類 + s.回次}>
-                  <div className={cls}>
-                    <span className="no">{ボ ? `賞与${s.回次}` : `${s.回次}回`}</span>
-                    <span>{md(s.期日)}
-                      {s.状態 === '一部入金' &&
-                        <span style={{ color: 'var(--today)', marginLeft: 6, fontSize: 12 }}>
-                          残 {yen(s.請求 - s.入金)}
-                        </span>}
-                      {late && s.状態 !== '一部入金' &&
-                        <span style={{ color: 'var(--overdue)', marginLeft: 6, fontSize: 12 }}>未入金</span>}
-                    </span>
-                    <span className="amt">{yen(s.請求)}</span>
-                  </div>
+                <div key={鍵}>
+                  {押せる ? (
+                    <button type="button" className={cls}
+                            onClick={() => setメモ欄((k) => (k === 鍵 ? null : 鍵))}>
+                      {中身}
+                    </button>
+                  ) : (
+                    <div className={cls}>{中身}</div>
+                  )}
                   {/* その回に、いつ・いくら入ったか。
                       期日だけでは、遅れて払われたのかが分からない */}
                   {s.入金明細.map((p, i) => (
@@ -285,6 +303,13 @@ export default function CustomerPage({ id, onChanged }) {
                       <span className="rec-p-a">{yen(p.金額)}</span>
                     </div>
                   ))}
+                  {開いている && (
+                    <RecMemoAdd
+                      顧客id={c.id} 回次={s.回次}
+                      onClose={() => setメモ欄(null)}
+                      onDone={() => { load(); onChanged && onChanged(); }}
+                    />
+                  )}
                   <RecMemos
                     顧客id={c.id} 回次={s.回次} メモ={s.メモ}
                     約束を開く={開く約束}
@@ -297,6 +322,51 @@ export default function CustomerPage({ id, onChanged }) {
         </div>
       </div>
     </>
+  );
+}
+
+// ── その回にメモを足す欄（回を押すと下に出る）───────────
+// 電話を切った直後に、その回のことをその場で書き足せるようにする。
+// 書いた日と時刻はサーバーが入れる（created_at）。人が入れ間違えない。
+function RecMemoAdd({ 顧客id, 回次, onClose, onDone }) {
+  const [本文, set本文] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const 足す = async () => {
+    const text = 本文.trim();
+    if (!text) { setErr('メモを入れてください。'); return; }
+    setBusy(true); setErr('');
+    try {
+      await api.postCustomer({ id: 顧客id, 種類: '回メモ', 回次, 本文: text });
+      set本文('');          // 続けて足せるように、欄は開けたまま空にする
+      onDone();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rec-add">
+      <label>{回次}回目にメモを足す</label>
+      <textarea
+        rows={2} value={本文} autoFocus disabled={busy}
+        placeholder="電話で話したこと、約束の事情など"
+        onChange={(e) => { set本文(e.target.value); setErr(''); }}
+        onKeyDown={(e) => {
+          // 文章なので Enter は改行。送るのは Ctrl/⌘ + Enter
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); 足す(); }
+          if (e.key === 'Escape') onClose();
+        }}
+      />
+      <div className="rec-add-b">
+        <button className="btn btn-sm btn-main" onClick={足す} disabled={busy}>
+          {busy ? '足しています…' : 'メモを足す'}
+        </button>
+        <button className="btn btn-sm" onClick={onClose} disabled={busy}>閉じる</button>
+        <span className="hint">書いた日と時刻も一緒に残ります。</span>
+      </div>
+      <Err>{err}</Err>
+    </div>
   );
 }
 
@@ -349,7 +419,8 @@ function RecMemos({ 顧客id, 回次, メモ, 約束を開く, onDone }) {
     ) : (
       <div className="rec-m" key={m.id}>
         <span className="rec-m-t">{m.本文}</span>
-        <span className="rec-m-d">{m.日時.slice(5, 10)}</span>
+        {/* 書いた日と時刻。「08/07 09:12」（年は同じ画面に何度も出るので落とす） */}
+        <span className="rec-m-d">{String(m.日時 || '').slice(5)}</span>
         <div className="rec-m-btn">
           {m.約束id ? (
             // これは約束の写し。ここの文だけ直しても約束は変わらないので、
