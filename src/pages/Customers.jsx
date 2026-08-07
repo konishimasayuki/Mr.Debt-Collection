@@ -184,6 +184,10 @@ export default function Customers({ onOpen, onChanged }) {
                           {r.終了理由}
                         </span>
                       )}
+                      {/* 遅れている人だけ出す。遅れていなければ何も出さない */}
+                      {!r.終了 && r.遅れ日数 > 0 && (
+                        <span className="tag t-late">{r.遅れ日数}日 遅れ</span>
+                      )}
                       {r.よみ && <span className="yomi">{r.よみ}</span>}
                     </td>
                     <td data-label="債権譲渡会社">

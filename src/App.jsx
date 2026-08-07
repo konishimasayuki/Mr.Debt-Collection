@@ -12,8 +12,8 @@ import Settings from './pages/Settings';
 import Debug from './pages/Debug';
 
 const TABS = [
-  { key: 'customers', label: '顧客一覧' },
   { key: 'dash', label: 'ダッシュボード' },
+  { key: 'customers', label: '顧客一覧' },
   { key: 'entry', label: '入金登録' },
   { key: 'history', label: '入金履歴' },
   { key: 'unpaid', label: '未入金' },
@@ -149,8 +149,7 @@ export default function App() {
             onChanged={refresh}
           />
         ) : tab === 'unpaid' ? (
-          <Unpaid key={reloadKey} onOpen={setCustomerId} goHistory={goHistory}
-                  onChanged={refresh} />
+          <Unpaid key={reloadKey} onOpen={setCustomerId} onChanged={refresh} />
         ) : tab === 'finished' ? (
           <Finished key={reloadKey} onOpen={setCustomerId} />
         ) : tab === 'debug' ? (

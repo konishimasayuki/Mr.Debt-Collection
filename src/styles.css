@@ -604,19 +604,6 @@ button.att-i:hover{border-color:var(--indigo)}
 .dash-caret{color:var(--ink-3);font-weight:400}
 .dash-fold:hover{color:var(--indigo)}
 
-/* ── トラブル（顧客ページ）───────────────── */
-.trb-list{display:flex;flex-direction:column;gap:8px}
-.trb{border:1px solid var(--rule);border-left:3px solid var(--overdue);
-  background:#FBF1EF;padding:9px 12px}
-.trb.done{border-left-color:var(--rule-strong);background:var(--paper-2);opacity:.75}
-.trb-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.trb-h b{font-size:14px}
-.trb-d{margin-left:auto;font-size:11.5px;color:var(--ink-3);
-  font-variant-numeric:tabular-nums;white-space:nowrap}
-.trb-b{margin:5px 0 0;font-size:13px;color:var(--ink-2);line-height:1.7;
-  white-space:pre-wrap;word-break:break-word}
-.trb-btn{display:flex;gap:6px;margin-top:7px}
-
 @media (max-width:760px){
   .dash-top{grid-template-columns:1fr 1fr}
   .dash-rate b{font-size:26px}
@@ -626,8 +613,51 @@ button.att-i:hover{border-color:var(--indigo)}
   .dash-amt i{display:inline;margin-left:8px}
   .dash-h{gap:10px}
   .dash-p{font-size:18px}
-  .trb-d{margin-left:0;width:100%}
   /* 折りたたみの見出し。説明は次の行に落とす */
   .dash-fold{flex-wrap:wrap}
   .dash-fold i{flex:1 1 100%}
+}
+
+/* 印そのものを押せるようにする（ボタンを増やさずに操作を足す） */
+.tag-btn{font-family:inherit;cursor:pointer;margin-left:8px}
+.tag-btn:hover:not(:disabled){filter:brightness(.95)}
+.tag-btn:disabled{opacity:.5;cursor:default}
+@media (hover:none){.tag-btn{padding:4px 9px}}
+
+/* 約束の日を過ぎた人。いちばん先に電話する相手なので、上に赤い帯で出す */
+.alert-box{background:#FBEDEA;border:1px solid #D4A99F;border-left-width:3px;
+  padding:10px 14px;margin-bottom:14px}
+.alert-h{border-bottom-color:#D4A99F;color:var(--overdue)}
+.alert-h:hover{color:var(--overdue)}
+.alert-box .dash-r{border-bottom-color:#E7CEC8}
+.alert-box .dash-r:hover{background:#F6E3DF}
+.dash-s.alert b{color:var(--overdue)}
+
+/* ── 未入金の札（スマホ）───────────────────── */
+/* 2つずつ横に並べて、1件ぶんの高さを詰める。
+   縦に7段あると、1画面に1人しか入らず、名簿として使えない */
+@media (max-width:760px){
+  .unpaid-cards tbody tr.clickable{display:grid;grid-template-columns:1fr 1fr;
+    padding-bottom:10px;column-gap:0}
+  /* ラベルと値を横に並べる。縦に積むと1件で7段になり、1画面に1人しか入らない */
+  .unpaid-cards td{padding:2px 12px;font-size:13.5px;
+    display:flex;gap:6px;align-items:baseline;white-space:nowrap}
+  .unpaid-cards td::before{flex:0 0 auto;font-size:10.5px;line-height:1.6}
+  .unpaid-cards td.nm,.unpaid-cards td.act{grid-column:1/-1}
+  /* 操作はいちばん下。並べ替えの order を指定しないと途中に割り込む */
+  .unpaid-cards td.act{order:7}
+  /* 並びは「支払い期日｜支払済回数」「月額｜支払日」「残債｜残回数」 */
+  .unpaid-cards td[data-label="支払い期日"]{order:1}
+  .unpaid-cards td[data-label="支払済回数"]{order:2}
+  .unpaid-cards td[data-label="月額"]{order:3}
+  .unpaid-cards td[data-label="支払日"]{order:4}
+  .unpaid-cards td[data-label="残債"]{order:5}
+  .unpaid-cards td[data-label="残回数"]{order:6}
+  /* 名前の帯。印が多いので行間を詰める */
+  .unpaid-cards td.nm{font-size:15.5px;padding:8px 12px 7px;line-height:1.95;
+    display:block;white-space:normal}
+  .unpaid-cards td.nm .tag{margin-left:0;margin-right:5px}
+  .unpaid-cards td.nm .yomi{display:inline;margin-left:8px}
+  .unpaid-cards td.act{padding:7px 12px 0;margin-top:4px;display:flex}
+  .unpaid-cards td.act .btn{min-height:38px}
 }

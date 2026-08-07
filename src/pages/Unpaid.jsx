@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, yen, ymd } from '../api';
+import { api, yen, ymd, md } from '../api';
 import { Err, Empty, Note, Loading } from '../components/ui';
 import { ManualPayment } from './PaymentEntry';
 
-export default function Unpaid({ onOpen, goHistory, onChanged }) {
+export default function Unpaid({ onOpen, onChanged }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [入金する, set入金する] = useState(null);   // 手動入金を入れる顧客
+  const [busy, setBusy] = useState(0);              // 督促を書き込んでいる顧客id
 
   const load = useCallback(() => {
     api.customers({ 未入金: 1 })
@@ -15,11 +16,30 @@ export default function Unpaid({ onOpen, goHistory, onChanged }) {
   }, []);
   useEffect(load, [load]);
 
+  // 督促の連絡をしたかを控える。電話を切った直後にその場で押せるよう、
+  // 名前の横の印そのものを押せるようにしてある（ボタンを増やさない）。
+  const 督促 = async (r, 取り消す) => {
+    const 文 = 取り消す
+      ? `${r.氏名}さんの督促の記録を取り消します。よろしいですか。`
+      : `${r.氏名}さんに督促の連絡をした、として記録します。よろしいですか。`;
+    if (!confirm(文)) return;
+    setBusy(r.id); setErr('');
+    try {
+      await api.postCustomer({
+        id: r.id, 種類: 取り消す ? '督促取消' : '督促',
+        回次: r.回次, 回の種類: r.回の種類,
+      });
+      load(); onChanged && onChanged();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(0); }
+  };
+
   // 合計には、動作を試すための顧客を入れない。
   // 経営者が見る数字なので、試し打ちの金額が混ざってはいけない。
   const 本物 = (rows || []).filter((r) => !r.テスト);
   const テスト数 = (rows || []).length - 本物.length;
   const 合計 = 本物.reduce((s, r) => s + r.この回の残り, 0);
+  const 未督促 = 本物.filter((r) => !r.督促回数).length;
 
   return (
     <>
@@ -28,13 +48,16 @@ export default function Unpaid({ onOpen, goHistory, onChanged }) {
         {rows && (
           <span className="sub">
             {本物.length}名 ／ 今の回の未入金 合計 {yen(合計)}円
+            {未督促 > 0 && ` ／ 未督促 ${未督促}名`}
           </span>
         )}
       </div>
 
       <Note>
         支払期日までに入金できていない顧客を、あいうえお順で出しています。
-        行を押すと、入金履歴でその方を探した状態になります。
+        <b>行を押すと顧客ページが開きます。</b>
+        名前の横の <span className="tag t-warn">未督促</span> を押すと、
+        督促の連絡をしたことを控えられます。
         <span className="tag t-bonus">ボーナス</span> は、遅れているのがボーナスの回であることを表します。
         {テスト数 > 0 && (
           <> なお、<span className="tag t-test">テスト</span> の
@@ -43,17 +66,17 @@ export default function Unpaid({ onOpen, goHistory, onChanged }) {
       </Note>
       <Err>{err}</Err>
 
-      <div className="card tw cards">
+      <div className="card tw cards unpaid-cards">
         <table>
           <thead>
             <tr>
               <th>顧客名</th>
-              <th className="num">月額</th>
               <th>支払い期日</th>
+              <th className="num">支払済回数</th>
+              <th className="num">月額</th>
               <th className="num">支払日</th>
-              <th className="num">支払い回数</th>
-              <th className="num">残回数</th>
               <th className="num">残債</th>
+              <th className="num">残回数</th>
               <th />
             </tr>
           </thead>
@@ -66,7 +89,7 @@ export default function Unpaid({ onOpen, goHistory, onChanged }) {
             )}
             {rows && rows.map((r) => (
               <tr key={r.id} className={'clickable' + (r.テスト ? ' test-row' : '')}
-                  onClick={() => goHistory(r.氏名)}>
+                  onClick={() => onOpen(r.id)}>
                 <td className="nm">
                   <b>{r.氏名}</b>
                   {r.テスト && <span className="tag t-test">テスト</span>}
@@ -75,25 +98,39 @@ export default function Unpaid({ onOpen, goHistory, onChanged }) {
                   {r.ボーナス中 && <span className="tag t-bonus">ボーナス</span>}
                   {r.よみ && <span className="yomi">{r.よみ}</span>}
                   <span className="tag t-late" style={{ marginLeft: 8 }}>{r.遅れ日数}日 遅れ</span>
-                  {r.この回の残り !== r.金額 && (
-                    <span className="tag t-dup" style={{ marginLeft: 6 }}>
-                      残り {yen(r.この回の残り)}円
+                  {/* 督促したかどうか。押すと控えられる */}
+                  <button
+                    type="button"
+                    className={'tag tag-btn ' + (r.督促回数 ? 't-done' : 't-warn')}
+                    disabled={busy === r.id}
+                    onClick={(e) => { e.stopPropagation(); 督促(r, !!r.督促回数); }}
+                  >
+                    {r.督促回数
+                      ? `督促 ${md(r.督促日)}${r.督促回数 > 1 ? `（${r.督促回数}回）` : ''}`
+                      : '未督促'}
+                  </button>
+                  {/* いつ払うと言ったか。日を過ぎていれば朱色 */}
+                  {r.約束 && (
+                    <span className={'tag ' + (r.約束.切れ ? 't-late' : 't-dup')}>
+                      約束 {md(r.約束.日)}
+                      {r.約束.時刻 ? ` ${r.約束.時刻}` : ''}
+                      {r.約束.件数 > 1 ? `（${r.約束.件数}件）` : ''}
+                      {r.約束.切れ ? ' 超過' : ''}
                     </span>
                   )}
+                  {r.この回の残り !== r.金額 && (
+                    <span className="tag t-dup">残り {yen(r.この回の残り)}円</span>
+                  )}
                 </td>
-                <td className="num" data-label="月額">{yen(r.金額)}</td>
                 <td data-label="支払い期日">{ymd(r.支払い期日)}</td>
-                <td className="num" data-label="支払日">{r.毎月の支払日}日</td>
-                <td className="num" data-label="支払い回数">
+                <td className="num" data-label="支払済回数">
                   {r.支払い回数}回{r.ボーナス回数 > 0 && `（賞与 残${r.ボーナス残り}回）`}
                 </td>
-                <td className="num" data-label="残回数">{r.残り支払い回数}回</td>
+                <td className="num" data-label="月額">{yen(r.金額)}</td>
+                <td className="num" data-label="支払日">{r.毎月の支払日}日</td>
                 <td className="num" data-label="残債">{yen(r.残債金額)}</td>
+                <td className="num" data-label="残回数">{r.残り支払い回数}回</td>
                 <td className="act">
-                  <button
-                    className="btn btn-sm"
-                    onClick={(e) => { e.stopPropagation(); onOpen(r.id); }}
-                  >顧客ページを開く</button>
                   {/* 電話中にその場で入金を入れられるように。
                       入金登録タブへ行って名前を探し直さなくて済む */}
                   <button
