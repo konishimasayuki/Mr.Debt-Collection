@@ -26,17 +26,22 @@ export async function 顧客一覧(sql, 絞り込み) {
   // is_test は c.* にも入るが、わざと名指しで書いている。
   // 列がまだ無いデータベースでは、ここで符号 42703 になって
   // _db.js が一度だけテーブルを作り直してくれる（画面から何も押さずに追いつく）。
-  const [customers, schedules, paidRows] = await Promise.all([
+  const [customers, schedules, paidRows, promises] = await Promise.all([
     sql(`SELECT c.*, c.is_test, c.status, a.name AS assignor_name, b.name AS assignee_name
            FROM customer c
            LEFT JOIN company a ON a.id = c.assignor_id
            LEFT JOIN company b ON b.id = c.assignee_id
           WHERE c.archived = false
           ORDER BY c.id`),
-    sql(`SELECT id, customer_id, no, kind, due_date, planned_amount, state
+    sql(`SELECT id, customer_id, no, kind, due_date, planned_amount, state,
+                dunned_count,
+                to_char(dunned_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') AS dunned_on
            FROM schedule ORDER BY customer_id, due_date, kind, no`),
     sql(`SELECT schedule_id, COALESCE(sum(amount),0)::int AS n FROM allocation
           WHERE schedule_id IS NOT NULL GROUP BY schedule_id`),
+    // まだ果たされていない入金約束。未入金の行に「いつ払うと言ったか」を出す
+    sql(`SELECT customer_id, schedule_no, promised_on, until_time, amount
+           FROM promise WHERE done = false ORDER BY promised_on, id`),
   ]);
   const paidBy = {};
   paidRows.forEach((r) => (paidBy[r.schedule_id] = r.n));
@@ -44,8 +49,20 @@ export async function 顧客一覧(sql, 絞り込み) {
   const by = {};
   schedules.forEach((s) => (by[s.customer_id] = by[s.customer_id] || []).push(s));
 
+  // 顧客ごとの、まだ果たされていない約束（日の近い順）。
+  // どの回ぶんかでは絞らない。電話をかける人が知りたいのは
+  // 「この人はいつ払うと言ったか」であって、何回目ぶんかではない
+  const 約束ごと = {};
+  promises.forEach((p) => (約束ごと[p.customer_id] = 約束ごと[p.customer_id] || []).push(p));
+
   let list = customers.map((c) => {
-    const s = summarize(c, by[c.id] || [], paidBy);
+    const 予定 = by[c.id] || [];
+    const s = summarize(c, 予定, paidBy);
+    // いま追いかけている回。督促と約束はこの回のものを出す
+    const 今の回 = 予定.filter((x) => x.state !== '入金済み')
+      .sort((a, b) => String(isoOf(a.due_date)).localeCompare(String(isoOf(b.due_date))))[0] || null;
+    const 候補 = 約束ごと[c.id] || [];
+    const 約束 = 候補[0] || null;
     return {
       id: c.id, 氏名: c.name, よみ: c.kana || '',
       索引: 索引(c.name, c.kana), テスト: !!c.is_test,
@@ -63,6 +80,17 @@ export async function 顧客一覧(sql, 絞り込み) {
       ボーナス回数: s.ボーナス回数, ボーナス残り: s.ボーナス残り,
       ボーナス総額: s.ボーナス総額, ボーナス中: s.ボーナス中, 回の種類: s.回の種類,
       電話番号: c.tel || '',
+      // 督促。回ごとに持つので、次の回になれば「未督促」から始まる
+      督促日: 今の回 ? (今の回.dunned_on || null) : null,
+      督促回数: 今の回 ? (Number(今の回.dunned_count) || 0) : 0,
+      // いつ払うと言ったか。約束の日を過ぎていれば 約束切れ
+      約束: 約束 ? {
+        日: isoOf(約束.promised_on),
+        時刻: 約束.until_time ? String(約束.until_time).slice(0, 5) : null,
+        金額: 約束.amount,
+        件数: 候補.length,
+        切れ: isoOf(約束.promised_on) < today(),
+      } : null,
     };
   });
 

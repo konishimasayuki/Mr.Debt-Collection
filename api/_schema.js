@@ -85,11 +85,20 @@ const STATEMENTS = [
      planned_amount integer NOT NULL CHECK (planned_amount > 0),
      state          text NOT NULL DEFAULT '未入金'
                     CHECK (state IN ('未入金','一部入金','入金済み')),
+     -- 督促の連絡をしたか。回ごとに持つ。
+     -- 顧客ごとに持つと、次の月になっても「督促済み」のままになり、
+     -- かけ忘れた人が分からなくなる。回が変われば、また「未督促」から始まる。
+     dunned_at      timestamptz,
+     dunned_count   integer NOT NULL DEFAULT 0,
+     dunned_by      text,
      UNIQUE (customer_id, kind, no)
    )`,
   `CREATE INDEX IF NOT EXISTS schedule_due_idx ON schedule (due_date)`,
   // すでに作ってあるデータベースにも足す
   `ALTER TABLE schedule ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT '通常'`,
+  `ALTER TABLE schedule ADD COLUMN IF NOT EXISTS dunned_at timestamptz`,
+  `ALTER TABLE schedule ADD COLUMN IF NOT EXISTS dunned_count integer NOT NULL DEFAULT 0`,
+  `ALTER TABLE schedule ADD COLUMN IF NOT EXISTS dunned_by text`,
   // 一意の決まりを (customer_id, no) から (customer_id, kind, no) へ移す。
   // 移さないと、ボーナス1回目と通常1回目がぶつかって入らない。
   `DO $$
@@ -225,27 +234,6 @@ const STATEMENTS = [
   `DROP TRIGGER IF EXISTS event_no_update ON event`,
   `CREATE TRIGGER event_no_update BEFORE UPDATE OR DELETE ON event
      FOR EACH ROW EXECUTE FUNCTION event_append_only()`,
-
-  // ── トラブル ─────────────────────────────
-  // 「携帯が繋がらない」「支払いに応じない」など、督促がうまく進まない事情。
-  // 未入金かどうかとは別に持つ。払えていても連絡が付かないことはあるし、
-  // 遅れているだけで話は通じている人もいる。ダッシュボードで数を見る。
-  //
-  // 解消したら消さずに resolved を立てる。
-  // いつから何度もめているかが分かるようにしておく。
-  `CREATE TABLE IF NOT EXISTS trouble (
-     id          serial PRIMARY KEY,
-     customer_id integer NOT NULL REFERENCES customer(id) ON DELETE CASCADE,
-     kind        text NOT NULL,
-     memo        text,
-     resolved    boolean NOT NULL DEFAULT false,
-     created_by  text NOT NULL,
-     created_at  timestamptz NOT NULL DEFAULT now(),
-     resolved_by text,
-     resolved_at timestamptz
-   )`,
-  `CREATE INDEX IF NOT EXISTS trouble_idx ON trouble (customer_id, id)`,
-  `CREATE INDEX IF NOT EXISTS trouble_open_idx ON trouble (resolved, id)`,
 
   // ── デバッグ依頼 ───────────────────────────
   // 使っていて困ったことを、画面からそのまま出せるようにする。

@@ -53,7 +53,6 @@ export default function CustomerPage({ id, onChanged }) {
   if (!d) return <Loading 件数={2} 行={6} />;
 
   const c = d.顧客;
-  const 未解消トラブル = (d.トラブル || []).filter((x) => !x.解消).length;
 
   // 支払いの記録に出ている「約束の写し」から、約束そのものを開く。
   // 写しの文だけ直しても約束は変わらないので、カレンダー側の編集へ送る。
@@ -109,10 +108,6 @@ export default function CustomerPage({ id, onChanged }) {
       <div className="cust-head">
         <h2 className="cust-name">{c.氏名}</h2>
         {c.テスト && <span className="tag t-test">テスト</span>}
-        {/* 電話をかける前に気づけるように、名前の横へ出す */}
-        {未解消トラブル > 0 && (
-          <span className="tag t-warn">トラブル {未解消トラブル}件</span>
-        )}
         <button className="btn btn-sm" onClick={() => setEditCustomer(true)}>顧客情報を編集</button>
       </div>
       {c.テスト && (
@@ -249,11 +244,6 @@ export default function CustomerPage({ id, onChanged }) {
               />
             )}
           </div>
-
-          <Troubles
-            顧客id={c.id} 一覧={d.トラブル || []}
-            onDone={() => { load(); onChanged && onChanged(); }}
-          />
 
           <CustomerMemo c={c} onDone={() => { load(); onChanged && onChanged(); }} />
         </div>
@@ -743,150 +733,6 @@ function DayBox({ iso, 顧客, 予定, 印, editing, setEditing, onClose, onDone
 }
 
 // ── 顧客についてのメモ ────────────────────────
-// ── トラブル ─────────────────────────────
-// 「携帯が繋がらない」「支払いに応じない」など、督促が進まない事情を控える。
-// 未入金かどうかとは別に持つ。払えていても連絡が付かないことはあるし、
-// 遅れているだけで話は通じている人もいる。ダッシュボードで件数を見る。
-const トラブルの種類 = ['携帯が繋がらない', '支払いに応じない', 'その他'];
-
-function Troubles({ 顧客id, 一覧, onDone }) {
-  const [開く, set開く] = useState(false);
-  const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [済みも, set済みも] = useState(false);
-
-  const 未解消 = 一覧.filter((x) => !x.解消);
-  const 解消済み = 一覧.filter((x) => x.解消);
-  const 出す = 済みも ? [...未解消, ...解消済み] : 未解消;
-
-  const 動かす = async (body, 確かめ) => {
-    if (確かめ && !confirm(確かめ)) return;
-    setBusy(true); setErr('');
-    try { await api.postCustomer({ id: 顧客id, ...body }); onDone(); }
-    catch (e) { setErr(e.message); }
-    finally { setBusy(false); }
-  };
-
-  return (
-    <div className="sec">
-      <h3>トラブル{未解消.length > 0 && `（${未解消.length}件）`}</h3>
-      <Note>
-        督促が進まない事情を控えておく欄です。ダッシュボードに件数が出ます。
-        解消しても記録は消えません。何度もめている方かどうかが分かるようにしています。
-      </Note>
-      <Err>{err}</Err>
-
-      {出す.length === 0 ? (
-        <Empty>いま抱えているトラブルはありません。</Empty>
-      ) : (
-        <div className="trb-list">
-          {出す.map((x) => (
-            <div className={'trb' + (x.解消 ? ' done' : '')} key={x.id}>
-              <div className="trb-h">
-                <b>{x.種類}</b>
-                {x.解消 && <span className="tag t-done">解消 {x.解消日}</span>}
-                <span className="trb-d">{x.記録日}／{x.記録者}</span>
-              </div>
-              {x.内容 && <p className="trb-b">{x.内容}</p>}
-              <div className="trb-btn">
-                {!x.解消 && (
-                  <button className="btn btn-sm" disabled={busy}
-                          onClick={() => 動かす({ 種類: 'トラブル解消', トラブルid: x.id })}>
-                    解消した
-                  </button>
-                )}
-                <button className="btn btn-sm btn-danger" disabled={busy}
-                        onClick={() => 動かす({ 種類: 'トラブル削除', トラブルid: x.id },
-                          `「${x.種類}」の記録を消します。\n間違えて入れたときだけ使ってください。`)}>
-                  削除
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="row-btn" style={{ marginTop: 10 }}>
-        <button className="btn btn-main" onClick={() => set開く(true)}>トラブルを記録</button>
-        {解消済み.length > 0 && (
-          <label className="chk">
-            <input type="checkbox" checked={済みも}
-                   onChange={(e) => set済みも(e.target.checked)} />
-            解消したものも出す（{解消済み.length}件）
-          </label>
-        )}
-      </div>
-
-      {開く && (
-        <TroubleForm
-          顧客id={顧客id}
-          onClose={() => set開く(false)}
-          onDone={() => { set開く(false); onDone(); }}
-        />
-      )}
-    </div>
-  );
-}
-
-function TroubleForm({ 顧客id, onClose, onDone }) {
-  const [種類, set種類] = useState('携帯が繋がらない');
-  const [自由, set自由] = useState('');
-  const [メモ, setメモ] = useState('');
-  const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const 決まった種類 = 種類 === 'その他' ? 自由.trim() : 種類;
-
-  const submit = async () => {
-    if (!決まった種類) return setErr('トラブルの種類を入れてください。');
-    setBusy(true); setErr('');
-    try {
-      await api.postCustomer({
-        id: 顧客id, 種類: 'トラブル', 内容の種類: 決まった種類, メモ,
-      });
-      onDone();
-    } catch (e) { setErr(e.message); setBusy(false); }
-  };
-
-  return (
-    <Modal
-      title="トラブルを記録"
-      onClose={onClose}
-      foot={
-        <>
-          <button className="btn" onClick={onClose}>キャンセル</button>
-          <div className="right">
-            <button className="btn btn-main" onClick={submit} disabled={busy}>
-              {busy ? '記録しています…' : '記録する'}
-            </button>
-          </div>
-        </>
-      }
-    >
-      <div className="f"><label>どんなトラブルですか</label></div>
-      <div className="dbt-pick">
-        {トラブルの種類.map((k) => (
-          <button key={k} type="button"
-                  className={'dbt-o' + (種類 === k ? ' on' : '')}
-                  onClick={() => set種類(k)}>
-            <b>{k}</b>
-            <i>{k === '携帯が繋がらない' ? '電話がつながらない、折り返しも無い'
-              : k === '支払いに応じない' ? '話はできるが、払う話にならない'
-              : '自分で書く'}</i>
-          </button>
-        ))}
-      </div>
-      {種類 === 'その他' && (
-        <Text label="トラブルの種類" value={自由} onChange={set自由}
-              placeholder="住所に住んでいない" />
-      )}
-      <Text label="くわしく（任意）" value={メモ} onChange={setメモ}
-            placeholder="いつ・誰が・何を試したか" />
-      <Err>{err}</Err>
-    </Modal>
-  );
-}
-
 function CustomerMemo({ c, onDone }) {
   const [memo, setMemo] = useState(c.メモ || '');
   const [busy, setBusy] = useState(false);
