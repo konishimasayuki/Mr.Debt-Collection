@@ -6,7 +6,7 @@
 // 決めごと
 // ・期日が今日以前の回だけを数える。まだ期日の来ていない回は未回収ではない
 // ・100%回収できた月は出さない。残っている月は、どれだけ古くても出し続ける
-// ・車を回収した方と、動作を試すための顧客は入れない
+// ・車を引き上げた方と、動作を試すための顧客は入れない
 import { useCallback, useEffect, useState } from 'react';
 import { api, yen, ymd, md } from '../api';
 import { Err, Empty, Note, Loading } from '../components/ui';
@@ -107,7 +107,7 @@ export default function Dashboard({ onOpen }) {
       <Note>
         支払期日が過ぎた回だけを数えています。まだ期日の来ていない回は入りません。
         <b>全部回収できた月は消えます。</b>残っている月は、古くても出し続けます。
-        車両を回収した方と、動作を試すための顧客は入れていません。
+        車両を引き上げた方と、動作を試すための顧客は入れていません。
       </Note>
 
       {d.月.length === 0 && (
