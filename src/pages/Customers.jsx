@@ -170,7 +170,7 @@ export default function Customers({ onOpen, onChanged }) {
                     <span>{人.length}名</span>
                   </th>
                 </tr>
-                {/* 終わった取引（回収・完済）は薄いグレー。
+                {/* 終わった取引（引き上げ・完済）は薄いグレー。
                     一覧からは消さない。名前で探されたときに見つからないと困る */}
                 {人.map((r) => (
                   <tr key={r.id} className={'clickable' + (r.テスト ? ' test-row' : '')
@@ -180,7 +180,7 @@ export default function Customers({ onOpen, onChanged }) {
                       <b>{r.氏名}</b>
                       {r.テスト && <span className="tag t-test">テスト</span>}
                       {r.終了 && (
-                        <span className={'tag ' + (r.終了理由 === '回収' ? 't-taken' : 't-done')}>
+                        <span className={'tag ' + (r.終了理由 === '引き上げ' ? 't-taken' : 't-done')}>
                           {r.終了理由}
                         </span>
                       )}

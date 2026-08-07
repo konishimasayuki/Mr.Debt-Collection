@@ -33,10 +33,11 @@ const STATEMENTS = [
      start_date      date NOT NULL,
      total_amount    integer NOT NULL,
      memo            text,
-     -- 取引の状態。回収は「車両を回収して終わり」。督促も請求もしない。
+     -- 取引の状態。値は今も「回収」のまま(車両を引き上げて終わり。督促も請求もしない)。
+     -- 画面での呼び名は「引き上げ」にしている。値そのものは変えていない(移行が要らないように)。
      -- 完済はここに入れない。入金から決まるものなので、二重に持つとずれる。
      status          text NOT NULL DEFAULT '通常' CHECK (status IN ('通常','回収')),
-     status_date     date,                             -- 回収した日
+     status_date     date,                             -- 引き上げた日
      -- 口座振替（自動引き落とし）の手続きの状態。全員まず「未申込」。
      debit_state     text NOT NULL DEFAULT '未申込'
                      CHECK (debit_state IN ('未申込','口座振替申込','口座振替開始','口座振替停止')),

@@ -17,7 +17,7 @@ const TABS = [
   { key: 'entry', label: '入金登録' },
   { key: 'history', label: '入金履歴' },
   { key: 'unpaid', label: '未入金' },
-  { key: 'finished', label: '終了' },
+  { key: 'finished', label: '完済/引き上げ' },
   { key: 'settings', label: '設定' },
   { key: 'debug', label: 'デバッグ依頼' },
 ];
@@ -40,7 +40,9 @@ const 覚える = (できた) => {
 
 export default function App() {
   const [me, setMe] = useState(null);          // null=確認中
-  const [tab, setTab] = useState('customers');
+  // 開いた直後（ログインの直後・ページの更新の直後）は、まずダッシュボードを見せる。
+  // 経営者も担当者も、その日の状況をここで確かめてから動くため
+  const [tab, setTab] = useState('dash');
   const [customerId, setCustomerId] = useState(null);   // 顧客ページを開いているとき
   const [jump, setJump] = useState(null);      // 未入金などから飛んできたときの検索語
   const [reloadKey, setReloadKey] = useState(0);
@@ -95,7 +97,11 @@ export default function App() {
   if (確認中 && !枠を先に出す) {
     return <div className="login"><div className="login-box">読み込んでいます…</div></div>;
   }
-  if (!確認中 && !me.ログイン中) return <Login onDone={(d) => { 覚える(true); setMe(d); }} />;
+  if (!確認中 && !me.ログイン中) {
+    // ログインし直したとき（ページを更新せず、ログアウトしてまた入ったとき）も
+    // ダッシュボードから始める。タブの状態はページを更新していないと引き継がれたままなので
+    return <Login onDone={(d) => { 覚える(true); setMe(d); setTab('dash'); setCustomerId(null); }} />;
+  }
 
   return (
     <div className="app">
@@ -130,7 +136,7 @@ export default function App() {
             どの表も「ログインが必要です」で埋まってしまう */}
         {確認中 ? (
           <>
-            <div className="bar"><h2>顧客一覧</h2></div>
+            <div className="bar"><h2>ダッシュボード</h2></div>
             <Loading 件数={6} />
           </>
         ) : customerId ? (

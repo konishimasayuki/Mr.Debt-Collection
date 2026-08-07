@@ -206,7 +206,8 @@ export default async (req, res) => {
       if (b.生年月日 !== undefined) put('birthday', b.生年月日 || null);
       if (b.契約日 !== undefined) put('contract_date', b.契約日 || null);
 
-      // 取引の状態（通常 / 回収）。回収にすると督促の対象から外れる
+      // 取引の状態（通常 / 回収）。回収にすると督促の対象から外れる。
+      // 値そのものは今も「回収」のまま持つ。画面での呼び名だけ「引き上げ」にしている
       const 状態一覧 = ['通常', '回収'];
       if (b.状態 !== undefined) {
         if (!状態一覧.includes(b.状態)) {
@@ -284,7 +285,7 @@ export default async (req, res) => {
       let 何を = b.顧客メモ !== undefined ? '顧客のメモを更新した' : '顧客の情報を変更した';
       if (b.状態 !== undefined) {
         何を = b.状態 === '回収'
-          ? `車両を回収した扱いにした（${b.状態日 || today()}）。督促の対象から外れる`
+          ? `車両を引き上げた扱いにした（${b.状態日 || today()}）。督促の対象から外れる`
           : '取引の状態を「通常」に戻した。督促の対象に戻る';
       } else if (ボ結果) {
         const 月 = (b.ボーナス月 || []).join('月・');

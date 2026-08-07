@@ -161,8 +161,8 @@ export default function CustomerPage({ id, onChanged }) {
             <i>この回の残り（請求 {yen(c.この回の請求)}円 / 入金 {yen(c.この回の入金)}円）</i></div>
         )}
         {c.状態 === '回収' && (
-          <div className="s taken"><b>車両を回収</b>
-            <i>{c.状態日 ? `${jpDate(c.状態日)} に回収。` : ''}督促の対象から外れています</i></div>
+          <div className="s taken"><b>車両を引き上げ</b>
+            <i>{c.状態日 ? `${jpDate(c.状態日)} に引き上げ。` : ''}督促の対象から外れています</i></div>
         )}
         {c.完済 && <div className="s good"><b>完済</b><i>お支払いは終わっています</i></div>}
       </div>
@@ -565,7 +565,7 @@ function EditCustomer({ c, onClose, onDone }) {
         </Note>
       )}
 
-      {/* 車両を回収したら、督促も請求も止める。取り違えると回収済みの方へ
+      {/* 車両を引き上げたら、督促も請求も止める。取り違えると引き上げ済みの方へ
           督促の電話をかけてしまうので、何が起きるかをその場に書いておく */}
       <div className="f">
         <label>取引の状態</label>
@@ -576,16 +576,16 @@ function EditCustomer({ c, onClose, onDone }) {
           </button>
           <button className={'dbt-o taken' + (v.状態 === '回収' ? ' on' : '')}
                   onClick={() => set('状態')('回収')}>
-            <b>車両を回収</b><i>ここで終わり。督促も請求もしません</i>
+            <b>車両を引き上げ</b><i>ここで終わり。督促も請求もしません</i>
           </button>
         </div>
       </div>
       {v.状態 === '回収' && (
         <>
-          <Text label="回収した日" type="date" value={v.状態日} onChange={set('状態日')} />
+          <Text label="引き上げた日" type="date" value={v.状態日} onChange={set('状態日')} />
           <Note kind="warn">
-            回収にすると、この方は<b>未入金タブに出なくなり</b>、督促の対象から外れます。
-            顧客一覧では背景が薄いグレーになり、<b>終了タブ</b>に並びます。
+            引き上げにすると、この方は<b>未入金タブに出なくなり</b>、督促の対象から外れます。
+            顧客一覧では背景が薄いグレーになり、<b>完済/引き上げタブ</b>に並びます。
             もとに戻すときは「通常」を選び直してください。
           </Note>
         </>

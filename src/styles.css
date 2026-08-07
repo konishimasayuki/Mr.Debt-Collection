@@ -98,7 +98,7 @@ tbody tr.off td{text-decoration:line-through}
 /* 動作を試すための顧客。本物と見間違えないよう、ほかの印と色を分けて塗りつぶす */
 .t-test{background:#4A3B7A;border-color:#4A3B7A;color:#fff;font-weight:600}
 tbody tr.test-row>td{background:#F5F2FB}
-/* 車両を回収した顧客 */
+/* 車両を引き上げた顧客 */
 .t-taken{background:#F6E3DF;border-color:#D4A99F;color:#8C2F26}
 /* ボーナス払い。金額が大きいので、通常の回と見分けが付くようにする */
 .t-bonus{background:#EAE6F4;border-color:#B3A9D1;color:#4A3B7A;font-weight:600}
