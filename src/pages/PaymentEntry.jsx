@@ -90,10 +90,11 @@ export default function PaymentEntry({ onChanged, goHistory }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [manual, setManual] = useState(false);
+  const [乗っている, set乗っている] = useState(false);   // ファイルを持ってきている最中か
   const file = useRef(null);
+  const 深さ = useRef(0);          // 中の字の上を通るたびに離れた事にならないよう数える
 
-  const pick = async (e) => {
-    const f = e.target.files && e.target.files[0];
+  const 読み取る = async (f) => {
     if (!f) return;
     setErr(''); setResult(null); setBusy(true);
     try {
@@ -108,6 +109,50 @@ export default function PaymentEntry({ onChanged, goHistory }) {
     } catch (e2) { setErr(e2.message); setPreview(null); }
     finally { setBusy(false); if (file.current) file.current.value = ''; }
   };
+
+  const pick = (e) => 読み取る(e.target.files && e.target.files[0]);
+
+  // 表計算のファイルや画像を落とされることがある。読めないものは、その場で断る。
+  // 銀行のCSVは .txt や拡張子なしで来ることもあるので、そこは通す
+  const 読めない = (f) => {
+    const 名 = (f.name || '').toLowerCase();
+    if (/\.(xlsx?|numbers|pdf|docx?|zip)$/.test(名)) {
+      return `${f.name} はCSVではありません。銀行の画面から、CSV形式で落としてください。`;
+    }
+    if ((f.type || '').startsWith('image/')) {
+      return '画像は取り込めません。銀行のCSVファイルを落としてください。';
+    }
+    return '';
+  };
+
+  const 放した = (e) => {
+    e.preventDefault();
+    深さ.current = 0; set乗っている(false);
+    const fs = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+    if (!fs.length) return;
+    if (fs.length > 1) {
+      setErr('ファイルは1つずつ入れてください。'); return;
+    }
+    const だめ = 読めない(fs[0]);
+    if (だめ) { setErr(だめ); return; }
+    読み取る(fs[0]);
+  };
+
+  // 受け口の外に落としたときは、ブラウザがそのファイルを開いてしまい、
+  // 画面が丸ごと入れ替わって作業中のものが消える。それを止める
+  useEffect(() => {
+    const 止める = (e) => {
+      if (e.target && e.target.closest && e.target.closest('.drop')) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+    };
+    window.addEventListener('dragover', 止める);
+    window.addEventListener('drop', 止める);
+    return () => {
+      window.removeEventListener('dragover', 止める);
+      window.removeEventListener('drop', 止める);
+    };
+  }, []);
 
   const commit = async () => {
     const rows = preview.明細
@@ -139,11 +184,33 @@ export default function PaymentEntry({ onChanged, goHistory }) {
         <h3>CSVから取り込む</h3>
         <input ref={file} type="file" accept=".csv,.txt,text/csv,text/plain"
                onChange={pick} style={{ display: 'none' }} />
-        <button className="btn btn-main" onClick={() => file.current.click()} disabled={busy}>
-          {busy && !preview ? '読み取っています…' : 'CSVファイルを選ぶ'}
+        {/* ファイルを放しても、押しても、同じことが起きる。
+            スマホには放す操作が無いので、押せることは必ず残す */}
+        <button
+          type="button"
+          className={'drop' + (乗っている ? ' over' : '') + (busy && !preview ? ' busy' : '')}
+          onClick={() => file.current.click()}
+          disabled={busy}
+          onDragEnter={(e) => { e.preventDefault(); 深さ.current++; set乗っている(true); }}
+          onDragOver={(e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; }}
+          onDragLeave={() => { 深さ.current--; if (深さ.current <= 0) set乗っている(false); }}
+          onDrop={放した}
+        >
+          <b>
+            {busy && !preview ? '読み取っています…'
+              : 乗っている ? 'ここで放してください'
+              : (
+                <>
+                  {/* 指で触る端末には放す操作が無い。同じ言い方をすると迷わせる */}
+                  <span className="pc-only">CSVファイルをここに放すか、押して選んでください</span>
+                  <span className="sp-only">押してCSVファイルを選んでください</span>
+                </>
+              )}
+          </b>
+          <i>選んでも、すぐには取り込みません。中身を確かめてからです</i>
         </button>
         <p style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 0 }}>
-          選ぶと、取り込む前に中身を確かめられます。日付・付番・金額が重なる行には印を付けます。
+          日付・付番・金額が重なる行には印を付けます。すでに取り込んだ行は、最初から外します。
         </p>
       </div>
 

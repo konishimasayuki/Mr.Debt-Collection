@@ -653,6 +653,38 @@ button.att-i:hover{border-color:var(--indigo)}
   .unpaid-cards td.act .btn{min-height:38px}
 }
 
+/* ── CSVを放して入れる受け口 ─────────────────── */
+/* 押しても、放しても、同じことが起きる。
+   スマホには放す操作が無いので、押せる見た目を先に立てる */
+.drop{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:4px; width:100%; min-height:104px; padding:18px 16px; margin-bottom:10px;
+  background:var(--paper); color:var(--ink);
+  border:2px dashed var(--rule-strong); border-radius:3px;
+  font-family:inherit; font-size:15px; cursor:pointer; text-align:center;
+  transition:background .12s, border-color .12s;
+}
+.drop b{font-weight:700}
+.drop i{font-style:normal; font-size:12.5px; color:var(--ink-3)}
+.drop:hover{border-color:var(--indigo); background:var(--paper-2)}
+.drop:focus-visible{outline:2px solid var(--indigo); outline-offset:2px}
+/* ファイルを持ってきている最中。放してよい場所だと分かるようにする */
+.drop.over{
+  border-color:var(--indigo); border-style:solid;
+  background:#EEF2F8; color:var(--indigo);
+}
+.drop.over i{color:var(--indigo)}
+.drop:disabled{cursor:default; color:var(--ink-2)}
+.drop.busy{border-style:solid; background:var(--paper-2)}
+/* 中の字の上を通っただけで「離れた」と数えないようにする */
+.drop b,.drop i{pointer-events:none}
+/* 指で触る端末には放す操作が無いので、言い方を変える */
+.drop .sp-only{display:none}
+@media (hover:none) and (pointer:coarse){
+  .drop .pc-only{display:none}
+  .drop .sp-only{display:inline}
+}
+
 /* ── 支払いの記録：回を押してメモを足す ───────────── */
 .rec-hint{margin:-4px 0 8px;font-size:12px;color:var(--ink-3)}
 /* 回の行をボタンにする。見た目は div のときと変えない */
