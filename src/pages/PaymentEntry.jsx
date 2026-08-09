@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, yen, ymd, jpDate, 本日 } from '../api';
 import { Modal, Text, Money, Select, Picker, Err, Note, Empty } from '../components/ui';
+import BankIntake from './BankIntake';
 
 // CSVは銀行によって Shift-JIS のことも UTF-8 のこともある。
 //
@@ -25,6 +26,60 @@ async function readText(file) {
   if (!s) return u.t;
   if (!u) return s.t;
   return s.化け <= u.化け ? s.t : u.t;
+}
+
+
+// ── 取り込む前の確認の表。CSVからでも銀行からでも、同じものを使う ──────
+// 出所が違っても、人が見て確かめることは同じ。
+// 2つ作ると、片方だけ直されて見え方が食い違う。
+export function 明細の表({ 明細, 顧客, keep, setKeep, assignTo, setAssignTo }) {
+  return (
+    <div className="card tw" style={{ maxHeight: 460, overflowY: 'auto' }}>
+      <table>
+        <thead>
+          <tr>
+            <th style={{ width: 44 }}>取込</th>
+            <th>日付</th><th>付番</th><th className="num">金額</th><th>振込人</th>
+            <th>顧客</th><th>印</th>
+          </tr>
+        </thead>
+        <tbody>
+          {明細.map((r) => (
+            <tr key={r.行} className={[
+              keep[r.行] ? '' : 'off',
+              r.すでに取込済み ? 'dupdone' : r.ファイル内で重複 ? 'dup' : '',
+            ].filter(Boolean).join(' ')}>
+              <td>
+                <input type="checkbox" checked={!!keep[r.行]}
+                       onChange={(e) => setKeep((o) => ({ ...o, [r.行]: e.target.checked }))} />
+              </td>
+              <td>{ymd(r.日付)}</td>
+              <td style={{ fontFamily: 'var(--mono)', fontSize: 12.5 }}>{r.付番 || '—'}</td>
+              <td className="num">{yen(r.金額)}</td>
+              <td style={{ fontFamily: 'var(--mono)', fontSize: 12.5 }}>{r.振込人 || '—'}</td>
+              <td>
+                {r.照合できた ? (
+                  <>{r.顧客名}<span style={{ color: 'var(--ink-3)', fontSize: 12, marginLeft: 6 }}>{r.判断}</span></>
+                ) : (
+                  <select value={assignTo[r.行] || ''} style={{ maxWidth: 220, padding: '4px 6px' }}
+                          onChange={(e) => setAssignTo((o) => ({ ...o, [r.行]: e.target.value }))}>
+                    <option value="">選ぶ（{r.判断}）</option>
+                    {顧客.map((c) => (
+                      <option key={c.id} value={c.id}>{c.氏名}{c.よみ ? `（${c.よみ}）` : ''}</option>
+                    ))}
+                  </select>
+                )}
+              </td>
+              <td>
+                {r.すでに取込済み && <span className="tag t-warn">取込済み</span>}
+                {!r.すでに取込済み && r.ファイル内で重複 && <span className="tag t-dup">重複</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export default function PaymentEntry({ onChanged, goHistory }) {
@@ -144,51 +199,9 @@ export default function PaymentEntry({ onChanged, goHistory }) {
             </Note>
           )}
 
-          <div className="card tw" style={{ maxHeight: 460, overflowY: 'auto' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th style={{ width: 44 }}>取込</th>
-                  <th>日付</th><th>付番</th><th className="num">金額</th><th>振込人</th>
-                  <th>顧客</th><th>印</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.明細.map((r) => (
-                  <tr key={r.行} className={[
-                    keep[r.行] ? '' : 'off',
-                    r.すでに取込済み ? 'dupdone' : r.ファイル内で重複 ? 'dup' : '',
-                  ].filter(Boolean).join(' ')}>
-                    <td>
-                      <input type="checkbox" checked={!!keep[r.行]}
-                             onChange={(e) => setKeep((o) => ({ ...o, [r.行]: e.target.checked }))} />
-                    </td>
-                    <td>{ymd(r.日付)}</td>
-                    <td style={{ fontFamily: 'var(--mono)', fontSize: 12.5 }}>{r.付番 || '—'}</td>
-                    <td className="num">{yen(r.金額)}</td>
-                    <td style={{ fontFamily: 'var(--mono)', fontSize: 12.5 }}>{r.振込人 || '—'}</td>
-                    <td>
-                      {r.照合できた ? (
-                        <>{r.顧客名}<span style={{ color: 'var(--ink-3)', fontSize: 12, marginLeft: 6 }}>{r.判断}</span></>
-                      ) : (
-                        <select value={assignTo[r.行] || ''} style={{ maxWidth: 220, padding: '4px 6px' }}
-                                onChange={(e) => setAssignTo((o) => ({ ...o, [r.行]: e.target.value }))}>
-                          <option value="">選ぶ（{r.判断}）</option>
-                          {preview.顧客.map((c) => (
-                            <option key={c.id} value={c.id}>{c.氏名}{c.よみ ? `（${c.よみ}）` : ''}</option>
-                          ))}
-                        </select>
-                      )}
-                    </td>
-                    <td>
-                      {r.すでに取込済み && <span className="tag t-warn">取込済み</span>}
-                      {!r.すでに取込済み && r.ファイル内で重複 && <span className="tag t-dup">重複</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <明細の表 明細={preview.明細} 顧客={preview.顧客}
+                    keep={keep} setKeep={setKeep}
+                    assignTo={assignTo} setAssignTo={setAssignTo} />
 
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
             <button className="btn btn-main" onClick={commit} disabled={busy || !残す数}>
@@ -201,6 +214,9 @@ export default function PaymentEntry({ onChanged, goHistory }) {
           </div>
         </div>
       )}
+
+      {/* ── 中：銀行から取り込む ── */}
+      <BankIntake onChanged={onChanged} />
 
       {/* ── 下：手動入金登録 ── */}
       <div className="sec">
