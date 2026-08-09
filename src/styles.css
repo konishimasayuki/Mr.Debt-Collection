@@ -102,6 +102,9 @@ tbody tr.test-row>td{background:#F5F2FB}
 .t-taken{background:#F6E3DF;border-color:#D4A99F;color:#8C2F26}
 /* ボーナス払い。金額が大きいので、通常の回と見分けが付くようにする */
 .t-bonus{background:#EAE6F4;border-color:#B3A9D1;color:#4A3B7A;font-weight:600}
+/* 未入金で、月額の行かボーナスの行かを分けて出す印。
+   月額は落ち着いた灰色にして、ボーナス（紫）が目に入るようにする */
+.t-mon{background:#EEEFF1;border-color:#C9CDD3;color:var(--ink-2);font-weight:600}
 
 /* 終わった取引。顧客一覧では薄いグレーにして、目立たせない */
 tbody tr.fin-row>td{background:#F1F0EE;color:var(--ink-2)}

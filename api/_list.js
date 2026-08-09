@@ -98,7 +98,46 @@ export async function 顧客一覧(sql, 絞り込み) {
   if (絞り込み === '未入金') {
     // 期日を過ぎて、その回にまだ残りがある人。あいうえお順で出す。
     // 終わった取引（引き上げ・完済）は外す。引き上げた方に督促の電話はしない。
-    list = list.filter((r) => !r.終了 && r.遅れ && r.この回の残り > 0);
+    //
+    // 月額とボーナスは別の行にする。期日も金額も別なので、
+    // 1行にまとめると「いま何の話をしているか」が電話で食い違う。
+    // 両方とも遅れている人は、同じ名前が縦に2行並ぶ（月額の行 → ボーナスの行）。
+    const t = today();
+    const 出す = [];
+    for (const r of list) {
+      if (r.終了) continue;
+      const 予定 = by[r.id] || [];
+      for (const kind of ['通常', 'ボーナス']) {
+        // その種類で、期日がいちばん早い未済の回
+        const cur = 予定
+          .filter((s) => (s.kind || '通常') === kind && s.state !== '入金済み')
+          .sort((a, b) => String(isoOf(a.due_date)).localeCompare(String(isoOf(b.due_date))))[0];
+        if (!cur) continue;
+        const 期日 = isoOf(cur.due_date);
+        if (期日 >= t) continue;                       // まだ期日が来ていない
+        const 残り = Math.max(0, cur.planned_amount - (paidBy[cur.id] || 0));
+        if (残り <= 0) continue;
+        const 同種 = 予定.filter((s) => (s.kind || '通常') === kind);
+        出す.push({
+          ...r,
+          種類: kind === 'ボーナス' ? 'ボーナス' : '月額',
+          回次: cur.no, 回の種類: kind,
+          支払い期日: 期日,
+          金額: cur.planned_amount,          // その回の請求（月額かボーナス金額）
+          この回の残り: 残り,
+          遅れ: true,
+          遅れ日数: Math.round((new Date(t) - new Date(期日)) / 86400000),
+          支払い回数: 同種.filter((s) => s.state === '入金済み').length,
+          残り支払い回数: 同種.filter((s) => s.state !== '入金済み').length,
+          // 督促は回ごとに持つので、月額とボーナスで別々に控えられる
+          督促日: cur.dunned_on || null,
+          督促回数: Number(cur.dunned_count) || 0,
+          ボーナス中: kind === 'ボーナス',
+        });
+      }
+    }
+    // 同じ人の2行は、並べ替えても月額が先に来る（sort は順を崩さない）
+    list = 出す;
   } else if (絞り込み === '終了') {
     list = list.filter((r) => r.終了);
   }
