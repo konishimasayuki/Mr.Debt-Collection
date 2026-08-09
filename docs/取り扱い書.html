@@ -1,0 +1,761 @@
+<title>入金管理台帳 取り扱い書</title>
+<style>
+  /* ── 色。台帳の画面と同じものを使う。
+        取り扱い書の中の印が、画面の印とまったく同じに見えるようにするため ── */
+  :root{
+    --paper:#FBFAF7; --panel:#F3F1EB; --sunk:#EFEDE6;
+    --ink:#16181A; --ink-2:#5A5F63; --ink-3:#8A8F93;
+    --rule:#D9D5CB; --rule-2:#A9A399;
+    --accent:#1F3A5F; --accent-soft:#E7ECF3;
+    --overdue:#8C2F26; --overdue-bg:#F7E6E3; --overdue-line:#D9B3AB;
+    --paid:#2F5D4A; --paid-bg:#E8F0EA; --paid-line:#AFC9B8;
+    --today:#8A6D1F; --today-bg:#FBF4DF; --today-line:#DCC98C;
+    --bonus:#4A3B7A; --bonus-bg:#EAE6F4; --bonus-line:#B3A9D1;
+    --mon-bg:#EEEFF1; --mon-line:#C9CDD3;
+    --shadow:0 1px 2px rgba(22,24,26,.06);
+    --mincho:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP","Songti SC",serif;
+    --gothic:"Hiragino Kaku Gothic ProN","Yu Gothic Medium","Noto Sans JP","Meiryo",system-ui,sans-serif;
+    --mono:"SFMono-Regular",Consolas,"Courier New",monospace;
+  }
+  /* 端末の設定が「システムに合わせる」のとき、印は何も付かない。
+     そのため media と data-theme の両方で、同じ札を入れ直す */
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#14181E; --panel:#1A1F26; --sunk:#20262E;
+      --ink:#E9E7E2; --ink-2:#A8AEB6; --ink-3:#7C838C;
+      --rule:#2C333C; --rule-2:#454E58;
+      --accent:#8FB4DC; --accent-soft:#1D2735;
+      --overdue:#E8938A; --overdue-bg:#33211F; --overdue-line:#6B3B35;
+      --paid:#8DC4AB; --paid-bg:#1B2A24; --paid-line:#3A5A4B;
+      --today:#D9BC72; --today-bg:#2C2617; --today-line:#5C4F2A;
+      --bonus:#B6A8E0; --bonus-bg:#231F33; --bonus-line:#463C68;
+      --mon-bg:#22272E; --mon-line:#3C444E;
+      --shadow:0 1px 2px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#14181E; --panel:#1A1F26; --sunk:#20262E;
+    --ink:#E9E7E2; --ink-2:#A8AEB6; --ink-3:#7C838C;
+    --rule:#2C333C; --rule-2:#454E58;
+    --accent:#8FB4DC; --accent-soft:#1D2735;
+    --overdue:#E8938A; --overdue-bg:#33211F; --overdue-line:#6B3B35;
+    --paid:#8DC4AB; --paid-bg:#1B2A24; --paid-line:#3A5A4B;
+    --today:#D9BC72; --today-bg:#2C2617; --today-line:#5C4F2A;
+    --bonus:#B6A8E0; --bonus-bg:#231F33; --bonus-line:#463C68;
+    --mon-bg:#22272E; --mon-line:#3C444E;
+    --shadow:0 1px 2px rgba(0,0,0,.4);
+  }
+
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--gothic); font-size:16px; line-height:1.85;
+    -webkit-text-size-adjust:100%;
+  }
+  ::selection{background:var(--accent-soft)}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:2px}
+  @media (prefers-reduced-motion: no-preference){ html{scroll-behavior:smooth} }
+
+  /* ── 台帳の綴じ目。左に索引の柱、右に本文 ── */
+  .sheet{
+    max-width:1180px; margin:0 auto;
+    display:grid; grid-template-columns:232px minmax(0,1fr); gap:0;
+  }
+  .rail{
+    border-right:1px solid var(--rule);
+    padding:40px 22px 60px 20px;
+    position:sticky; top:0; align-self:start; max-height:100vh; overflow-y:auto;
+  }
+  .rail-t{
+    font-family:var(--mincho); font-size:12.5px; letter-spacing:.22em;
+    color:var(--ink-3); margin:0 0 14px; font-weight:400;
+  }
+  .rail a{
+    display:block; padding:4px 0 4px 11px; margin-left:-1px;
+    border-left:2px solid transparent;
+    color:var(--ink-2); text-decoration:none; font-size:13.5px; line-height:1.5;
+  }
+  .rail a:hover{color:var(--ink)}
+  .rail a.on{color:var(--accent); border-left-color:var(--accent); font-weight:700}
+  .rail .sub{padding-left:24px; font-size:12.5px; color:var(--ink-3)}
+  .rail .gap{height:12px}
+
+  .body{padding:40px 40px 100px; min-width:0}
+  .wrap{max-width:37em}
+
+  /* ── 表紙 ── */
+  .cover{border-bottom:2px solid var(--accent); padding-bottom:26px; margin-bottom:40px}
+  .cover .eyebrow{
+    font-size:12.5px; letter-spacing:.24em; color:var(--ink-3); margin:0 0 10px;
+  }
+  .cover h1{
+    font-family:var(--mincho); font-weight:600;
+    font-size:clamp(30px,5vw,46px); letter-spacing:.1em; line-height:1.3;
+    margin:0 0 14px; text-wrap:balance;
+  }
+  .cover p{margin:0; color:var(--ink-2); font-size:15px; max-width:34em}
+
+  h2{
+    font-family:var(--mincho); font-weight:600;
+    font-size:26px; letter-spacing:.06em; line-height:1.45;
+    margin:64px 0 6px; padding-top:26px; border-top:1px solid var(--rule);
+    text-wrap:balance;
+  }
+  h2:first-of-type{border-top:0; padding-top:0; margin-top:0}
+  h2 + .lede{margin:0 0 22px; color:var(--ink-2); font-size:14.5px}
+  h3{
+    font-family:var(--mincho); font-weight:600;
+    font-size:19px; letter-spacing:.04em; margin:38px 0 10px; text-wrap:balance;
+  }
+  h4{font-size:15px; font-weight:700; margin:26px 0 6px; letter-spacing:.02em}
+  p{margin:0 0 16px}
+  a{color:var(--accent)}
+  strong{font-weight:700}
+  ul,ol{margin:0 0 18px; padding-left:1.35em}
+  li{margin-bottom:7px}
+  li::marker{color:var(--ink-3)}
+
+  /* ── 画面のどこか。新しい方がいちばん困るのは「どこを押すか」── */
+  .where{
+    display:inline-flex; align-items:center; gap:7px; flex-wrap:wrap;
+    font-size:12.5px; color:var(--ink-2); background:var(--sunk);
+    border:1px solid var(--rule); border-radius:2px;
+    padding:3px 10px; margin:0 0 12px; line-height:1.7;
+  }
+  .where b{color:var(--ink); font-weight:700}
+  .where i{font-style:normal; color:var(--ink-3)}
+
+  /* ── 印。台帳の画面と同じ見た目 ── */
+  .tag{
+    display:inline-block; font-size:12px; padding:1px 7px;
+    border:1px solid; border-radius:2px; white-space:nowrap;
+    font-family:var(--gothic); line-height:1.7; vertical-align:.05em;
+  }
+  .t-late,.t-warn{background:var(--overdue-bg); border-color:var(--overdue-line); color:var(--overdue)}
+  .t-done{background:var(--paid-bg); border-color:var(--paid-line); color:var(--paid)}
+  .t-dup{background:var(--today-bg); border-color:var(--today-line); color:var(--today)}
+  .t-bonus{background:var(--bonus-bg); border-color:var(--bonus-line); color:var(--bonus); font-weight:700}
+  .t-mon{background:var(--mon-bg); border-color:var(--mon-line); color:var(--ink-2); font-weight:700}
+  .t-test{background:var(--bonus); border-color:var(--bonus); color:var(--paper); font-weight:700}
+  .t-csv{background:var(--panel); border-color:var(--rule-2); color:var(--ink-2)}
+  .t-manual{background:var(--today-bg); border-color:var(--today-line); color:var(--today)}
+
+  /* ── 帯。注意と、こつ ── */
+  .box{
+    border-left:3px solid var(--rule-2); background:var(--panel);
+    padding:14px 18px; margin:0 0 20px; font-size:15px;
+  }
+  .box :last-child{margin-bottom:0}
+  .box .h{
+    display:block; font-size:12.5px; letter-spacing:.14em;
+    color:var(--ink-3); margin-bottom:5px;
+  }
+  .box.warn{border-left-color:var(--overdue); background:var(--overdue-bg)}
+  .box.warn .h{color:var(--overdue)}
+  .box.tip{border-left-color:var(--paid); background:var(--paid-bg)}
+  .box.tip .h{color:var(--paid)}
+
+  /* ── 表。台帳の罫のように、行の下だけに細い線 ── */
+  .tw{overflow-x:auto; margin:0 0 22px; border:1px solid var(--rule); background:var(--panel)}
+  table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:min(100%,420px)}
+  th,td{text-align:left; padding:9px 14px; border-bottom:1px solid var(--rule); vertical-align:top}
+  thead th{
+    background:var(--sunk); font-size:12.5px; letter-spacing:.08em;
+    color:var(--ink-2); font-weight:700; white-space:nowrap;
+    border-bottom:1px solid var(--rule-2);
+  }
+  tbody tr:last-child td{border-bottom:0}
+  td.n{font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+  .tw--tight td:first-child{white-space:nowrap}
+
+  /* ── 一日の流れ。これは本当に順番があるので番号を振る ── */
+  .flow{list-style:none; padding:0; margin:0 0 24px; counter-reset:step}
+  .flow > li{
+    counter-increment:step; position:relative;
+    padding:0 0 22px 46px; margin:0;
+    border-left:1px solid var(--rule); margin-left:13px;
+  }
+  .flow > li:last-child{border-left-color:transparent; padding-bottom:0}
+  .flow > li::before{
+    content:counter(step);
+    position:absolute; left:-13px; top:1px;
+    width:26px; height:26px; border-radius:50%;
+    background:var(--accent); color:var(--paper);
+    font-size:13px; font-weight:700; line-height:26px; text-align:center;
+    font-variant-numeric:tabular-nums;
+  }
+  .flow h4{margin:0 0 6px}
+  .flow p:last-child{margin-bottom:0}
+
+  /* ── 一問一答 ── */
+  .qa{border-top:1px solid var(--rule)}
+  .qa details{border-bottom:1px solid var(--rule)}
+  .qa summary{
+    cursor:pointer; padding:13px 0 13px 26px; position:relative;
+    font-weight:700; font-size:15px; list-style:none;
+  }
+  .qa summary::-webkit-details-marker{display:none}
+  .qa summary::before{
+    content:"Q"; position:absolute; left:0; top:13px;
+    color:var(--accent); font-family:var(--mincho); font-weight:600;
+  }
+  .qa summary:hover{color:var(--accent)}
+  .qa .a{padding:0 0 16px 26px; color:var(--ink-2); font-size:15px}
+  .qa .a :last-child{margin-bottom:0}
+
+  .dont li{margin-bottom:10px}
+  .dont li strong{color:var(--overdue)}
+
+  .end{
+    margin-top:56px; padding-top:20px; border-top:1px solid var(--rule);
+    font-size:13px; color:var(--ink-3);
+  }
+
+  /* ── 幅の狭い端末。索引は上に畳んで置く ── */
+  @media (max-width:860px){
+    .sheet{grid-template-columns:1fr}
+    .rail{
+      position:static; max-height:none; border-right:0;
+      border-bottom:1px solid var(--rule); padding:20px 20px 16px;
+    }
+    .rail-nav{
+      display:flex; flex-wrap:wrap; gap:2px 14px;
+    }
+    .rail a{border-left:0; padding:2px 0; margin:0}
+    .rail a.on{border-left:0}
+    .rail .sub{display:none}
+    .rail .gap{display:none}
+    .body{padding:28px 20px 80px}
+    h2{margin-top:48px}
+  }
+</style>
+
+<div class="sheet">
+
+  <nav class="rail" aria-label="目次">
+    <p class="rail-t">目次</p>
+    <div class="rail-nav">
+      <a href="#three">覚えることは3つ</a>
+      <a href="#login">入り方と出方</a>
+      <a href="#map">画面の地図</a>
+      <a href="#day">一日の流れ</a>
+      <div class="gap"></div>
+      <a href="#phone">電話まわりの操作</a>
+      <a href="#pay">入金を入れる</a>
+      <a href="#cust">顧客の管理</a>
+      <a href="#screens">画面ごとの見方</a>
+      <div class="gap"></div>
+      <a href="#tags">印の早見表</a>
+      <a href="#owner">経営者の方へ</a>
+      <a href="#help">困ったとき</a>
+      <a href="#dont">やってはいけないこと</a>
+      <a href="#rules">この台帳の決めごと</a>
+    </div>
+  </nav>
+
+  <main class="body">
+  <div class="wrap">
+
+    <header class="cover">
+      <p class="eyebrow">入金管理台帳</p>
+      <h1>取り扱い書</h1>
+      <p>自社割賦（車の自社ローン）の入金を管理する台帳です。<strong>誰がいくら払ったか・誰が遅れているか・誰にいつ電話したか</strong>を、この1か所に残します。</p>
+    </header>
+
+    <p>使う方は2種類です。</p>
+    <ul>
+      <li><strong>電話を受ける担当者</strong> — おもに「未入金」タブと、お客様のページを使います</li>
+      <li><strong>経営者</strong> — おもに「ダッシュボード」で数字を見ます</li>
+    </ul>
+    <p>はじめての方は、次の「覚えることは3つ」と「一日の流れ」を読めば動けます。細かい操作は、必要になったときに該当のところだけ読んでください。</p>
+
+
+    <h2 id="three">覚えることは3つ</h2>
+
+    <h3>1. 支払期日は動きません</h3>
+    <p>「来週払います」と言われて約束を入れても、<strong>契約上の支払期日は変わりません</strong>。約束は「いつ払うと言ったか」の控えです。期日そのものを書き換えるものではありません。</p>
+    <p>以前は約束のたびに期日を動かしていましたが、分割の約束を何件も入れると期日が跳ね回り、契約上いつが期日だったのか分からなくなったため、やめました。</p>
+
+    <h3>2. 記録は消えません</h3>
+    <p>入金を取り消しても、「取り消した」という記録が残ります。メモを消しても、「消した」という記録が残ります。</p>
+    <div class="box tip">
+      <span class="h">だから安心して直せます</span>
+      <p>間違いを隠すことはできませんが、間違いを直すことはいつでもできます。放置するほうが困ります。</p>
+    </div>
+
+    <h3>3. 迷ったらテスト顧客で試す</h3>
+    <div class="where"><b>設定</b> <i>▸</i> テスト用の顧客を用意する</div>
+    <p>押すと、練習用のお客様が1件できます。入金・約束・メモ・CSVの取り込みを、いくらでも試せます。顧客一覧では <span class="tag t-test">テスト</span> の印が付き、経営者が見る数字にも入りません。</p>
+    <div class="box warn">
+      <span class="h">注意</span>
+      <p><strong>本物のお客様で練習しないでください。</strong> 分からなくなったら、テスト顧客は作り直せます。</p>
+    </div>
+
+
+    <h2 id="login">入り方と出方</h2>
+
+    <h3>入る</h3>
+    <p>利用者名とパスワードを入れて「ログイン」を押します。一度入れば<strong>8時間</strong>そのまま使えます。翌日はもう一度入れてください。</p>
+
+    <h3>出る</h3>
+    <p>右上の「ログアウト」を押します。みんなで使うパソコンでは、席を離れる前に必ず押してください。</p>
+
+    <h3>大事な注意</h3>
+    <p>ログインは<strong>全員で同じもの</strong>を使っています。そのため、<strong>入力した人の名前は残りません</strong>（記録者はすべて「管理者」と出ます）。</p>
+    <p>誰がやったかを残したいことは、<strong>メモに書いてください。</strong><br>
+    （例：「8/9 田中が電話。給料日後に半分入れると本人が言っている」）</p>
+
+
+    <h2 id="map">画面の地図</h2>
+    <p class="lede">上に8つのタブが並んでいます。</p>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>タブ</th><th>何をする画面か</th><th>よく使う人</th></tr></thead>
+        <tbody>
+          <tr><td><strong>ダッシュボード</strong></td><td>月ごとの回収の状況。開いた直後はここ</td><td>経営者</td></tr>
+          <tr><td><strong>顧客一覧</strong></td><td>全員の一覧。名前を探して開く</td><td>両方</td></tr>
+          <tr><td><strong>入金登録</strong></td><td>銀行のCSVを取り込む／手で1件入れる</td><td>担当者</td></tr>
+          <tr><td><strong>入金履歴</strong></td><td>入れた入金を見る・直す・取り消す</td><td>両方</td></tr>
+          <tr><td><strong>未入金</strong></td><td>期日を過ぎて払えていない方の一覧。<strong>電話はここから</strong></td><td>担当者</td></tr>
+          <tr><td><strong>完済/引き上げ</strong></td><td>終わった取引。払い終えた方と、車を引き上げた方</td><td>両方</td></tr>
+          <tr><td><strong>設定</strong></td><td>債権会社の登録。テスト用の顧客を作る</td><td>経営者</td></tr>
+          <tr><td><strong>デバッグ依頼</strong></td><td>おかしいところを報告する</td><td>両方</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+
+    <h2 id="day">一日の流れ</h2>
+    <p class="lede">電話を受ける担当者の方向けです。</p>
+
+    <ol class="flow">
+      <li>
+        <h4>朝、ダッシュボードを見る</h4>
+        <p>台帳を開くと、まずダッシュボードが出ます。<strong>月ごとに、何％回収できたか</strong>が並びます。100%になった月は消えます。</p>
+        <p>上に赤い帯で「約束切れが◯件あります」と出ることがあります。<strong>払うと言った日を過ぎた方</strong>です。その日のうちにかけてください。</p>
+      </li>
+      <li>
+        <h4>「未入金」タブを開く</h4>
+        <p>期日を過ぎて払えていない方が、あいうえお順で並びます。上から順にかけていけば、かけ忘れが出ません。名前の横の印を見れば、その方の状況が分かります。</p>
+        <div class="tw tw--tight">
+          <table>
+            <thead><tr><th>印</th><th>意味</th></tr></thead>
+            <tbody>
+              <tr><td><span class="tag t-late">13日 遅れ</span></td><td>期日を過ぎた日数</td></tr>
+              <tr><td><span class="tag t-warn">未督促</span></td><td><strong>まだ電話していません。ここからかけます</strong></td></tr>
+              <tr><td><span class="tag t-done">督促 8/5</span></td><td>8月5日に連絡済み</td></tr>
+              <tr><td><span class="tag t-dup">約束 8/20</span></td><td>8月20日に払うと言っています</td></tr>
+              <tr><td><span class="tag t-late">約束 8/5 超過</span></td><td><strong>払うと言った日を過ぎています。優先してかけます</strong></td></tr>
+              <tr><td><span class="tag t-mon">月額</span> <span class="tag t-bonus">ボーナス</span></td><td>どちらの支払いの話か（ボーナス払いの方だけ出ます）</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="box warn">
+          <span class="h">同じ名前が2行あっても間違いではありません</span>
+          <p>ボーナス払いの方は、月額の行とボーナスの行が別々に並びます。金額も期日も別のものなので、<strong>どちらの話をしているか確かめてから</strong>話してください。月額3万円とボーナス10万円では、話がまるで違います。</p>
+        </div>
+      </li>
+      <li>
+        <h4>電話をかける</h4>
+        <p>行を押すと、そのお客様のページが開きます。左にカレンダー、右に支払いの記録が出ます。かける前に見ておくとよいところ:</p>
+        <ul>
+          <li><strong>カレンダー上の帯</strong> — 月々の金額、次の支払期日、いまの回、残債</li>
+          <li><strong>支払いの記録</strong> — 過去にいつ・いくら入ったか。遅れがちな方かどうか分かります</li>
+          <li><strong>この顧客についてのメモ</strong> — 連絡のつきやすい時間、勤務先、家族のことなど</li>
+        </ul>
+      </li>
+      <li>
+        <h4>電話を切ったら、すぐ控える</h4>
+        <p><strong>あとでまとめて、はやめてください。</strong> 忘れます。</p>
+        <ul>
+          <li><strong>連絡した</strong> → 未入金タブの <span class="tag t-warn">未督促</span> を押す</li>
+          <li><strong>払う日を言われた</strong> → カレンダーのその日を押して、入金約束を入れる</li>
+          <li><strong>事情を聞いた</strong> → 支払いの記録の、その回を押してメモを足す</li>
+        </ul>
+      </li>
+      <li>
+        <h4>入金が来たら登録する</h4>
+        <p>「入金登録」タブから入れます。<a href="#pay">入金を入れる</a>を見てください。</p>
+      </li>
+    </ol>
+
+
+    <h2 id="phone">電話まわりの操作</h2>
+
+    <h3>督促したことを控える</h3>
+    <div class="where"><b>未入金</b> <i>▸</i> 名前の横の <span class="tag t-warn">未督促</span></div>
+    <p>押すと確認が出ます。「OK」を押すと <span class="tag t-done">督促 8/9</span> に変わります。</p>
+    <ul>
+      <li>何度もかけたときは <span class="tag t-done">督促 8/9（3回）</span> のように回数が出ます</li>
+      <li>間違えて押したら、もう一度押せば取り消せます</li>
+      <li><strong>督促は「回」ごとに控えます。</strong> 次の月になれば、また「未督促」から始まります</li>
+      <li>ボーナス払いの方は、月額とボーナスで<strong>別々に</strong>控えられます</li>
+    </ul>
+
+    <h3>入金約束を入れる</h3>
+    <div class="where"><b>顧客ページ</b> <i>▸</i> 入金カレンダー <i>▸</i> 払うと言われた日を押す</div>
+    <p>下に欄が出るので、次を入れて「登録する」を押します。</p>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>欄</th><th>入れるもの</th></tr></thead>
+        <tbody>
+          <tr><td>どの回ぶん</td><td>何月分の話か。分からなければ「決めない」で構いません</td></tr>
+          <tr><td>いくら入金</td><td>言われた金額</td></tr>
+          <tr><td>いつまで</td><td>終日のままでよいです。「17時まで」と言われたらチェックを外して時刻を入れます</td></tr>
+          <tr><td>メモ</td><td>言われたことをそのまま（例：給料日後、家族が払う）</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box tip">
+      <span class="h">こつ</span>
+      <p><strong>1つの回に何件でも入れられます。</strong> 「3日後に半分、5日後に残り」も、そのまま2件入れてください。上書きされません。</p>
+    </div>
+    <p>過ぎた日には入れられません。これから払う約束のための欄だからです。</p>
+
+    <h3>約束を直す・取り消す</h3>
+    <p>同じ日をもう一度押すと、その日の約束が一覧で出ます。<strong>「編集」</strong>で直せます。<strong>「削除」</strong>で取り消せます。取り消したことは記録に残ります。</p>
+
+    <h3>支払いの記録にメモを足す</h3>
+    <div class="where"><b>顧客ページ</b> <i>▸</i> 支払いの記録 <i>▸</i> 回を押す</div>
+    <p>下に入力欄が出ます。書いて「メモを足す」を押します。</p>
+    <ul>
+      <li>書いた<strong>日と時刻は自動で入ります</strong>。入れ間違いが起きません</li>
+      <li>続けて何件でも足せます（欄は開いたままです）</li>
+      <li>送るのは「メモを足す」ボタンか、<strong>Ctrl + Enter</strong>（文章なので Enter は改行です）</li>
+      <li><strong>ボーナスの回にも足せます。</strong> 賞与1回目のメモと、通常1回目のメモは別々に残ります</li>
+    </ul>
+    <p>入金約束を入れると、その回に自動でメモが1行足されます。自動で入ったメモは、約束のほうを直せば一緒に変わります。</p>
+
+    <h3>お客様についてのメモ</h3>
+    <div class="where"><b>顧客ページ</b> <i>▸</i> 左下「この顧客についてのメモ」</div>
+    <p><strong>その方についてずっと残しておきたいこと</strong>を書きます。例：連絡のつきやすい時間、勤務先、家族のこと、事情。</p>
+    <p>回ごとのメモとは別ものです。回ごとのメモは「その月の話」、こちらは「その人の話」です。</p>
+
+
+    <h2 id="pay">入金を入れる</h2>
+
+    <h3>銀行のCSVから取り込む（まとめて）</h3>
+    <div class="where"><b>入金登録</b> <i>▸</i> CSVファイルを選ぶ</div>
+    <p><strong>取り込む前に中身が出ます。</strong> ここで必ず確かめてから「◯件を取り込む」を押してください。</p>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>出るもの</th><th>どうするか</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag t-manual">取込済み</span></td><td>すでに取り込んだ入金です。最初から外れています。そのままで構いません</td></tr>
+          <tr><td><span class="tag t-dup">重複</span></td><td>同じファイルの中に同じ入金が2つあります</td></tr>
+          <tr><td>顧客の欄が選択式</td><td>名前が結びつきませんでした。選んでください</td></tr>
+          <tr><td>「◯行は取り込みません」</td><td>中身を開いて確かめてください。出金や訂正の行ならそのままで構いません。<strong>入金のはずの行が入っていたら、ファイルの列の並びが違う可能性があります</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>手で1件入れる</h3>
+    <div class="where"><b>入金登録</b> <i>▸</i> 手動入金登録</div>
+    <p>現金で受け取ったときや、CSVに出てこない振り込みのときに使います。<strong>未入金タブの行の右</strong>にある「手動入金登録」からも開けます。電話中はこちらが早いです。</p>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>欄</th><th>入れるもの</th></tr></thead>
+        <tbody>
+          <tr><td>日付</td><td>実際に入った日</td></tr>
+          <tr><td>金額</td><td>受け取った額</td></tr>
+          <tr><td>名前</td><td>打つと候補が出ます（かな・カナ・漢字・英字のどれでも当たります）</td></tr>
+          <tr><td>入金方法</td><td>振り込み／現金／その他</td></tr>
+          <tr><td>入金種類</td><td><strong>ボーナス払いの方にだけ出ます</strong>（下記）</td></tr>
+          <tr><td>メモ</td><td><strong>手で入れた理由を必ず書いてください</strong>（例：現金で受け取った）</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>登録すると「3回目へ 30,000円」のように、どの回に充てたかが出ます。</p>
+
+    <h3>ボーナス払いの入金</h3>
+    <p>ボーナス払いの設定がある方は、<strong>「入金種類」</strong>の欄が出ます。選べるのは <span class="tag t-mon">月額</span> と <span class="tag t-bonus">ボーナス</span> の2つです。</p>
+    <ul>
+      <li>はじめから、<strong>いま払えていない分の種類</strong>が入っています。たいていはそのままで結構です</li>
+      <li>未入金タブの <span class="tag t-bonus">ボーナス</span> の行から開いたときは、ボーナスで始まります</li>
+    </ul>
+    <div class="box">
+      <span class="h">なぜ分けるのか</span>
+      <p>台帳はふつう、期日の古い順にお金を充てます。そのため、賞与で受け取った10万円が古い月々の回に食われてしまい、ボーナスの回はいつまでも未入金のまま残っていました。種類を選べば、<strong>その種類の回にだけ</strong>充てます。</p>
+    </div>
+
+    <h3>入金を間違えたとき</h3>
+    <div class="where"><b>入金履歴</b> <i>▸</i> その行を押す</div>
+    <ul>
+      <li><strong>直す</strong> — 日付・金額・顧客・入金方法・メモを直せます。充当も自動で付け直します</li>
+      <li><strong>取り消す</strong> — 「この入金を削除」。充当も一緒に外れます</li>
+    </ul>
+    <p>どちらも記録に残ります。顧客を付け替えたときは、<strong>移す前と移した先の両方</strong>に残ります。</p>
+    <p>ボーナスとして入れた入金を直しても、<strong>ボーナスのまま</strong>です。勝手に月額へ移りません。</p>
+
+
+    <h2 id="cust">顧客の管理</h2>
+
+    <h3>新しく登録する</h3>
+    <div class="where"><b>顧客一覧</b> <i>▸</i> ＋ 新規顧客登録</div>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>欄</th><th>補足</th></tr></thead>
+        <tbody>
+          <tr><td>名前</td><td>必須</td></tr>
+          <tr><td>よみ（カナ）</td><td><strong>必ず入れてください。</strong> あいうえお順と、CSVの振込人名の照合に使います</td></tr>
+          <tr><td>性別・生年月日・電話番号・住所</td><td>分かる範囲で</td></tr>
+          <tr><td>契約日・車種</td><td>分かる範囲で</td></tr>
+          <tr><td>債権譲渡会社・債権譲渡先</td><td>「設定」タブで会社を登録してから選べます</td></tr>
+          <tr><td>月々の金額・支払回数・毎月の支払日</td><td><strong>あとから変えられません</strong>（下記）</td></tr>
+          <tr><td>支払い開始月</td><td>空なら契約日の翌月から始まります</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>登録すると、支払予定が回数ぶん自動で作られます。毎月の支払日がその月に無いとき（31日など）は、その月の末日になります。</p>
+
+    <h3>情報を直す</h3>
+    <div class="where"><b>顧客ページ</b> <i>▸</i> 右上「顧客情報を編集」</div>
+    <div class="box warn">
+      <span class="h">ここでは変えられないもの</span>
+      <p>月々の金額 ／ 支払回数 ／ 毎月の支払日 ／ 支払い開始月</p>
+      <p>変えると支払予定を作り直すことになり、<strong>すでに充てた入金の行き先が消える</strong>ためです。どうしても直す必要があるときは、デバッグ依頼から相談してください。</p>
+    </div>
+
+    <h3>口座振替（自動引き落とし）の状態</h3>
+    <div class="where"><b>顧客ページ</b> <i>▸</i> 帯の右端「口座振替（押すと変えられます）」</div>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>状態</th><th>意味</th></tr></thead>
+        <tbody>
+          <tr><td>未申込</td><td>まだ手続きしていません</td></tr>
+          <tr><td>口座振替申込</td><td>申し込みました（申し込んだ日を入れます）</td></tr>
+          <tr><td>口座振替開始</td><td>引き落としが始まりました（始まる日を入れます）</td></tr>
+          <tr><td>口座振替停止</td><td>止めました</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>ボーナス払いの設定</h3>
+    <div class="where"><b>顧客ページ</b> <i>▸</i> 顧客情報を編集 <i>▸</i> ボーナス払い</div>
+    <ol>
+      <li>12か月の札から、<strong>ボーナス月を押して選びます</strong>（複数選べます）</li>
+      <li>選ぶと日と金額の欄が出るので、入れます</li>
+      <li>保存すると、その月日に<strong>別の回</strong>として支払予定に足されます</li>
+    </ol>
+    <ul>
+      <li>支払総額と残債にも足されます</li>
+      <li>契約の期間（初回の期日〜最終回の期日）に入る月だけ作られます</li>
+      <li><strong>すでに入金が充てられているボーナスの回は消えません。</strong> 入金の行き先が消えないためです</li>
+    </ul>
+    <p>支払いの記録では「全48回 + ボーナス4回」のように出て、ボーナスの回は <span class="tag t-bonus">賞与1</span> と紫色で出ます。</p>
+
+    <h3>車を引き上げた</h3>
+    <div class="where"><b>顧客ページ</b> <i>▸</i> 顧客情報を編集 <i>▸</i> 取引の状態 <i>▸</i> 車両を引き上げ</div>
+    <p>引き上げた日を入れて保存します。</p>
+    <ul>
+      <li>未入金タブから消えます（引き上げた方に督促の電話はしません）</li>
+      <li>「完済/引き上げ」タブに移ります</li>
+      <li>顧客一覧では行の背景が薄い灰色になります</li>
+    </ul>
+    <p>払い終えた方は、何もしなくても自動で「完済」になります。</p>
+
+
+    <h2 id="screens">画面ごとの見方</h2>
+
+    <h3>ダッシュボード</h3>
+    <p><strong>支払期日が過ぎた回だけ</strong>を数えています。まだ期日の来ていない回は入りません。<strong>全部回収できた月は消えます。</strong> 残っている月は、古くても出し続けます。車を引き上げた方と、テスト用の顧客は入っていません。</p>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>見るところ</th><th>意味</th></tr></thead>
+        <tbody>
+          <tr><td>2026年6月分 <strong>50%</strong></td><td>その月の回のうち、半分が入金済み</td></tr>
+          <tr><td class="n">1/2 回収</td><td>2件のうち1件が入金済み</td></tr>
+          <tr><td class="n">未回収 30,442円</td><td>まだ入っていない額</td></tr>
+          <tr><td>名前の行</td><td>まだ入っていない方。金額が大きい順</td></tr>
+          <tr><td><span class="tag t-late">6か月 未回収</span></td><td>その方が何か月ためているか</td></tr>
+          <tr><td>赤い背景の行</td><td>複数の月に出ている方。<strong>いちばん心配な方です</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>顧客一覧</h3>
+    <p>全員が<strong>あいうえお順</strong>で並びます。あ行・か行…の札で飛べます。上の欄で、<strong>氏名・よみ・車種</strong>から探せます。かな・カナ・漢字・英字のどれでも当たります。</p>
+    <p>遅れている方は名前の横に <span class="tag t-late">13日 遅れ</span> と出ます。遅れていなければ出ません。終わった取引（完済・引き上げ）は、行の背景が薄い灰色です。</p>
+
+    <h3>未入金</h3>
+    <p><strong>電話はこの画面から始めます。</strong> 上に「◯名 ／ 今の回の未入金 合計 ◯円 ／ 未督促 ◯件」と出ます。ボーナス払いの方が2行に分かれているときは、人数のうしろに「（◯件）」が付きます。<strong>人数と行数は一致しません。</strong></p>
+
+    <h3>入金履歴</h3>
+    <p>入れた入金が新しい順に並びます。行を押すと直せます。<strong>手で入れた入金</strong>は行の色が違います。上の欄で名前から探せます。お客様の名前を押すと、その方のページが開きます。</p>
+
+    <h3>完済/引き上げ</h3>
+    <p>終わった取引です。<span class="tag t-done">完済</span> と <span class="tag t-late">引き上げ</span> の区分が付きます。</p>
+
+
+    <h2 id="tags">印の早見表</h2>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>印</th><th>どこに出るか</th><th>意味</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag t-late">13日 遅れ</span></td><td>顧客一覧・未入金</td><td>期日を過ぎた日数</td></tr>
+          <tr><td><span class="tag t-warn">未督促</span></td><td>未入金</td><td>まだ連絡していません（押すと控えられます）</td></tr>
+          <tr><td><span class="tag t-done">督促 8/5（2回）</span></td><td>未入金</td><td>8月5日に連絡済み・通算2回</td></tr>
+          <tr><td><span class="tag t-dup">約束 8/20</span></td><td>顧客一覧・未入金</td><td>その日に払うと言っています</td></tr>
+          <tr><td><span class="tag t-late">約束 8/5 超過</span></td><td>未入金</td><td><strong>払うと言った日を過ぎています</strong></td></tr>
+          <tr><td><span class="tag t-late">◯/◯ 約束切れ</span></td><td>ダッシュボード</td><td>同上</td></tr>
+          <tr><td><span class="tag t-mon">月額</span></td><td>未入金</td><td>月々の支払いの行（ボーナス払いの方だけ）</td></tr>
+          <tr><td><span class="tag t-bonus">ボーナス</span></td><td>未入金</td><td>ボーナスの支払いの行</td></tr>
+          <tr><td><span class="tag t-bonus">賞与1</span></td><td>支払いの記録</td><td>ボーナスの1回目</td></tr>
+          <tr><td><span class="tag t-dup">残り 10,000円</span></td><td>未入金</td><td>一部だけ入っていて、残りがある</td></tr>
+          <tr><td><span class="tag t-test">テスト</span></td><td>顧客一覧ほか</td><td>練習用の顧客。数字には入りません</td></tr>
+          <tr><td><span class="tag t-manual">取込済み</span></td><td>CSVの確認</td><td>すでに取り込んだ入金</td></tr>
+          <tr><td><span class="tag t-dup">重複</span></td><td>CSVの確認</td><td>同じファイルの中に同じ入金がある</td></tr>
+          <tr><td><span class="tag t-warn">未割当</span></td><td>入金履歴</td><td>どのお客様か決まっていない入金</td></tr>
+          <tr><td><span class="tag t-done">完済</span> <span class="tag t-late">引き上げ</span></td><td>完済/引き上げ</td><td>終わり方</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>カレンダーの色</h4>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>色</th><th>意味</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag t-late">赤</span></td><td>支払期日（固定）</td></tr>
+          <tr><td><span class="tag t-bonus">紫</span></td><td>ボーナス払い</td></tr>
+          <tr><td><span class="tag t-dup">黄</span></td><td>入金約束日</td></tr>
+          <tr><td><span class="tag t-done">緑</span></td><td>入金</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>支払期日とボーナスの回は、<strong>払い終えると緑</strong>に変わります。赤や紫のまま残っている日が、まだ入っていない回です。</p>
+
+
+    <h2 id="owner">経営者の方へ</h2>
+
+    <h3>回収率</h3>
+    <p>ダッシュボードの％は、<strong>支払期日が過ぎた回のうち、入金済みの回の割合</strong>です。まだ期日の来ていない回は分母に入りません。ですから、<strong>「これから来る支払い」で薄まることはありません。</strong></p>
+
+    <h3>残債</h3>
+    <p>その方の支払総額から、これまでの入金合計を引いた額です。ボーナス払いを設定していれば、その分も入っています。</p>
+    <p>未入金タブでは、月額の行とボーナスの行の<strong>両方に同じ残債</strong>が出ます。残債は「その人にいくら残っているか」であり、種類で割れる数字ではないためです。</p>
+
+    <h3>いま危ないのは誰か</h3>
+    <p>ダッシュボードで<strong>赤い背景の行</strong>を見てください。複数の月に出ている方です。1か月遅れの方より、3か月ためている方のほうが先に手を打つ必要があります。</p>
+
+    <h3>数字に入らないもの</h3>
+    <ul>
+      <li>車を引き上げた方（督促も請求もしないため）</li>
+      <li>テスト用の顧客（試し打ちの金額が混ざらないようにするため）</li>
+    </ul>
+
+
+    <h2 id="help">困ったとき</h2>
+
+    <div class="qa">
+      <details>
+        <summary>入金を間違えた顧客に入れてしまいました</summary>
+        <div class="a"><p>入金履歴でその行を押し、顧客を選び直してください。充当は自動で付け直します。移す前と移した先の両方に記録が残ります。</p></div>
+      </details>
+      <details>
+        <summary>まとめて2か月分が振り込まれました</summary>
+        <div class="a"><p>そのまま1件で入れてください。古い回から順に自動で埋まります。</p></div>
+      </details>
+      <details>
+        <summary>ボーナスの入金なのに、古い月の回に入ってしまいました</summary>
+        <div class="a"><p>入金履歴でその行を押し、直してください。次からは手動入金登録で<strong>入金種類を「ボーナス」</strong>にすると、ボーナスの回にだけ入ります。</p></div>
+      </details>
+      <details>
+        <summary>「未入金」に同じ名前が2行出ています</summary>
+        <div class="a"><p>間違いではありません。ボーナス払いの方は、月額とボーナスを別の行に分けています。</p></div>
+      </details>
+      <details>
+        <summary>約束を入れたのに、期日が変わりません</summary>
+        <div class="a"><p>そういう作りです。期日は契約上のものなので動きません。約束は別に残ります。</p></div>
+      </details>
+      <details>
+        <summary>月々の金額を間違えて登録しました</summary>
+        <div class="a"><p>あとから変えられません。すでに充てた入金の行き先が消えるためです。デバッグ依頼から相談してください。</p></div>
+      </details>
+      <details>
+        <summary>CSVを2回取り込んでしまいました</summary>
+        <div class="a"><p>2回目は自動で弾かれます。確認画面に <span class="tag t-manual">取込済み</span> と出て、最初から外れています。</p></div>
+      </details>
+      <details>
+        <summary>画面が真っ白／古い内容のままです</summary>
+        <div class="a"><p>画面を<strong>強く更新</strong>してください。Windows は Ctrl + Shift + R、Mac は ⌘ + Shift + R です。</p></div>
+      </details>
+      <details>
+        <summary>誰がこの入金を入れたのか知りたいです</summary>
+        <div class="a"><p>いまの台帳では分かりません。記録者はすべて「管理者」になります。残したいことは、メモに名前を書いてください。</p></div>
+      </details>
+    </div>
+
+    <h3>うまくいかないときは「デバッグ依頼」</h3>
+    <div class="where"><b>デバッグ依頼</b> <i>▸</i> 新しい依頼</div>
+    <ol>
+      <li><strong>タイトル</strong> — ひとことで（例：未入金の合計が合わない）</li>
+      <li><strong>本文</strong> — <strong>どの画面で、何をしたら、どうなったか</strong>を書いてください</li>
+      <li><strong>画像</strong> — 画面を撮って添付してください。欄に貼り付け（Ctrl + V）でも入ります</li>
+    </ol>
+    <p>投稿には返信できます。追加で分かったことは、返信で足してください。</p>
+    <div class="box tip">
+      <span class="h">書き方の例</span>
+      <p>未入金タブで、山田太郎さんの「未督促」を押したら、確認は出たのに印が変わりませんでした。画面を更新すると変わっていました。（8/9 14時ごろ、スマホ）</p>
+    </div>
+    <p>「動かない」だけでは調べようがありません。<strong>画面・操作・結果</strong>の3つを書いてください。</p>
+
+
+    <h2 id="dont">やってはいけないこと</h2>
+    <ul class="dont">
+      <li><strong>本物のお客様で操作を練習しない</strong> — 「設定」タブのテスト用の顧客を使ってください</li>
+      <li><strong>あとでまとめて控えようとしない</strong> — 電話を切った直後に入れてください。忘れます</li>
+      <li><strong>CSVを確かめずに取り込まない</strong> — 取り込む前の確認画面は必ず読んでください</li>
+      <li><strong>共用のパソコンでログアウトを忘れない</strong> — 席を離れる前に押してください</li>
+      <li><strong>間違いを放置しない</strong> — 直した記録は残ります。隠すより直すほうが安全です</li>
+    </ul>
+
+
+    <h2 id="rules">この台帳の決めごと</h2>
+    <p class="lede">新人の方は読まなくて構いません。運用を決める方向けです。</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>決めごと</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td>支払期日は約束では動かない</td><td>分割の約束を何件も入れると期日が跳ね回り、契約上の期日が分からなくなるため</td></tr>
+          <tr><td>入金は「充当」で回に割り振る</td><td>まとめ払いを1件の入金として受け、複数の回へ按分するため</td></tr>
+          <tr><td>満額に届くまでは「一部入金」</td><td>届いてはじめて「入金済み」。残りが見えなくなるのを防ぐため</td></tr>
+          <tr><td>記録は追記のみ</td><td>消せる台帳は台帳ではないため。訂正は「取消」を足して表す</td></tr>
+          <tr><td>督促は回ごとに持つ</td><td>顧客ごとに持つと、次の月になっても「督促済み」のままになり、かけ忘れが分からなくなるため</td></tr>
+          <tr><td>通常とボーナスは回次を別に数える</td><td>「全48回 + ボーナス4回」と数えるため</td></tr>
+          <tr><td>ログインは全員で共通（8時間）</td><td>担当者ごとの利用者はまだ作っていません</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="end">入金管理台帳 取り扱い書 ／ 技術的な詳細は <code>docs/データ保存設計.md</code> にあります。</p>
+
+  </div>
+  </main>
+</div>
+
+<script>
+  // 目次の、いま読んでいるところに印を付ける。
+  // 長い手引書なので、どこを読んでいるかが分からなくなるのを防ぐ
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.rail a'));
+    var map = {};
+    var targets = [];
+    links.forEach(function (a) {
+      var el = document.getElementById(a.getAttribute('href').slice(1));
+      if (el) { map[el.id] = a; targets.push(el); }
+    });
+    if (!('IntersectionObserver' in window) || !targets.length) return;
+    var seen = {};
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen[e.target.id] = e.isIntersecting; });
+      var 現在 = null;
+      for (var i = 0; i < targets.length; i++) {
+        if (seen[targets[i].id]) { 現在 = targets[i].id; break; }
+      }
+      if (!現在) return;
+      links.forEach(function (a) { a.classList.remove('on'); });
+      map[現在].classList.add('on');
+    }, { rootMargin: '0px 0px -70% 0px' });
+    targets.forEach(function (t) { io.observe(t); });
+  })();
+</script>
