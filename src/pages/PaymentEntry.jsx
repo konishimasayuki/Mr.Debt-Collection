@@ -312,7 +312,7 @@ function ImportResult({ d, onClose, onChanged, goHistory }) {
 // ── 手動入金 ────────────────────────────────
 // 未入金タブからも開くので、名前を付けて外へ出す。
 // 初期顧客id を渡すと、その方が選ばれた状態で開く（未入金から来たとき）。
-export function ManualPayment({ onClose, onDone, 初期顧客id }) {
+export function ManualPayment({ onClose, onDone, 初期顧客id, 初期種類 }) {
   const [customers, setCustomers] = useState([]);
   const [v, setV] = useState({ 日付: 本日(), 顧客id: 初期顧客id ? String(初期顧客id) : '',
     金額: '', 入金方法: '振込', 入金種類: '', メモ: '' });
@@ -334,8 +334,11 @@ export function ManualPayment({ onClose, onDone, 初期顧客id }) {
   // 遅れている分から順に埋めるのが普通なので、たいていはこのままでよい
   useEffect(() => {
     if (!相手) { if (v.入金種類) set('入金種類')(''); return; }
+    // 未入金のボーナスの行から開いたときは、その行の種類をそのまま使う。
+    // 「ボーナスの行を押したのに月額が入っている」では、選び直させることになる
+    const 行から = 初期種類 === 'ボーナス' || 初期種類 === '月額' ? 初期種類 : '';
     const 既定 = 相手.ボーナス回数 > 0
-      ? (相手.回の種類 === 'ボーナス' ? 'ボーナス' : '月額') : '';
+      ? (行から || (相手.回の種類 === 'ボーナス' ? 'ボーナス' : '月額')) : '';
     set('入金種類')(既定);
     // 相手が変わったときだけ入れ直す（人が選び直したものは触らない）
     // eslint-disable-next-line react-hooks/exhaustive-deps

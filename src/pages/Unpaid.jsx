@@ -40,6 +40,8 @@ export default function Unpaid({ onOpen, onChanged }) {
   const テスト数 = (rows || []).length - 本物.length;
   const 合計 = 本物.reduce((s, r) => s + r.この回の残り, 0);
   const 未督促 = 本物.filter((r) => !r.督促回数).length;
+  // 行は「人 × 種類」。同じ人が月額とボーナスで2行に並ぶので、人数は名寄せして数える
+  const 人数 = new Set(本物.map((r) => r.id)).size;
 
   return (
     <>
@@ -47,8 +49,9 @@ export default function Unpaid({ onOpen, onChanged }) {
         <h2>未入金</h2>
         {rows && (
           <span className="sub">
-            {本物.length}名 ／ 今の回の未入金 合計 {yen(合計)}円
-            {未督促 > 0 && ` ／ 未督促 ${未督促}名`}
+            {人数}名{本物.length > 人数 && `（${本物.length}件）`}
+            {' '}／ 今の回の未入金 合計 {yen(合計)}円
+            {未督促 > 0 && ` ／ 未督促 ${未督促}件`}
           </span>
         )}
       </div>
@@ -58,7 +61,9 @@ export default function Unpaid({ onOpen, onChanged }) {
         <b>行を押すと顧客ページが開きます。</b>
         名前の横の <span className="tag t-warn">未督促</span> を押すと、
         督促の連絡をしたことを控えられます。
-        <span className="tag t-bonus">ボーナス</span> は、遅れているのがボーナスの回であることを表します。
+        ボーナス払いの方は、<span className="tag t-mon">月額</span> と{' '}
+        <span className="tag t-bonus">ボーナス</span> を<b>別の行</b>に分けています。
+        期日も金額も別なので、同じ名前が縦に2行並ぶことがあります。
         {テスト数 > 0 && (
           <> なお、<span className="tag t-test">テスト</span> の
           {テスト数}名は上の人数と合計に入れていません。</>
@@ -73,7 +78,7 @@ export default function Unpaid({ onOpen, onChanged }) {
               <th>顧客名</th>
               <th>支払い期日</th>
               <th className="num">支払済回数</th>
-              <th className="num">月額</th>
+              <th className="num">金額</th>
               <th className="num">支払日</th>
               <th className="num">残債</th>
               <th className="num">残回数</th>
@@ -88,14 +93,20 @@ export default function Unpaid({ onOpen, onChanged }) {
               </Empty></td></tr>
             )}
             {rows && rows.map((r) => (
-              <tr key={r.id} className={'clickable' + (r.テスト ? ' test-row' : '')}
+              <tr key={`${r.id}-${r.回の種類}`}
+                  className={'clickable' + (r.テスト ? ' test-row' : '')}
                   onClick={() => onOpen(r.id)}>
                 <td className="nm">
                   <b>{r.氏名}</b>
                   {r.テスト && <span className="tag t-test">テスト</span>}
-                  {/* 遅れているのがボーナスの回なら、その場で分かるようにする。
-                      金額が大きいので、通常の回と同じ扱いで電話すると話が食い違う */}
-                  {r.ボーナス中 && <span className="tag t-bonus">ボーナス</span>}
+                  {/* ボーナス払いのある方だけ、どちらの行かを出す。
+                      金額が大きいので、月額と同じ扱いで電話すると話が食い違う。
+                      ボーナスの無い方に「月額」と付けても、意味がなく目障りになる */}
+                  {r.ボーナス回数 > 0 && (
+                    <span className={'tag ' + (r.種類 === 'ボーナス' ? 't-bonus' : 't-mon')}>
+                      {r.種類}
+                    </span>
+                  )}
                   {r.よみ && <span className="yomi">{r.よみ}</span>}
                   <span className="tag t-late" style={{ marginLeft: 8 }}>{r.遅れ日数}日 遅れ</span>
                   {/* 督促したかどうか。押すと控えられる */}
@@ -123,10 +134,8 @@ export default function Unpaid({ onOpen, onChanged }) {
                   )}
                 </td>
                 <td data-label="支払い期日">{ymd(r.支払い期日)}</td>
-                <td className="num" data-label="支払済回数">
-                  {r.支払い回数}回{r.ボーナス回数 > 0 && `（賞与 残${r.ボーナス残り}回）`}
-                </td>
-                <td className="num" data-label="月額">{yen(r.金額)}</td>
+                <td className="num" data-label="支払済回数">{r.支払い回数}回</td>
+                <td className="num" data-label="金額">{yen(r.金額)}</td>
                 <td className="num" data-label="支払日">{r.毎月の支払日}日</td>
                 <td className="num" data-label="残債">{yen(r.残債金額)}</td>
                 <td className="num" data-label="残回数">{r.残り支払い回数}回</td>
@@ -147,6 +156,7 @@ export default function Unpaid({ onOpen, onChanged }) {
       {入金する && (
         <ManualPayment
           初期顧客id={入金する.id}
+          初期種類={入金する.種類}
           onClose={() => set入金する(null)}
           onDone={() => { set入金する(null); load(); onChanged && onChanged(); }}
         />
