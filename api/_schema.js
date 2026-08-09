@@ -134,7 +134,8 @@ const STATEMENTS = [
      amount       integer NOT NULL CHECK (amount > 0),
      method       text NOT NULL DEFAULT '振込'
                   CHECK (method IN ('振込','現金','その他')),
-     source       text NOT NULL DEFAULT '手動' CHECK (source IN ('CSV','手動')),
+     -- どこから来た入金か。画面で行の色を変えるためと、出所をたどるため
+     source       text NOT NULL DEFAULT '手動' CHECK (source IN ('CSV','手動','銀行')),
      ref_no       text,
      payer_name   text,
      memo         text,
@@ -148,6 +149,23 @@ const STATEMENTS = [
    )`,
   // 列を足すのは索引より先（上の schedule_memo と同じ理由）
   `ALTER TABLE payment ADD COLUMN IF NOT EXISTS alloc_kind text`,
+  // すでに作ってあるデータベースの決まりを、銀行APIぶんまで広げる。
+  // 古い決まりのままだと、銀行から取り込んだ入金が入らない
+  `DO $$
+   DECLARE c text;
+   BEGIN
+     SELECT conname INTO c FROM pg_constraint
+      WHERE conrelid='payment'::regclass AND contype='c'
+        AND pg_get_constraintdef(oid) LIKE '%source%'
+        AND pg_get_constraintdef(oid) NOT LIKE '%銀行%';
+     IF c IS NOT NULL THEN
+       EXECUTE format('ALTER TABLE payment DROP CONSTRAINT %I', c);
+     END IF;
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='payment_source_ck') THEN
+       ALTER TABLE payment ADD CONSTRAINT payment_source_ck
+         CHECK (source IN ('CSV','手動','銀行'));
+     END IF;
+   END $$`,
   `CREATE INDEX IF NOT EXISTS payment_paid_idx ON payment (paid_on DESC, id DESC)`,
   `CREATE INDEX IF NOT EXISTS payment_customer_idx ON payment (customer_id, paid_on)`,
 
@@ -213,6 +231,51 @@ const STATEMENTS = [
      ON schedule_memo (customer_id, schedule_no, kind, id DESC)`,
   `CREATE INDEX IF NOT EXISTS schedule_memo_promise_idx
      ON schedule_memo (promise_id)`,
+
+  // ── 銀行口座(APIで明細を取りに行く先)────────────
+  // 銀行ごとの違いは api/_banks.js の差し込み口に閉じ込める。
+  // ここに置くのは「どこから取るか」と「どこまで取ったか」だけ。
+  // 合鍵(接続の鍵)はここには入れない。環境変数に置く。
+  `CREATE TABLE IF NOT EXISTS bank_account (
+     id           serial PRIMARY KEY,
+     bank_name    text NOT NULL,              -- 画面に出す銀行名
+     branch       text,                       -- 支店名
+     last4        text,                       -- 口座番号の下4桁(見分けるためだけ)
+     kind         text NOT NULL,              -- どの差し込み口を使うか
+     api_ref      text,                       -- 銀行側の口座の識別子
+     active       boolean NOT NULL DEFAULT true,
+     last_ok_at   timestamptz,                -- 最後に取れた時刻
+     last_error   text,                       -- 最後に失敗した理由(取れたら消す)
+     created_at   timestamptz NOT NULL DEFAULT now(),
+     updated_at   timestamptz NOT NULL DEFAULT now()
+   )`,
+
+  // ── 銀行から取ってきた明細(人が確かめる前の置き場)──────
+  // 取ってきただけでは入金にしない。必ず人が確認画面を通してから入金にする。
+  // 間違った人に入った入金は、黙って入ると誰も気づかないため。
+  `CREATE TABLE IF NOT EXISTS bank_txn (
+     id          serial PRIMARY KEY,
+     account_id  integer NOT NULL REFERENCES bank_account(id) ON DELETE CASCADE,
+     -- 銀行側の取引通番。二重に取ってこないための鍵。
+     -- 通番を出さない銀行のときは、日付|金額|振込人|同日連番 で作る
+     txn_id      text NOT NULL,
+     paid_on     date NOT NULL,
+     amount      integer NOT NULL CHECK (amount > 0),
+     payer_name  text,
+     ref_no      text,
+     raw         text,                        -- 銀行が返した中身(そのまま)
+     -- 未確認 … 取ってきたが、まだ人が見ていない
+     -- 取込済み … 入金にした / 見送り … 人が「これは入金ではない」と決めた
+     state       text NOT NULL DEFAULT '未確認'
+                 CHECK (state IN ('未確認','取込済み','見送り')),
+     payment_id  integer REFERENCES payment(id) ON DELETE SET NULL,
+     fetched_at  timestamptz NOT NULL DEFAULT now(),
+     decided_at  timestamptz,
+     decided_by  text,
+     UNIQUE (account_id, txn_id)
+   )`,
+  `CREATE INDEX IF NOT EXISTS bank_txn_state_idx
+     ON bank_txn (state, paid_on DESC, id DESC)`,
 
   // ── 名寄せ辞書(CSVの振込人名 → 顧客)──────────────
   `CREATE TABLE IF NOT EXISTS payer_alias (

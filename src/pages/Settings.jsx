@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { Modal, Text, Err, Note, Empty, Loading } from '../components/ui';
+import { Modal, Text, Select, Err, Note, Empty, Loading } from '../components/ui';
 
 export default function Settings({ onOpen, onChanged }) {
   const [rows, setRows] = useState(null);
@@ -66,6 +66,9 @@ export default function Settings({ onOpen, onChanged }) {
           </table>
         </div>
       </div>
+
+      <BankAccounts />
+
 
       <TestCustomer onOpen={onOpen} onChanged={onChanged} />
 
@@ -141,6 +144,138 @@ function TestCustomer({ onOpen, onChanged }) {
         )}
       </div>
     </div>
+  );
+}
+
+
+// ── 銀行口座 ───────────────────────────
+// 明細を取りに行く先。合鍵（接続の鍵）はここには入れない。
+// 鍵はVercelの環境変数に置く（画面から見えるところに置かない）。
+function BankAccounts() {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState('');
+  const [開く, set開く] = useState(null);   // 口座 or 'new'
+
+  const load = () => {
+    setErr('');
+    api.bank().then(setD).catch((e) => { setD({ 口座: [], 差し込み口: [] }); setErr(e.message); });
+  };
+  useEffect(load, []);
+
+  return (
+    <div className="sec">
+      <h3>銀行口座</h3>
+      <Note>
+        入金明細を取りに行く先です。<b>取ってくるだけで、入金にはなりません。</b>
+        入金登録タブの「銀行から取り込む」で、人が確かめてから入金にします。
+        <br />
+        接続の鍵は、この画面には入れません。置き場所は別に用意します。
+      </Note>
+      <Err>{err}</Err>
+
+      <div className="card tw">
+        <table>
+          <thead>
+            <tr><th>銀行</th><th>支店</th><th>口座</th><th>差し込み口</th>
+              <th>最後に取れた</th><th>使う</th><th /></tr>
+          </thead>
+          <tbody>
+            {d === null && <tr><td colSpan={7}><Loading 件数={2} /></td></tr>}
+            {d && d.口座.length === 0 && (
+              <tr><td colSpan={7}><Empty>
+                まだ登録がありません。「銀行口座を追加」から入れてください。
+              </Empty></td></tr>
+            )}
+            {d && d.口座.map((a) => (
+              <tr key={a.id}>
+                <td><b>{a.銀行名}</b></td>
+                <td>{a.支店 || '—'}</td>
+                <td className="mono">{a.下4桁 ? `…${a.下4桁}` : '—'}</td>
+                <td>{a.差し込み口}</td>
+                <td style={{ fontSize: 12.5 }}>
+                  {a.最後に取れた || <span className="tag t-warn">未取得</span>}
+                  {a.最後の失敗 && (
+                    <div style={{ color: 'var(--overdue)', fontSize: 12 }}>{a.最後の失敗}</div>
+                  )}
+                </td>
+                <td>{a.使う
+                  ? <span className="tag t-done">使う</span>
+                  : <span className="tag t-csv">止めている</span>}</td>
+                <td><button className="btn btn-sm" onClick={() => set開く(a)}>編集</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="row-btn">
+        <button className="btn btn-main" onClick={() => set開く('new')}>＋ 銀行口座を追加</button>
+      </div>
+
+      {開く && (
+        <BankAccountForm
+          a={開く === 'new' ? null : 開く}
+          差し込み口={(d && d.差し込み口) || []}
+          onClose={() => set開く(null)}
+          onDone={() => { set開く(null); load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function BankAccountForm({ a, 差し込み口, onClose, onDone }) {
+  const [v, setV] = useState({
+    銀行名: a ? a.銀行名 : '', 支店: a ? a.支店 : '', 下4桁: a ? a.下4桁 : '',
+    差し込み口: a ? a.差し込み口 : (差し込み口[0] ? 差し込み口[0].kind : ''),
+    銀行側の識別子: a ? a.銀行側の識別子 : '', 使う: a ? a.使う : true,
+  });
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (val) => setV((o) => ({ ...o, [k]: val }));
+  const 選んだ口 = 差し込み口.find((x) => x.kind === v.差し込み口);
+
+  const submit = async () => {
+    setBusy(true); setErr('');
+    try {
+      await api.saveBankAccount(a ? { id: a.id, ...v } : v);
+      onDone();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal
+      title={a ? '銀行口座の編集' : '銀行口座の追加'}
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn" onClick={onClose}>キャンセル</button>
+          <div className="right">
+            <button className="btn btn-main" onClick={submit} disabled={busy}>
+              {busy ? '保存しています…' : a ? '保存する' : '追加する'}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <div className="grid2">
+        <Text label="銀行名" value={v.銀行名} onChange={set('銀行名')} placeholder="◯◯銀行" />
+        <Text label="支店" value={v.支店} onChange={set('支店')} placeholder="本店営業部" />
+      </div>
+      <Text label="口座番号の下4桁" value={v.下4桁} onChange={set('下4桁')}
+            placeholder="1234" hint="どの口座か見分けるためだけに使います" />
+      <Select label="差し込み口" value={v.差し込み口} onChange={set('差し込み口')}
+              options={差し込み口.map((x) => ({ value: x.kind, label: x.名前 }))}
+              hint={選んだ口 ? 選んだ口.説明 : '銀行ごとのつなぎ方です'} />
+      <Text label="銀行側の識別子" value={v.銀行側の識別子} onChange={set('銀行側の識別子')}
+            placeholder="銀行から知らされた口座の番号など"
+            hint="銀行との接続で、どの口座かを指すものです。分からなければ空のままで構いません" />
+      <Select label="使うか" value={v.使う ? '使う' : '止める'}
+              onChange={(x) => set('使う')(x === '使う')}
+              options={[{ value: '使う', label: '使う（取りに行く）' },
+                        { value: '止める', label: '止めている（取りに行かない）' }]} />
+      <Err>{err}</Err>
+    </Modal>
   );
 }
 

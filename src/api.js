@@ -108,6 +108,13 @@ export const api = {
   patchPayment: (body) => call('/api/payments', { method: 'PATCH', body }),
   deletePayment: (id) => call('/api/payments' + q({ id }), { method: 'DELETE' }),
 
+  // 銀行から取り込む
+  bank: () => call('/api/bank', { 取り直す: true }),
+  bankFetch: () => call('/api/bank', { method: 'POST', body: { 取得: true } }),
+  bankCommit: (明細) => call('/api/bank', { method: 'POST', body: { 取り込む: true, 明細 } }),
+  bankSkip: (ids) => call('/api/bank', { method: 'POST', body: { 見送る: ids } }),
+  saveBankAccount: (口座) => call('/api/bank', { method: 'POST', body: { 口座 } }),
+
   // 取り込み
   preview: (text) => call('/api/import', { method: 'POST', body: { text } }),
   commit: (明細) => call('/api/import', { method: 'POST', body: { 実行: true, 明細 } }),
