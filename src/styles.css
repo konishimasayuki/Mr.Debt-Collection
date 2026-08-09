@@ -636,10 +636,11 @@ button.att-i:hover{border-color:var(--indigo)}
   .unpaid-cards td.nm,.unpaid-cards td.act{grid-column:1/-1}
   /* 操作はいちばん下。並べ替えの order を指定しないと途中に割り込む */
   .unpaid-cards td.act{order:7}
-  /* 並びは「支払い期日｜支払済回数」「月額｜支払日」「残債｜残回数」 */
+  /* 並びは「支払い期日｜支払済回数」「金額｜支払日」「残債｜残回数」。
+     呼び名で指定しているので、列の見出しを変えたらここも一緒に直す */
   .unpaid-cards td[data-label="支払い期日"]{order:1}
   .unpaid-cards td[data-label="支払済回数"]{order:2}
-  .unpaid-cards td[data-label="月額"]{order:3}
+  .unpaid-cards td[data-label="金額"]{order:3}
   .unpaid-cards td[data-label="支払日"]{order:4}
   .unpaid-cards td[data-label="残債"]{order:5}
   .unpaid-cards td[data-label="残回数"]{order:6}
