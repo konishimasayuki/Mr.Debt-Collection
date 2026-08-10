@@ -446,20 +446,40 @@ export default async (req, res) => {
         const kind = b.回の種類 === 'ボーナス' ? 'ボーナス' : '通常';
         if (!no) return bad(res, 'どの回かを指定してください。');
         const s = (await sql(
-          `SELECT id, dunned_count FROM schedule WHERE customer_id=$1 AND kind=$2 AND no=$3`,
+          `SELECT id, dunned_count, dunned_undone_at,
+                  to_char(dunned_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') AS dunned_on
+             FROM schedule WHERE customer_id=$1 AND kind=$2 AND no=$3`,
           [id, kind, no]))[0];
         if (!s) return bad(res, 'その回が見つかりません。');
+        const 前の回数 = Number(s.dunned_count) || 0;
+        const 取消中 = !!s.dunned_undone_at;
 
+        // 取り消しても日付と回数は消さない。押し間違いを元へ戻せるようにするため。
+        // 「取り消してある」という印（dunned_undone_at）だけを立てる
         if (b.種類 === '督促取消') {
-          await sql(`UPDATE schedule SET dunned_at=NULL, dunned_count=0, dunned_by=NULL
-                      WHERE id=$1`, [s.id]);
+          await sql('UPDATE schedule SET dunned_undone_at=now() WHERE id=$1', [s.id]);
           await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                      VALUES ($1,$2,'督促',$3,$4)`,
-            [id, who, `${no}回目の督促の記録を取り消した`, memo]);
+            [id, who, `${no}回目の督促の記録を取り消した`
+              + (前の回数 ? `（${s.dunned_on} の ${前の回数}回目ぶん）` : ''), memo]);
           return ok(res, { done: true, 督促回数: 0 });
         }
-        const n = (Number(s.dunned_count) || 0) + 1;
-        await sql(`UPDATE schedule SET dunned_at=now(), dunned_count=$1, dunned_by=$2
+
+        // 押し間違いを元へ戻す。日付も回数も、取り消す前のまま
+        if (b.元に戻す) {
+          if (!取消中 || !前の回数) return bad(res, '元に戻す督促の記録がありません。');
+          await sql('UPDATE schedule SET dunned_undone_at=NULL WHERE id=$1', [s.id]);
+          await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                     VALUES ($1,$2,'督促',$3,$4)`,
+            [id, who, `${no}回目の督促の記録を元に戻した（${s.dunned_on} の ${前の回数}回目ぶん）`,
+             memo]);
+          return ok(res, { done: true, 督促回数: 前の回数 });
+        }
+
+        // 取り消してあったなら、そこまでの回数は数えない。今日から1回目として数え直す
+        const n = 取消中 ? 1 : 前の回数 + 1;
+        await sql(`UPDATE schedule SET dunned_at=now(), dunned_count=$1, dunned_by=$2,
+                          dunned_undone_at=NULL
                     WHERE id=$3`, [n, who, s.id]);
         await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                    VALUES ($1,$2,'督促',$3,$4)`,

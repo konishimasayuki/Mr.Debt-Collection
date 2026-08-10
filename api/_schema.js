@@ -92,6 +92,9 @@ const STATEMENTS = [
      dunned_at      timestamptz,
      dunned_count   integer NOT NULL DEFAULT 0,
      dunned_by      text,
+     -- 督促の記録を取り消した時刻。取り消しても日付と回数は消さずに残す。
+     -- 押し間違いを元に戻せるようにするため。ここに時刻が入っていれば「未督促」。
+     dunned_undone_at timestamptz,
      UNIQUE (customer_id, kind, no)
    )`,
   `CREATE INDEX IF NOT EXISTS schedule_due_idx ON schedule (due_date)`,
@@ -100,6 +103,7 @@ const STATEMENTS = [
   `ALTER TABLE schedule ADD COLUMN IF NOT EXISTS dunned_at timestamptz`,
   `ALTER TABLE schedule ADD COLUMN IF NOT EXISTS dunned_count integer NOT NULL DEFAULT 0`,
   `ALTER TABLE schedule ADD COLUMN IF NOT EXISTS dunned_by text`,
+  `ALTER TABLE schedule ADD COLUMN IF NOT EXISTS dunned_undone_at timestamptz`,
   // 一意の決まりを (customer_id, no) から (customer_id, kind, no) へ移す。
   // 移さないと、ボーナス1回目と通常1回目がぶつかって入らない。
   `DO $$

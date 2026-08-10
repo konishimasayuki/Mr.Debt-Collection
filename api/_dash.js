@@ -8,7 +8,7 @@
 // ・**期日が今日以前の回だけ**を数える。まだ期日の来ていない回は「未回収」ではない
 // ・**100%回収できた月は出さない。**残っている月は、どれだけ古くても出し続ける
 // ・車を引き上げた方と、動作を試すための顧客は外す。経営者が見る数字なので混ぜない
-import { isoOf, today } from './_lib.js';
+import { isoOf, today, 督促の様子 } from './_lib.js';
 
 // 「2026-06」→「2026年6月分」
 const 月の見出し = (ym) => {
@@ -27,7 +27,7 @@ export async function ダッシュボード(sql) {
            FROM customer
           WHERE archived = false AND status <> '回収' AND is_test = false`),
     sql(`SELECT id, customer_id, no, kind, due_date, planned_amount, state,
-                dunned_count,
+                dunned_count, dunned_undone_at,
                 to_char(dunned_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') AS dunned_on
            FROM schedule WHERE due_date <= $1 ORDER BY due_date, customer_id, kind, no`, [t]),
     sql(`SELECT schedule_id, COALESCE(sum(amount),0)::int AS n FROM allocation
@@ -60,8 +60,7 @@ export async function ダッシュボード(sql) {
       回次: s.no, 回の種類: s.kind || '通常',
       期日: isoOf(s.due_date),
       料金: s.planned_amount, 入金済み: 入った, 残り,
-      督促回数: Number(s.dunned_count) || 0,
-      督促日: s.dunned_on || null,
+      ...督促の様子(s),
       // 約束はこのあとで付ける
       後回し: null,
     });

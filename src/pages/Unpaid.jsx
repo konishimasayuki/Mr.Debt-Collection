@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, yen, ymd, md } from '../api';
-import { Err, Empty, Note, Loading } from '../components/ui';
+import { Modal, Err, Empty, Note, Loading } from '../components/ui';
 import { ManualPayment } from './PaymentEntry';
 
 export default function Unpaid({ onOpen, onChanged }) {
@@ -8,6 +8,7 @@ export default function Unpaid({ onOpen, onChanged }) {
   const [err, setErr] = useState('');
   const [入金する, set入金する] = useState(null);   // 手動入金を入れる顧客
   const [busy, setBusy] = useState(0);              // 督促を書き込んでいる顧客id
+  const [戻すか, set戻すか] = useState(null);       // 取り消した督促がある行（聞き直す）
 
   const load = useCallback(() => {
     api.customers({ 未入金: 1 })
@@ -18,20 +19,25 @@ export default function Unpaid({ onOpen, onChanged }) {
 
   // 督促の連絡をしたかを控える。電話を切った直後にその場で押せるよう、
   // 名前の横の印そのものを押せるようにしてある（ボタンを増やさない）。
-  const 督促 = async (r, 取り消す) => {
-    const 文 = 取り消す
-      ? `${r.氏名}さんの督促の記録を取り消します。よろしいですか。`
-      : `${r.氏名}さんに督促の連絡をした、として記録します。よろしいですか。`;
-    if (!confirm(文)) return;
+  const 送る = async (r, 中身) => {
     setBusy(r.id); setErr('');
     try {
-      await api.postCustomer({
-        id: r.id, 種類: 取り消す ? '督促取消' : '督促',
-        回次: r.回次, 回の種類: r.回の種類,
-      });
+      await api.postCustomer({ id: r.id, 回次: r.回次, 回の種類: r.回の種類, ...中身 });
       load(); onChanged && onChanged();
     } catch (e) { setErr(e.message); }
-    finally { setBusy(0); }
+    finally { setBusy(0); set戻すか(null); }
+  };
+
+  const 督促 = async (r, 取り消す) => {
+    // 取り消した督促が残っているときは、はい・いいえでは足りない。
+    // 「押し間違いを元に戻す」のか「今日あらためて電話した」のかを選んでもらう
+    if (!取り消す && r.取り消した督促) { set戻すか(r); return; }
+    const 文 = 取り消す
+      ? `${r.氏名}さんの督促の記録を取り消します。\n\n`
+        + '押し間違えたときは、もう一度押せば元に戻せます。\nよろしいですか。'
+      : `${r.氏名}さんに督促の連絡をした、として記録します。よろしいですか。`;
+    if (!confirm(文)) return;
+    await 送る(r, { 種類: 取り消す ? '督促取消' : '督促' });
   };
 
   // 合計には、動作を試すための顧客を入れない。
@@ -118,7 +124,9 @@ export default function Unpaid({ onOpen, onChanged }) {
                   >
                     {r.督促回数
                       ? `督促 ${md(r.督促日)}${r.督促回数 > 1 ? `（${r.督促回数}回）` : ''}`
-                      : '未督促'}
+                      : r.取り消した督促
+                        ? `未督促（${md(r.取り消した督促.日)}を取消）`
+                        : '未督促'}
                   </button>
                   {/* いつ払うと言ったか。日を過ぎていれば朱色 */}
                   {r.約束 && (
@@ -152,6 +160,47 @@ export default function Unpaid({ onOpen, onChanged }) {
           </tbody>
         </table>
       </div>
+
+      {戻すか && (
+        <Modal
+          title="督促の記録が取り消してあります"
+          onClose={() => set戻すか(null)}
+          foot={
+            <>
+              <button className="btn" onClick={() => set戻すか(null)}>やめる</button>
+              <div className="right" style={{ display: 'flex', gap: 8 }}>
+                <button className="btn"
+                        disabled={busy === 戻すか.id}
+                        onClick={() => 送る(戻すか, { 種類: '督促' })}>
+                  今日、あらためて連絡した
+                </button>
+                <button className="btn btn-main"
+                        disabled={busy === 戻すか.id}
+                        onClick={() => 送る(戻すか, { 種類: '督促', 元に戻す: true })}>
+                  取り消す前に戻す
+                </button>
+              </div>
+            </>
+          }
+        >
+          <p style={{ margin: '2px 0 10px' }}>
+            <b>{戻すか.氏名}</b> さんの{戻すか.回次}回目
+            {戻すか.回の種類 === 'ボーナス' ? '（ボーナス）' : ''}ぶんの督促は、
+            <br />
+            <b>{ymd(戻すか.取り消した督促.日)}</b> に
+            {戻すか.取り消した督促.回数 > 1 && <>（{戻すか.取り消した督促.回数}回目まで）</>}
+            連絡したことが記録されていて、そのあと<b>取り消してあります。</b>
+          </p>
+          <Note>
+            <b>押し間違えて取り消してしまったのなら、「取り消す前に戻す」</b>を押してください。
+            日付も回数も、取り消す前のままに戻ります。
+            <br />
+            <b>取り消したのは正しくて、今日あらためて電話したのなら、</b>
+            「今日、あらためて連絡した」を押してください。
+            今日の日付で、1回目から数え直します。
+          </Note>
+        </Modal>
+      )}
 
       {入金する && (
         <ManualPayment

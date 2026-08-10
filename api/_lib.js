@@ -248,6 +248,25 @@ async function allocate(sql, customerId, paymentId, amount, 種類) {
   return { 充当: touched, 余り: left };
 }
 
+// その回の督促の様子。未入金の一覧とダッシュボードで同じものを出す。
+//
+// 取り消しても日付と回数は消さない（dunned_undone_at を立てるだけ）。
+// 押し間違えたときに、そのまま元へ戻せるようにするため。
+// 取り消してあるあいだは「未督促」として扱い、取り消した中身は
+// 「取り消した督促」として別に渡す。画面で「元に戻しますか」と聞ける。
+function 督促の様子(回) {
+  if (!回) return { 督促日: null, 督促回数: 0, 取り消した督促: null };
+  const 回数 = Number(回.dunned_count) || 0;
+  const 取消 = !!回.dunned_undone_at;
+  if (取消 && 回数 > 0) {
+    return { 督促日: null, 督促回数: 0,
+             取り消した督促: { 日: 回.dunned_on || null, 回数 } };
+  }
+  return { 督促日: 取消 ? null : (回.dunned_on || null),
+           督促回数: 取消 ? 0 : 回数,
+           取り消した督促: null };
+}
+
 // 入金を取り消す。充当を消して、触っていた回の状態を戻す
 async function unallocate(sql, paymentId) {
   const rows = await sql(
@@ -297,6 +316,6 @@ function summarize(cust, rows, paidBy) {
 
 export {
   norm, normPayer, カナにそろえる, よみか, pad, iso, isoOf, today, lastDay, dueOf, yen,
-  readBody, query, restateMany, allocate, unallocate, summarize, makeSchedule,
+  readBody, query, restateMany, allocate, unallocate, summarize, makeSchedule, 督促の様子,
   bonusDues, remakeBonus, 入金種類,
 };
