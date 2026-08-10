@@ -37,7 +37,8 @@ export default function Customers({ onOpen, onChanged }) {
   useEffect(load, []);
 
   const k = norm(key);
-  // よみが空の方の人数。0名なら、入れる導線は出さない
+  // よみが空の方の人数。全員そろっても入口は残す。
+  // 一度入れたよみも、読み方が違っていれば直せなければ困るため
   const 空のよみ = (rows || []).filter((r) => !r.よみ && !r.テスト).length;
   const shown = (rows || []).filter((r) => !k
     || norm(r.氏名).includes(k) || norm(r.よみ).includes(k) || norm(r.車種).includes(k));
@@ -120,12 +121,11 @@ export default function Customers({ onOpen, onChanged }) {
             value={key} onChange={(e) => setKey(e.target.value)}
           />
           {/* よみが空だと、CSVの振込人名からお客様を当てられない。
-              入れる場所は、名前が並んでいるこの画面がいちばん分かりやすい */}
-          {空のよみ > 0 && (
-            <button className="btn" onClick={() => setかな(true)}>
-              よみを入れる（{空のよみ}名）
-            </button>
-          )}
+              入れる場所は、名前が並んでいるこの画面がいちばん分かりやすい。
+              全員そろっても消さない。読み方が違っていれば、あとから直すため */}
+          <button className="btn" onClick={() => setかな(true)}>
+            {空のよみ > 0 ? `よみを入れる（${空のよみ}名）` : 'よみを直す'}
+          </button>
           <button className="btn btn-main" onClick={() => setOpen(true)}>＋ 新規顧客登録</button>
         </div>
       </div>
