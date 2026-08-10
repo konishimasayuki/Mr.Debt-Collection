@@ -88,19 +88,31 @@ function parseZengin(lines) {
   return { 明細: out, トレーラ: trailer, 形式: '全銀協規定形式', 読み飛ばし };
 }
 
-// 見出しから列を探す。見つからなければ位置で拾う
+// 見出しから列を探す。見つからなければ位置で拾う。
+//
+// 銀行によっては「出金金額」と「入金金額」が別の列に分かれている。
+// どちらも「金額」を含むので、ただ「金額」を探すと出金のほうを拾ってしまう。
+// 台帳に入れるのは入金だけなので、入金の列を先に、名指しで探す。
 const HEAD = {
   日付: ['日付', '取引日', '勘定日', '入金日', '年月日', 'date'],
   付番: ['付番', '番号', '照会番号', '整理番号', 'no', 'ｎｏ'],
-  金額: ['金額', '入金', '入金額', 'お預り金額', '預入', 'amount'],
+  入金: ['入金金額', '入金額', 'お預り金額', '預り金額', '預入金額', '入金', 'お預り', '預入'],
+  出金: ['出金金額', 'お支払金額', '支払金額', '出金額', '引出金額', '払戻金額',
+        '出金', 'お支払', '支払', '引出', '払戻'],
+  金額: ['金額', 'amount'],
+  区分: ['取引区分', '入出金区分', '取引種別', '種別'],
   振込人: ['振込人', '依頼人', '名義', '摘要', 'お名前', '振込依頼人名', 'name'],
 };
 function findCols(head) {
   const h = head.map((x) => String(x).normalize('NFKC').toLowerCase().replace(/\s/g, ''));
+  const 探す = (words, 除く) => h.findIndex((c, i) =>
+    c && i !== 除く && words.some((w) => c.includes(w)));
   const col = {};
-  for (const [key, words] of Object.entries(HEAD)) {
-    col[key] = h.findIndex((c) => c && words.some((w) => c.includes(w)));
-  }
+  for (const key of ['日付', '付番', '区分', '振込人']) col[key] = 探す(HEAD[key]);
+  col.入金 = 探す(HEAD.入金);
+  col.出金 = 探す(HEAD.出金, col.入金);
+  // 入金の列が分かるならそれを使う。分からなければ、出金ではない「金額」の列
+  col.金額 = col.入金 >= 0 ? col.入金 : 探す(HEAD.金額, col.出金);
   return col;
 }
 
@@ -110,6 +122,13 @@ function parsePlain(lines) {
   const hasHead = col.日付 >= 0 || col.金額 >= 0;
   const body = hasHead ? rows.slice(1) : rows;
   const c = hasHead ? col : { 日付: 0, 付番: 1, 金額: 2, 振込人: 3 };
+
+  // 取引区分の列があるときは、振込の入金だけを取り込む。
+  // 利息やATMでの現金入金は、お客様からの振り込みではない。
+  // ただし「振込」と書かれた行が1つも無いファイルでは、この絞り込みはしない。
+  // 銀行によって区分の言い方が違うので、全部落ちてしまうのを防ぐ。
+  const 振込で絞る = c.区分 >= 0
+    && body.some((f) => String(f[c.区分] || '').includes('振込'));
 
   const out = [];
   // 読めない行は落とすが、黙って落とさない。
@@ -121,6 +140,19 @@ function parsePlain(lines) {
     if (!f.length || f.every((x) => !x)) return;      // 空行は数えない
     const 飛ばす = (理由) => 読み飛ばし.push(
       { 行: 行番号, 理由, 中身: f.join(',').slice(0, 60) });
+
+    // 入金の列がはっきりしているなら、そこが空の行は入金ではない
+    if (c.入金 >= 0 && !+digits(f[c.入金])) {
+      const 出 = c.出金 >= 0 ? +digits(f[c.出金]) : 0;
+      return 飛ばす(出 ? '出金の行です（入金だけ取り込みます）' : '入金額が空の行です');
+    }
+    if (振込で絞る) {
+      const k = String(f[c.区分] || '').trim();
+      if (!k.includes('振込')) {
+        return 飛ばす(`振込ではない入金です（${k || '区分なし'}）`);
+      }
+    }
+
     const iso = anyDate(c.日付 >= 0 ? f[c.日付] : '');
     const amount = +digits(c.金額 >= 0 ? f[c.金額] : '');
     if (!iso) return 飛ばす('日付が読み取れません');
