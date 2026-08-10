@@ -212,8 +212,16 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .modal-h{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding-bottom:10px;
   border-bottom:1px solid var(--rule)}
 .modal-h h3{margin:0;font-size:16px;letter-spacing:.06em}
-.modal-foot{display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)}
+.modal-foot{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule)}
 .modal-foot .right{margin-left:auto;display:flex;gap:8px}
+/* 選ぶ道が2つ以上あるモーダルは、狭いと横に並びきらない。
+   スマホでは縦に積んで、どれも端が切れないようにする */
+@media (max-width:560px){
+  .modal-foot{flex-direction:column-reverse;align-items:stretch}
+  .modal-foot .right{margin-left:0;flex-direction:column-reverse;gap:8px}
+  .modal-foot .btn{width:100%}
+}
 
 /* ── 知らせ ───────────────────────── */
 .note{padding:10px 14px;border-left:3px solid var(--indigo);background:var(--paper);

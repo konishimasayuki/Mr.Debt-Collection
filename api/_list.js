@@ -5,7 +5,7 @@
 // サーバーは遠く、しかもしばらく使われないと眠るため、
 // 1回目の往復に待ち時間がかかる。それが2回続くと、開いた直後がまるまる遅い。
 // 一覧をログイン確認の返事に同梱すれば、往復は1回で済む。
-import { isoOf, today, summarize } from './_lib.js';
+import { isoOf, today, summarize, 督促の様子 } from './_lib.js';
 import { 索引, あいうえお順 } from './_yomi_dict.js';
 
 // 絞り込みは '未入金' か '終了'。指定が無ければ全員。
@@ -25,7 +25,7 @@ export async function 顧客一覧(sql, 絞り込み) {
           WHERE c.archived = false
           ORDER BY c.id`),
     sql(`SELECT id, customer_id, no, kind, due_date, planned_amount, state,
-                dunned_count,
+                dunned_count, dunned_undone_at,
                 to_char(dunned_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') AS dunned_on
            FROM schedule ORDER BY customer_id, due_date, kind, no`),
     sql(`SELECT schedule_id, COALESCE(sum(amount),0)::int AS n FROM allocation
@@ -73,8 +73,7 @@ export async function 顧客一覧(sql, 絞り込み) {
       ボーナス総額: s.ボーナス総額, ボーナス中: s.ボーナス中, 回の種類: s.回の種類,
       電話番号: c.tel || '',
       // 督促。回ごとに持つので、次の回になれば「未督促」から始まる
-      督促日: 今の回 ? (今の回.dunned_on || null) : null,
-      督促回数: 今の回 ? (Number(今の回.dunned_count) || 0) : 0,
+      ...督促の様子(今の回),
       // いつ払うと言ったか。約束の日を過ぎていれば 約束切れ
       約束: 約束 ? {
         日: isoOf(約束.promised_on),
@@ -121,8 +120,7 @@ export async function 顧客一覧(sql, 絞り込み) {
           支払い回数: 同種.filter((s) => s.state === '入金済み').length,
           残り支払い回数: 同種.filter((s) => s.state !== '入金済み').length,
           // 督促は回ごとに持つので、月額とボーナスで別々に控えられる
-          督促日: cur.dunned_on || null,
-          督促回数: Number(cur.dunned_count) || 0,
+          ...督促の様子(cur),
           ボーナス中: kind === 'ボーナス',
         });
       }
