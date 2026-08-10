@@ -20,7 +20,12 @@ export default function KanaBulk({ onClose, onDone }) {
 
   useEffect(() => {
     api.kanaList()
-      .then((x) => { setD(x); set打った({}); set候補から({}); })
+      .then((x) => {
+        setD(x); set打った({}); set候補から({});
+        // 全員そろっているなら、空だけ出しても1人も出ない。
+        // 直しに来た人が空の画面を見ることになるので、はじめから全員を出す
+        if (!x.空の人数) set空だけ(false);
+      })
       .catch((e) => setErr(e.message));
   }, []);
 
@@ -82,6 +87,9 @@ export default function KanaBulk({ onClose, onDone }) {
         {' '}銀行の明細は <span className="mono">ｳｻﾐ ﾏｺﾄ</span> のようなカナで来るためです。
         <br />
         ひらがなでも半角カナでも構いません。保存するときに全角カナへそろえます。
+        <br />
+        <b>一度入れたよみも、ここで直せます。</b>
+        読み方が違っていたら、上の「よみが空の方だけ出す」のチェックを外して探してください。
       </Note>
 
       {d && (
@@ -113,7 +121,9 @@ export default function KanaBulk({ onClose, onDone }) {
             {d === null && <tr><td colSpan={4}><Loading 件数={6} /></td></tr>}
             {d && 出す.length === 0 && (
               <tr><td colSpan={4} style={{ color: 'var(--ink-2)', padding: 14 }}>
-                よみが空の方はいません。
+                {d.顧客.length === 0
+                  ? 'まだ顧客の登録がありません。'
+                  : 'よみが空の方はいません。直すときは、上のチェックを外してください。'}
               </td></tr>
             )}
             {出す.map((c) => {
