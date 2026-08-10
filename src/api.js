@@ -98,6 +98,8 @@ export const api = {
   customersNow: () => call('/api/customers', { 取り直す: true }),
   addCustomer: (body) => call('/api/customers', { method: 'POST', body }),
   patchCustomers: (body) => call('/api/customers', { method: 'PATCH', body }),
+  // よみをまとめて入れる画面のための一覧（氏名・いまのよみ・苗字の辞書からの候補）
+  kanaList: () => call('/api/customers?よみ=1', { 取り直す: true }),
   customer: (id) => call('/api/customer' + q({ id })),
   patchCustomer: (body) => call('/api/customer', { method: 'PATCH', body }),
   postCustomer: (body) => call('/api/customer', { method: 'POST', body }),

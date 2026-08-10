@@ -709,6 +709,20 @@ button.att-i:hover{border-color:var(--indigo)}
   .drop .sp-only{display:inline}
 }
 
+/* ── よみをまとめて入れる ───────────────────── */
+.kana-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.kana-only{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink-2);
+  cursor:pointer}
+.kana-only input{width:auto}
+.kana-cnt{font-size:13px;color:var(--ink-2);margin-left:auto}
+.kana-in{width:100%;padding:3px 8px;font-family:var(--sans)}
+.meisai .kana-hint{font-size:12.5px;color:var(--ink-3)}
+.kana-note{margin:10px 0 0;font-size:12.5px;color:var(--ink-2)}
+/* まだ入っていない行を目立たせる。上から順に埋めていけるように。
+   取り込みの表の「off」とは別の印にする。あちらは取り消し線が付くが、
+   ここでの空欄は「消す行」ではなく「これから埋める行」なので、線を引いてはいけない */
+.meisai tbody tr.kana-empty .kana-in{background:var(--today-bg);border-color:#DCC98C}
+
 /* ── 支払いの記録：回を押してメモを足す ───────────── */
 .rec-hint{margin:-4px 0 8px;font-size:12px;color:var(--ink-3)}
 /* 回の行をボタンにする。見た目は div のときと変えない */

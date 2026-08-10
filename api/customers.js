@@ -4,8 +4,10 @@
 // POST /api/customers          … 新規登録。支払予定も同時に作る
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
-import { readBody, query, dueOf, yen, norm, makeSchedule, remakeBonus } from './_lib.js';
+import { readBody, query, dueOf, yen, norm, makeSchedule, remakeBonus,
+         カナにそろえる, よみか } from './_lib.js';
 import { 顧客一覧 } from './_list.js';
+import { guess, あいうえお順 } from './_yomi_dict.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -22,6 +24,29 @@ export default async (req, res) => {
 
     if (method === 'GET') {
       const q = query(req);
+
+      // ── よみをまとめて入れる画面のための一覧 ──────────
+      // 氏名と、いまのよみと、苗字の辞書から出した候補だけを返す。
+      // 候補は「たたき台」であって正解ではない。読みが分かれる苗字は
+      // 空で返し、その理由も一緒に渡す（人が必ず確かめられるように）。
+      if (q['よみ']) {
+        const rows = await sql(
+          `SELECT id, name, kana FROM customer WHERE archived = false`);
+        const list = rows.map((c) => {
+          const g = guess(c.name);
+          return { id: c.id, 氏名: c.name, よみ: c.kana || '',
+                   候補: g.読み, 候補の理由: g.理由 };
+        });
+        list.sort((a, b) => あいうえお順(
+          { name: a.氏名, kana: a.よみ, id: a.id },
+          { name: b.氏名, kana: b.よみ, id: b.id }));
+        return ok(res, {
+          顧客: list,
+          空の人数: list.filter((c) => !c.よみ).length,
+          候補がある人数: list.filter((c) => !c.よみ && c.候補).length,
+        });
+      }
+
       // 組み立ては _list.js に置いてある。開いた直後の往復を減らすため、
       // 同じ一覧を /api/session からも返せるようにしている。
       return ok(res, await 顧客一覧(sql, q['未入金'] ? '未入金' : (q['終了'] ? '終了' : '')));
@@ -129,9 +154,51 @@ export default async (req, res) => {
     // 債権譲渡が起きると、複数の顧客の会社が一度に変わる。1件ずつ開かせない。
     // PATCH /api/customers {債権譲渡会社:id}          … 全顧客に当てる
     // PATCH /api/customers {債権譲渡先:id, 対象:[…]}  … 指定した顧客だけ
+    // PATCH /api/customers {よみ:[{id, よみ}, …]}     … よみをまとめて入れる
     if (method === 'PATCH') {
       const who = recordedBy(req);
       const b = await readBody(req);
+
+      // ── よみをまとめて入れる ────────────────
+      // よみが空だと、CSVの振込人名から顧客を当てられない。
+      // 1件ずつ顧客ページを開いて入れるのは、人数が多いと現実的でない。
+      if (Array.isArray(b['よみ'])) {
+        const 直す = [];
+        for (const x of b['よみ']) {
+          const id = Number(x && x.id);
+          if (!id) continue;
+          const k = カナにそろえる(x['よみ']);
+          if (k && !よみか(k)) {
+            return bad(res, `「${k}」は よみ として読めません。`,
+              'カタカナ（またはひらがな）で入れてください');
+          }
+          直す.push({ id, よみ: k });
+        }
+        if (!直す.length) return bad(res, '直す相手がいません。');
+
+        // 変えるものだけを数えたいので、今の中身も一緒に見る
+        const 今 = await sql(
+          'SELECT id, name, kana FROM customer WHERE id = ANY($1::int[])',
+          [直す.map((x) => x.id)]);
+        const 今の = {};
+        今.forEach((c) => (今の[c.id] = c));
+        const 変わる = 直す.filter((x) => 今の[x.id] && (今の[x.id].kana || '') !== x.よみ);
+        if (!変わる.length) return ok(res, { done: true, 変えた人数: 0, 内容: '変わりはありません' });
+
+        await sql(
+          `UPDATE customer c SET kana = NULLIF(u.k, ''), updated_at = now()
+             FROM unnest($1::int[], $2::text[]) AS u(i, k)
+            WHERE c.id = u.i`,
+          [変わる.map((x) => x.id), 変わる.map((x) => x.よみ)]);
+        // 誰のよみをどう変えたかは、1人ずつ残す。あとからたどれるように
+        await sql(
+          `INSERT INTO event (customer_id, recorded_by, kind, text)
+           SELECT i, $1, '設定', t FROM unnest($2::int[], $3::text[]) AS u(i, t)`,
+          [who, 変わる.map((x) => x.id),
+           変わる.map((x) => `よみを「${今の[x.id].kana || '（空）'}」から「${x.よみ || '（空）'}」に変えた`)]);
+        return ok(res, { done: true, 変えた人数: 変わる.length,
+          内容: `よみを ${変わる.length}名ぶん入れた` });
+      }
 
       const set = [], val = [], 説明 = [];
       for (const [key, col] of [['債権譲渡会社', 'assignor_id'], ['債権譲渡先', 'assignee_id']]) {

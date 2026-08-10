@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, yen, ymd, norm } from '../api';
 import { Modal, Text, Money, Select, Err, Empty, Note, Loading } from '../components/ui';
+import KanaBulk from './KanaBulk';
 
 // 電話帳と同じ並び。索引はサーバーが「あ」「か」…で返す
 const 行 = ['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ', 'その他'];
@@ -23,6 +24,7 @@ export default function Customers({ onOpen, onChanged }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [open, setOpen] = useState(false);
+  const [かな, setかな] = useState(false);
   const [key, setKey] = useState('');
   const [いまの行, setいまの行] = useState('');   // 画面に出ている行。索引の色に使う
   const [余りの高さ, set余りの高さ] = useState(0); // 最後の行も上まで送れるようにする余白
@@ -35,6 +37,8 @@ export default function Customers({ onOpen, onChanged }) {
   useEffect(load, []);
 
   const k = norm(key);
+  // よみが空の方の人数。0名なら、入れる導線は出さない
+  const 空のよみ = (rows || []).filter((r) => !r.よみ && !r.テスト).length;
   const shown = (rows || []).filter((r) => !k
     || norm(r.氏名).includes(k) || norm(r.よみ).includes(k) || norm(r.車種).includes(k));
 
@@ -115,6 +119,13 @@ export default function Customers({ onOpen, onChanged }) {
             className="search" placeholder="氏名・よみ・車種で検索"
             value={key} onChange={(e) => setKey(e.target.value)}
           />
+          {/* よみが空だと、CSVの振込人名からお客様を当てられない。
+              入れる場所は、名前が並んでいるこの画面がいちばん分かりやすい */}
+          {空のよみ > 0 && (
+            <button className="btn" onClick={() => setかな(true)}>
+              よみを入れる（{空のよみ}名）
+            </button>
+          )}
           <button className="btn btn-main" onClick={() => setOpen(true)}>＋ 新規顧客登録</button>
         </div>
       </div>
@@ -214,6 +225,13 @@ export default function Customers({ onOpen, onChanged }) {
         <NewCustomer
           onClose={() => setOpen(false)}
           onDone={() => { setOpen(false); load(); onChanged && onChanged(); }}
+        />
+      )}
+
+      {かな && (
+        <KanaBulk
+          onClose={() => setかな(false)}
+          onDone={() => { load(); onChanged && onChanged(); }}
         />
       )}
     </>
