@@ -187,6 +187,28 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .modal-box{background:var(--paper);border:1px solid var(--rule-strong);max-width:720px;width:100%;
   padding:20px 22px;box-shadow:0 8px 30px rgba(0,0,0,.2)}
 .modal-box.wide{max-width:1100px}
+/* 取り込む前の確認の表。ふだんは高さを抑え、モーダルで出すときは伸ばす */
+.meisai{max-height:460px;overflow-y:auto}
+/* 顧客を選ぶ欄。名前と、なぜ当たらなかったかの両方が読めるだけの幅をとる */
+.meisai .assign{width:100%;max-width:340px;padding:4px 6px}
+/* 表を大きく見せるとき。画面の端まで広げ、中の表を高さいっぱいまで伸ばす。
+   50件のCSVを、少しずつ送りながら確かめるのは目が疲れる。
+   まわりの余白と行の高さを詰めて、一度に見える行数をできるだけ増やす。
+   字の大きさは変えない（詰めるのは上下の余白だけ） */
+.modal:has(.modal-box.huge){padding:10px}
+.modal-box.huge{max-width:min(1560px,96vw);display:flex;flex-direction:column;
+  max-height:calc(100vh - 20px);padding:14px 18px}
+.modal-box.huge > .modal-h{margin-bottom:10px;padding-bottom:8px}
+.modal-box.huge > .modal-foot{margin-top:10px;padding-top:10px}
+.modal-box.huge .note{margin-bottom:10px;padding:8px 12px;font-size:13px;line-height:1.6}
+/* 行の詰め。48px→38px で、同じ高さに4〜5行ぶん多く入る */
+.meisai th,.meisai td{padding:5px 12px}
+.meisai .assign{padding:2px 6px}
+.modal-box.huge > .modal-h,.modal-box.huge > .modal-foot{flex:0 0 auto}
+.modal-box.huge > .modal-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+  overflow-y:auto}
+/* 表そのものが伸び縮みする。中身が少ないときは縮む */
+.modal-box.huge .meisai{flex:1 1 auto;min-height:0;max-height:none}
 .modal-h{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding-bottom:10px;
   border-bottom:1px solid var(--rule)}
 .modal-h h3{margin:0;font-size:16px;letter-spacing:.06em}
@@ -415,6 +437,8 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
      避けないと、いちばん上の題がその下に潜って読めなくなる */
   .modal-box{min-height:100%;
     padding:calc(16px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom))}
+  /* スマホは画面いっぱいに出すので、高さの縛りは外す */
+  .modal-box.huge{max-width:100%;max-height:none}
   /* 題は上に貼り付けておく。長い入力を下まで送っても、何の画面かが分かる */
   .modal-h{position:sticky;top:0;z-index:1;background:var(--paper);
     margin:calc(-16px - env(safe-area-inset-top)) -14px 16px;

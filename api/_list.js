@@ -5,17 +5,8 @@
 // サーバーは遠く、しかもしばらく使われないと眠るため、
 // 1回目の往復に待ち時間がかかる。それが2回続くと、開いた直後がまるまる遅い。
 // 一覧をログイン確認の返事に同梱すれば、往復は1回で済む。
-import { isoOf, today, norm, summarize } from './_lib.js';
-import { 並び読み, 索引 } from './_yomi_dict.js';
-
-// あいうえお順。登録された「よみ」が無い人は苗字の辞書で補って並べる。
-// それでも読みが分からない人だけ、最後にまわす。
-const collator = new Intl.Collator('ja');
-const byKana = (a, b) => {
-  const ak = norm(並び読み(a.name, a.kana)), bk = norm(並び読み(b.name, b.kana));
-  if (!!ak !== !!bk) return ak ? -1 : 1;
-  return collator.compare(ak || a.name, bk || b.name) || a.id - b.id;
-};
+import { isoOf, today, summarize } from './_lib.js';
+import { 索引, あいうえお順 } from './_yomi_dict.js';
 
 // 絞り込みは '未入金' か '終了'。指定が無ければ全員。
 export async function 顧客一覧(sql, 絞り込み) {
@@ -141,7 +132,7 @@ export async function 顧客一覧(sql, 絞り込み) {
   } else if (絞り込み === '終了') {
     list = list.filter((r) => r.終了);
   }
-  list.sort((a, b) => byKana(
+  list.sort((a, b) => あいうえお順(
     { kana: a.よみ, name: a.氏名, id: a.id },
     { kana: b.よみ, name: b.氏名, id: b.id }));
 

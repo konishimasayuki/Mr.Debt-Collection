@@ -5,6 +5,7 @@
 // どこから来た明細でも同じでなければならない。
 // 2か所に書くと、いつか片方だけ直されて食い違う。だから1か所に置く。
 import { isoOf, yen, normPayer, allocate } from './_lib.js';
+import { あいうえお順 } from './_yomi_dict.js';
 
 // 重複判定の鍵。日付+付番+金額
 const dupKey = (r) => `${r.日付}|${String(r.付番 || '').trim()}|${r.金額}`;
@@ -51,6 +52,9 @@ async function 照合の道具(sql) {
     sql(`SELECT id, name, kana, monthly_amount FROM customer WHERE archived=false ORDER BY id`),
     sql(`SELECT normalized_name, customer_id FROM payer_alias`),
   ]);
+  // 顧客を選ぶ欄に出すので、あいうえお順にそろえる。
+  // 顧客一覧と並びが違うと、同じ人を探すのに二度手間になる
+  customers.sort(あいうえお順);
   const match = matcher(aliases, customers);
   const nameOf = (id) => (customers.find((c) => c.id === id) || {}).name || null;
   return { customers, match, nameOf };

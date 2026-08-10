@@ -1,3 +1,4 @@
+import { norm } from './_lib.js';
 // 苗字の読みの下書き。人が確かめて直すための「たたき台」であって、正解ではない。
 // 確か:false は読みが分かれる苗字。画面で目印を出し、必ず本人に確認してもらう。
 //
@@ -71,4 +72,16 @@ function 索引(name, kana) {
   return 'その他';
 }
 
-export { SURNAME, surnameOf, guess, 並び読み, 索引, 行 };
+// あいうえお順。登録された「よみ」が無い人は苗字の辞書で補って並べる。
+// それでも読みが分からない人だけ、最後にまわす。
+//
+// 顧客一覧でも、CSVの取り込みで顧客を選ぶ欄でも、同じ並びでなければならない。
+// 探す場所によって並びが変わると、目で追えなくなる。
+const collator = new Intl.Collator('ja');
+const あいうえお順 = (a, b) => {
+  const ak = norm(並び読み(a.name, a.kana)), bk = norm(並び読み(b.name, b.kana));
+  if (!!ak !== !!bk) return ak ? -1 : 1;
+  return collator.compare(ak || a.name, bk || b.name) || a.id - b.id;
+};
+
+export { SURNAME, surnameOf, guess, 並び読み, 索引, 行, あいうえお順 };
