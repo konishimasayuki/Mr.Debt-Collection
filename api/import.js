@@ -54,12 +54,14 @@ export default async (req, res) => {
         if (dup.length) return ok(res, { done: true, 保存した: false, 理由: 'すでに取り込み済みです' });
         pid = (await sql(
           `INSERT INTO payment (customer_id, paid_on, amount, method, source, ref_no,
-                                payer_name, import_key, recorded_by)
-           VALUES ($1,$2,$3,'振込','CSV',$4,$5,$6,$7) RETURNING id`,
+                                payer_name, import_key, alloc_kind, recorded_by)
+           VALUES ($1,$2,$3,'振込','CSV',$4,$5,$6,'通常',$7) RETURNING id`,
           [cid, a.日付, amount, String(a.付番 || '') || null,
            String(a.振込人 || '') || null, key, who]))[0].id;
       }
-      const r = await allocate(sql, cid, pid, amount);
+      // 自動で来た入金は、通常（月額）の回にだけ充てる。
+      // ボーナスは人が「入金種類：ボーナス」を選んで手動で入れる
+      const r = await allocate(sql, cid, pid, amount, '通常');
       await sql(`INSERT INTO event (customer_id, payment_id, recorded_by, kind, text, memo)
                  VALUES ($1,$2,$3,'入金',$4,$5)`,
         [cid, pid, who, `${yen(amount)}円 を人が選んで割り当て（振込人：${a.振込人 || '—'}）`, null]);
@@ -77,7 +79,8 @@ export default async (req, res) => {
       if (!rows.length) return bad(res, 400, { error: '取り込む行がありません。' });
       const r = await 取り込む(sql, who, rows, 'CSV');
       return ok(res, { done: true, 取り込んだ件数: r.取込, 見送った件数: r.見送り,
-                       照合できなかった件数: r.未割当, 照合できなかった明細: r.残り });
+                       照合できなかった件数: r.未割当, 照合できなかった明細: r.残り,
+                       余った: r.余った });
     }
 
     // ── プレビュー（読み取るだけ。保存しない）──────────────
