@@ -15,6 +15,20 @@ function norm(s) {
 }
 
 // 振込人名の正規化。上に加えて法人格を落とす
+// 「よみ」を全角カタカナにそろえる。
+// ひらがなで打っても、半角カナで打っても、同じ形にして保存する。
+// 保存の形がばらつくと、並び順も照合も当てにならなくなる。
+function カナにそろえる(s) {
+  return String(s == null ? '' : s)
+    .normalize('NFKC')                                   // 半角カナ・英数を全角の形へ
+    .replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60))  // ひらがな→カタカナ
+    .replace(/[\s　]+/g, ' ')
+    .trim();
+}
+// よみとして受け付けられるか。カタカナ・長音・中黒・空白だけ。
+// 漢字や英字が混じっていたら、それは「よみ」ではないので断る
+const よみか = (s) => /^[ァ-ヶー・\s]*$/.test(カナにそろえる(s));
+
 function normPayer(s) {
   return norm(String(s == null ? '' : s)
     .normalize('NFKC')
@@ -282,7 +296,7 @@ function summarize(cust, rows, paidBy) {
 }
 
 export {
-  norm, normPayer, pad, iso, isoOf, today, lastDay, dueOf, yen,
+  norm, normPayer, カナにそろえる, よみか, pad, iso, isoOf, today, lastDay, dueOf, yen,
   readBody, query, restateMany, allocate, unallocate, summarize, makeSchedule,
   bonusDues, remakeBonus, 入金種類,
 };
