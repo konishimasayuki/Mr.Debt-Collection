@@ -117,6 +117,10 @@ export const api = {
   bankSkip: (ids) => call('/api/bank', { method: 'POST', body: { 見送る: ids } }),
   saveBankAccount: (口座) => call('/api/bank', { method: 'POST', body: { 口座 } }),
 
+  // ボーナスの回に自動で入ってしまった入金の付け直し
+  repairCheck: () => call('/api/repair', { 取り直す: true }),
+  repairRun: () => call('/api/repair', { method: 'POST', body: { 実行: true } }),
+
   // 取り込み
   preview: (text) => call('/api/import', { method: 'POST', body: { text } }),
   commit: (明細) => call('/api/import', { method: 'POST', body: { 実行: true, 明細 } }),

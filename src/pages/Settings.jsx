@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, yen } from '../api';
 import { Modal, Text, Select, Err, Note, Empty, Loading } from '../components/ui';
 
 export default function Settings({ onOpen, onChanged }) {
@@ -69,6 +69,7 @@ export default function Settings({ onOpen, onChanged }) {
 
       <BankAccounts />
 
+      <BonusRepair onChanged={onChanged} />
 
       <TestCustomer onOpen={onOpen} onChanged={onChanged} />
 
@@ -80,6 +81,118 @@ export default function Settings({ onOpen, onChanged }) {
         />
       )}
     </>
+  );
+}
+
+// ── ボーナスの回に入ってしまった入金の付け直し ──────────────
+//
+// いまは自動で取り込んだ入金をボーナスの回に充てない。
+// けれど、その決まりより前に取り込んだ分は、入ったまま残っている。
+// ここで一度だけ押してもらって、月額の回に付け直す。
+//
+// 直すものが無いときは、この欄ごと出さない。使わないボタンは迷いのもと。
+function BonusRepair({ onChanged }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = () => api.repairCheck().then(setD).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, []);
+
+  const 直す = async () => {
+    if (!confirm(
+      `${d.件数}名の入金を、ボーナスの回から月額の回へ付け直します。\n\n`
+      + '入金の金額そのものは変わりません。どの回に充てるかだけが変わります。\n'
+      + (d.余り合計
+        ? `${d.余りが出る人数}名・合わせて ${yen(d.余り合計)}円 は月額の回に充てきれず、`
+          + '余りになります（残債はその分だけ増えて見えます）。\n'
+        : '')
+      + '\nよろしいですか。')) return;
+    setBusy(true); setErr('');
+    try {
+      const r = await api.repairRun();
+      await load();
+      onChanged && onChanged();
+      alert(`${r.件数}名を付け直しました。`
+        + (r.余り合計
+          ? `\n\n${r.余りが出る人数}名・${yen(r.余り合計)}円 が余りになりました。`
+            + '\nその方の入金が本当はボーナス分なら、入金履歴でその行を押して'
+            + '\n入金種類を「ボーナス」に直してください。'
+          : ''));
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  if (d && d.件数 === 0) return null;
+
+  return (
+    <div className="sec">
+      <h3>ボーナスの回に入った入金の付け直し</h3>
+      <Note kind="warn">
+        <b>ボーナスの回に、月々の振り込みが入ってしまっている方がいます。</b>
+        {d && <> 対象は <b>{d.件数}名</b>です。</>}
+        <br />
+        期日が同じだと、金額の大きいボーナスの回が先に埋まるため、
+        月々の回がいつまでも未入金のまま残っていました。
+        いまの台帳は<b>自動で取り込んだ入金をボーナスの回に充てません</b>が、
+        その決まりより前に入った分は、入ったままです。
+        <br />
+        <b>入金の金額そのものは変わりません。</b>どの回に充てるかだけを付け直します。
+        記録にも残ります。
+      </Note>
+      <Err>{err}</Err>
+
+      {d === null && <Loading 件数={2} 行={1} />}
+
+      {d && d.件数 > 0 && (
+        <>
+          {d.余り合計 > 0 && (
+            <Note kind="warn">
+              このうち <b>{d.余りが出る人数}名</b>・合わせて <b>{yen(d.余り合計)}円</b> は、
+              月額の回をもう払い終えているため、充てる先がなく<b>余り</b>になります。
+              その分は<b>残債が増えて見えます。</b>
+              <br />
+              その入金が本当はボーナス分なら、<b>先に</b>入金履歴でその行を押して
+              <b>入金種類を「ボーナス」</b>に直してから、このボタンを押してください。
+              あとから直しても構いません。
+            </Note>
+          )}
+
+          <div className="card tw cards">
+            <table>
+              <thead>
+                <tr><th>お客様</th><th className="num">ボーナスから外す</th>
+                  <th className="num">余りになる</th><th>余りの入金</th></tr>
+              </thead>
+              <tbody>
+                {d.顧客.map((c) => (
+                  <tr key={c.顧客id}>
+                    <td className="nm"><b>{c.顧客名}</b></td>
+                    <td className="num" data-label="ボーナスから外す">
+                      {c.ボーナスから外す ? `${yen(c.ボーナスから外す)}円` : '—'}
+                    </td>
+                    <td className="num" data-label="余りになる">
+                      {c.余り
+                        ? <b style={{ color: 'var(--overdue)' }}>{yen(c.余り)}円</b>
+                        : '—'}
+                    </td>
+                    <td data-label="余りの入金" style={{ whiteSpace: 'normal', fontSize: 12.5 }}>
+                      {c.余りの明細.map((x) => `${x.日付}・${yen(x.金額)}円`).join('／') || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="row-btn">
+            <button className="btn btn-main" onClick={直す} disabled={busy}>
+              {busy ? '付け直しています…' : `${d.件数}名を月額の回に付け直す`}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
