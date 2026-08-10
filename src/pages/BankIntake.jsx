@@ -49,10 +49,15 @@ export default function BankIntake({ onChanged }) {
     setBusy('取込'); setErr('');
     try {
       const r = await api.bankCommit(rows);
+      const 余 = r.余った || [];
       alert(`${r.取り込んだ件数}件を入金にしました。`
         + (r.見送った件数 ? `\n${r.見送った件数}件は見送りました（すでに取り込み済みなど）。` : '')
         + (r.照合できなかった件数 ? `\n${r.照合できなかった件数}件は、まだどの顧客か決まっていません。`
-           + '\n入金履歴から顧客を選んでください。' : ''));
+           + '\n入金履歴から顧客を選んでください。' : '')
+        + (余.length ? `\n${余.length}件は、月額の回に充てきれず余りになりました。`
+           + (余.filter((x) => x.ボーナスが残っている).length
+             ? '\nボーナスの回が残っている方がいます。入金履歴で入金種類を「ボーナス」に直してください。' : '')
+           : ''));
       await load();
       onChanged && onChanged();
     } catch (e) { setErr(e.message); }
@@ -135,6 +140,9 @@ export default function BankIntake({ onChanged }) {
             <br />
             <b>ここに出ているだけでは、まだ入金になっていません。</b>
             残す行にチェックを付けて「取り込む」を押してください。
+            <br />
+            <b>ボーナスの回には充てません。</b>{' '}
+            ボーナス分は「手動入金登録」で<b>入金種類：ボーナス</b>を選んで入れてください。
           </Note>
 
           <明細の表 明細={d.明細} 顧客={d.顧客}

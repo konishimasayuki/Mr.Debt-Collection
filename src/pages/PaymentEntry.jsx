@@ -243,6 +243,10 @@ export default function PaymentEntry({ onChanged, goHistory }) {
             <b>取り込みたくない行は、左のチェックを外してください。</b>
             {' '}チェックの付いた行だけが入金になります。
             <br />
+            <b>ボーナスの回には充てません。</b>{' '}
+            月額の回だけに、古いほうから充てます。ボーナス分は
+            「手動入金登録」で<b>入金種類：ボーナス</b>を選んで入れてください。
+            <br />
             {preview.概要.件数}件・合計 {yen(preview.概要.合計)}円。
             照合できた {preview.概要.照合できた}件、
             照合できない {preview.概要.照合できない}件。
@@ -355,6 +359,8 @@ function ImportResult({ d, onClose, onChanged, goHistory }) {
         {d.照合できなかった件数 > 0 && ` ${d.照合できなかった件数}件は、まだどの顧客か決まっていません。`}
       </Note>
 
+      <余りの知らせ 余った={d.余った} />
+
       {rest.length > 0 && (
         <>
           <h4 style={{ fontSize: 13.5, margin: '14px 0 8px' }}>
@@ -400,6 +406,40 @@ function ImportResult({ d, onClose, onChanged, goHistory }) {
         <button className="btn" onClick={() => goHistory('')}>入金履歴で確かめる →</button>
       )}
     </div>
+  );
+}
+
+
+// ── 月額の回に充てきれなかった入金の知らせ ──────────────
+// 自動で取り込んだ入金は、月額の回にしか充てない。
+// ボーナスの回が残っている方でお金が余ったら、それはボーナス分の可能性が高い。
+// 黙って余らせると、残債が減っていないことに誰も気づかない。
+function 余りの知らせ({ 余った }) {
+  const 一覧 = 余った || [];
+  if (!一覧.length) return null;
+  const ボ = 一覧.filter((x) => x.ボーナスが残っている);
+  return (
+    <Note kind="warn">
+      <b>{一覧.length}件は、月額の回に充てきれませんでした。</b>
+      {' '}余ったお金は、まだどの回にも充てていません（残債は減っていません）。
+      {ボ.length > 0 && (
+        <>
+          <br />
+          このうち <b>{ボ.length}件</b>は、ボーナスの回が残っている方です。
+          <b>ボーナス分の可能性があります。</b>
+          {' '}入金履歴からその入金を開き、<b>入金種類を「ボーナス」</b>に直してください。
+        </>
+      )}
+      <ul className="amari">
+        {一覧.map((x) => (
+          <li key={x.入金id}>
+            {ymd(x.日付)}　{x.顧客名 || x.振込人 || '（名前なし）'}　
+            {yen(x.金額)}円 のうち <b>{yen(x.余り)}円</b> が余り
+            {x.ボーナスが残っている && <span className="tag t-bonus">ボーナス残あり</span>}
+          </li>
+        ))}
+      </ul>
+    </Note>
   );
 }
 

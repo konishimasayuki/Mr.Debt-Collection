@@ -92,6 +92,15 @@ function プレビュー(明細, { match, nameOf, 済み }) {
   });
 }
 
+// 自動で取り込んだ入金は、通常（月額）の回にだけ充てる。
+//
+// 充当は期日の古い順に埋めるので、これを付けないと、
+// 月々の振り込みがボーナスの回（金額が大きい）に食われて、
+// 台帳の金額がおかしくなる。振込人名からは、その入金が
+// 月額ぶんなのかボーナスぶんなのかを見分けられない。
+// ボーナスは、人が「入金種類：ボーナス」を選んで手動で入れる。
+const 自動の充当先 = '通常';
+
 // 人が確かめて残した行を、入金として保存する。
 // 区分は 'CSV' か '銀行'。画面で行の色を変えるためと、あとから出所をたどるため。
 async function 取り込む(sql, who, rows, 区分 = 'CSV') {
@@ -137,13 +146,13 @@ async function 取り込む(sql, who, rows, 区分 = 'CSV') {
       const cid = x.r.顧客id ? Number(x.r.顧客id) : match(x.r.振込人, x.amount).id;
       x.cid = cid || null;
       引数.push(x.cid, x.r.日付, x.amount, 区分, String(x.r.付番 || '') || null,
-               String(x.r.振込人 || '') || null, x.key, who);
+               String(x.r.振込人 || '') || null, x.key, 自動の充当先, who);
       const i = 引数.length;
-      値.push(`($${i - 7},$${i - 6},$${i - 5},'振込',$${i - 4},$${i - 3},$${i - 2},$${i - 1},$${i})`);
+      値.push(`($${i - 8},$${i - 7},$${i - 6},'振込',$${i - 5},$${i - 4},$${i - 3},$${i - 2},$${i - 1},$${i})`);
     });
     入金 = await sql(
       `INSERT INTO payment (customer_id, paid_on, amount, method, source, ref_no,
-                            payer_name, import_key, recorded_by)
+                            payer_name, import_key, alloc_kind, recorded_by)
        VALUES ${値.join(',')} RETURNING id, import_key`, 引数);
   }
   const idOf = {};
@@ -171,12 +180,17 @@ async function 取り込む(sql, who, rows, 区分 = 'CSV') {
   }
 
   const 記録 = [];
+  const 余った = [];
   await Promise.all([...顧客ごと.values()].map(async (組) => {
     for (const x of 組) {
-      const al = await allocate(sql, x.cid, x.pid, x.amount);
+      const al = await allocate(sql, x.cid, x.pid, x.amount, 自動の充当先);
+      if (al.余り > 0) {
+        余った.push({ 入金id: x.pid, 顧客id: x.cid, 日付: x.r.日付,
+                     金額: x.amount, 余り: al.余り, 振込人: x.r.振込人 || '' });
+      }
       記録.push([x.cid, x.pid,
         `${区分}から ${yen(x.amount)}円 を取り込み（${x.r.日付}・振込人：${x.r.振込人 || '—'}）`
-        + (al.余り ? `。余り ${yen(al.余り)}円` : ''),
+        + (al.余り ? `。余り ${yen(al.余り)}円（月額の回に充てきれませんでした）` : ''),
         normPayer(x.r.振込人)]);
     }
   }));
@@ -196,7 +210,25 @@ async function 取り込む(sql, who, rows, 区分 = 'CSV') {
     ]);
   }
 
-  return { 取込, 見送り, 未割当, 残り, 入れた };
+  // 余りが出た方のうち、ボーナスの回が残っている方を見つける。
+  // その余りは「ボーナスぶんだった可能性が高い」と画面で知らせる
+  if (余った.length) {
+    const ボ = await sql(
+      `SELECT DISTINCT customer_id FROM schedule
+        WHERE customer_id = ANY($1::int[]) AND kind='ボーナス' AND state <> '入金済み'`,
+      [[...new Set(余った.map((x) => x.顧客id))]]);
+    const ある = new Set(ボ.map((r) => r.customer_id));
+    const 名 = await sql('SELECT id, name FROM customer WHERE id = ANY($1::int[])',
+      [[...new Set(余った.map((x) => x.顧客id))]]);
+    const 名の = {};
+    名.forEach((c) => (名の[c.id] = c.name));
+    余った.forEach((x) => {
+      x.顧客名 = 名の[x.顧客id] || '';
+      x.ボーナスが残っている = ある.has(x.顧客id);
+    });
+  }
+
+  return { 取込, 見送り, 未割当, 残り, 入れた, 余った };
 }
 
 export { dupKey, importKey, matcher, 照合の道具, 取込済みの鍵, プレビュー, 取り込む, 自動の区分 };

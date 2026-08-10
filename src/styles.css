@@ -709,6 +709,11 @@ button.att-i:hover{border-color:var(--indigo)}
   .drop .sp-only{display:inline}
 }
 
+/* 月額の回に充てきれなかった入金の一覧 */
+.amari{margin:6px 0 0;padding-left:1.2em;font-size:13px}
+.amari li{margin-bottom:3px}
+.amari .tag{margin-left:6px}
+
 /* ── よみをまとめて入れる ───────────────────── */
 .kana-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .kana-only{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink-2);
