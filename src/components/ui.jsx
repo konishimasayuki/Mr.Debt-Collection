@@ -11,7 +11,8 @@ import { norm } from '../api';
 const 自動で移らない = 'date,time,month,week,datetime-local,file,checkbox,radio';
 const 移る先 = `input:not([type=${自動で移らない.split(',').join(']):not([type=')}]),textarea`;
 
-export function Modal({ title, onClose, children, foot, wide }) {
+// huge … 表を大きく見せたいとき（CSVの確認など）。画面いっぱいまで広げる
+export function Modal({ title, onClose, children, foot, wide, huge }) {
   const box = useRef(null);
   useEffect(() => {
     const esc = (e) => { if (e.key === 'Escape') onClose(); };
@@ -27,13 +28,15 @@ export function Modal({ title, onClose, children, foot, wide }) {
 
   return (
     <div className="modal" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={'modal-box' + (wide ? ' wide' : '')} ref={box} role="dialog" aria-modal="true">
+      <div className={'modal-box' + (huge ? ' huge' : wide ? ' wide' : '')}
+           ref={box} role="dialog" aria-modal="true">
         {/* 右上の「閉じる」は置かない。スマホでは題と重なって読めなくなる。
             閉じるのは下の「キャンセル」。どのモーダルにも必ず置いてある */}
         <div className="modal-h">
           <h3>{title}</h3>
         </div>
-        {children}
+        {/* 中身は1枚で包む。大きく出すとき（huge）に、ここだけを伸び縮みさせるため */}
+        <div className="modal-body">{children}</div>
         {foot && <div className="modal-foot">{foot}</div>}
       </div>
     </div>

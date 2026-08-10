@@ -34,7 +34,7 @@ async function readText(file) {
 // 2つ作ると、片方だけ直されて見え方が食い違う。
 export function 明細の表({ 明細, 顧客, keep, setKeep, assignTo, setAssignTo }) {
   return (
-    <div className="card tw" style={{ maxHeight: 460, overflowY: 'auto' }}>
+    <div className="card tw meisai">
       <table>
         <thead>
           <tr>
@@ -61,7 +61,7 @@ export function 明細の表({ 明細, 顧客, keep, setKeep, assignTo, setAssig
                 {r.照合できた ? (
                   <>{r.顧客名}<span style={{ color: 'var(--ink-3)', fontSize: 12, marginLeft: 6 }}>{r.判断}</span></>
                 ) : (
-                  <select value={assignTo[r.行] || ''} style={{ maxWidth: 220, padding: '4px 6px' }}
+                  <select value={assignTo[r.行] || ''} className="assign"
                           onChange={(e) => setAssignTo((o) => ({ ...o, [r.行]: e.target.value }))}>
                     <option value="">選ぶ（{r.判断}）</option>
                     {顧客.map((c) => (
@@ -214,15 +214,35 @@ export default function PaymentEntry({ onChanged, goHistory }) {
         </p>
       </div>
 
-      <Err>{err}</Err>
+      {!preview && <Err>{err}</Err>}
 
       {result && <ImportResult d={result} onClose={() => setResult(null)}
                                onChanged={onChanged} goHistory={goHistory} />}
 
+      {/* 取り込む前の確認は、画面いっぱいのモーダルで出す。
+          50件のCSVを狭い枠の中で少しずつ送りながら確かめるのは、目が疲れて見落とす */}
       {preview && (
-        <div className="sec">
-          <h3>取り込む前の確認（{preview.形式}）</h3>
+        <Modal
+          huge
+          title={`取り込む前の確認（${preview.形式}）`}
+          onClose={() => setPreview(null)}
+          foot={
+            <>
+              <button className="btn" onClick={() => setPreview(null)} disabled={busy}>
+                キャンセル
+              </button>
+              <div className="right">
+                <button className="btn btn-main" onClick={commit} disabled={busy || !残す数}>
+                  {busy ? '取り込んでいます…' : `${残す数}件を取り込む（${yen(残す額)}円）`}
+                </button>
+              </div>
+            </>
+          }
+        >
           <Note>
+            <b>取り込みたくない行は、左のチェックを外してください。</b>
+            {' '}チェックの付いた行だけが入金になります。
+            <br />
             {preview.概要.件数}件・合計 {yen(preview.概要.合計)}円。
             照合できた {preview.概要.照合できた}件、
             照合できない {preview.概要.照合できない}件。
@@ -266,20 +286,11 @@ export default function PaymentEntry({ onChanged, goHistory }) {
             </Note>
           )}
 
+          <Err>{err}</Err>
           <明細の表 明細={preview.明細} 顧客={preview.顧客}
                     keep={keep} setKeep={setKeep}
                     assignTo={assignTo} setAssignTo={setAssignTo} />
-
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
-            <button className="btn btn-main" onClick={commit} disabled={busy || !残す数}>
-              {busy ? '取り込んでいます…' : `${残す数}件を取り込む（${yen(残す額)}円）`}
-            </button>
-            <button className="btn" onClick={() => setPreview(null)} disabled={busy}>キャンセル</button>
-            <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>
-              取り込みたくない行は、左のチェックを外してください。
-            </span>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── 中：銀行から取り込む ── */}
