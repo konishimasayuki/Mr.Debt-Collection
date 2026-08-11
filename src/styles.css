@@ -212,6 +212,26 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .modal-h{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding-bottom:10px;
   border-bottom:1px solid var(--rule)}
 .modal-h h3{margin:0;font-size:16px;letter-spacing:.06em}
+/* ── 取り込まない振込人 ────────────────── */
+/* ファイルに出てきた名前を、押すだけで足せるようにする。
+   手で打ち直させると、半角カナの打ち間違いで当たらなくなる */
+.ex-cand{margin-bottom:12px;font-size:13px}
+.ex-cand > b{display:block;margin-bottom:6px;color:var(--ink-2);font-size:12.5px}
+.ex-cand > div{display:flex;flex-wrap:wrap;gap:6px}
+.ex-cand .btn{font-family:var(--mono);font-size:12px}
+.ex-add{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.ex-add .kana-in{flex:1 1 180px;min-width:0}
+/* 入金種類の選択欄。金額まで出すので、顧客の欄より狭くてよい */
+.ex-list{border:1px solid var(--rule);background:var(--paper)}
+.ex-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:8px 12px;border-bottom:1px solid var(--rule);font-size:13px}
+.ex-row:last-child{border-bottom:0}
+.ex-row > b{flex:0 0 auto}
+.ex-memo{flex:1 1 120px;min-width:0;color:var(--ink-2);font-size:12.5px}
+.ex-on{color:var(--ink-3);font-size:12px}
+.ex-none{margin:0;padding:14px;color:var(--ink-2);font-size:13px}
+.meisai .assign.kind{min-width:170px;max-width:200px}
+
 .modal-foot{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:14px;
   border-top:1px solid var(--rule)}
 .modal-foot .right{margin-left:auto;display:flex;gap:8px}

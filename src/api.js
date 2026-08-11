@@ -117,6 +117,11 @@ export const api = {
   bankSkip: (ids) => call('/api/bank', { method: 'POST', body: { 見送る: ids } }),
   saveBankAccount: (口座) => call('/api/bank', { method: 'POST', body: { 口座 } }),
 
+  // 取り込まない振込人
+  excludes: () => call('/api/excludes', { 取り直す: true }),
+  addExclude: (body) => call('/api/excludes', { method: 'POST', body }),
+  delExclude: (id) => call('/api/excludes' + q({ id }), { method: 'DELETE' }),
+
   // 取り込み
   preview: (text) => call('/api/import', { method: 'POST', body: { text } }),
   commit: (明細) => call('/api/import', { method: 'POST', body: { 実行: true, 明細 } }),

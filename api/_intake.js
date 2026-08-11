@@ -4,7 +4,7 @@
 // 振込人名から顧客を当てる・二重取込を弾く・古い回から充てる、は
 // どこから来た明細でも同じでなければならない。
 // 2か所に書くと、いつか片方だけ直されて食い違う。だから1か所に置く。
-import { isoOf, yen, normPayer, allocate } from './_lib.js';
+import { isoOf, yen, normPayer, allocate, 入金種類 } from './_lib.js';
 import { あいうえお順 } from './_yomi_dict.js';
 
 // 重複判定の鍵。日付+付番+金額
@@ -48,16 +48,20 @@ function matcher(aliases, customers) {
 
 // 照合に使う道具を一度に用意する。顧客と名寄せ辞書は同時に取ってくる
 async function 照合の道具(sql) {
-  const [customers, aliases] = await Promise.all([
-    sql(`SELECT id, name, kana, monthly_amount FROM customer WHERE archived=false ORDER BY id`),
+  const [customers, aliases, 除外行] = await Promise.all([
+    // ボーナス金額も一緒に取る。確認画面で「ボーナス ¥100,000-」を選べるようにするため
+    sql(`SELECT id, name, kana, monthly_amount, bonus_amount, bonus_months
+           FROM customer WHERE archived=false ORDER BY id`),
     sql(`SELECT normalized_name, customer_id FROM payer_alias`),
+    sql('SELECT normalized_name FROM payer_exclude'),
   ]);
+  const 除外 = new Set(除外行.map((x) => x.normalized_name));
   // 顧客を選ぶ欄に出すので、あいうえお順にそろえる。
   // 顧客一覧と並びが違うと、同じ人を探すのに二度手間になる
   customers.sort(あいうえお順);
   const match = matcher(aliases, customers);
   const nameOf = (id) => (customers.find((c) => c.id === id) || {}).name || null;
-  return { customers, match, nameOf };
+  return { customers, match, nameOf, 除外 };
 }
 
 // すでに取り込んである明細（日付+付番+金額 で見る）。
@@ -73,7 +77,7 @@ async function 取込済みの鍵(sql) {
 // 確認画面に出す形にする。保存はしない。
 // 「重複」は同じ取り込みの中にある重なり。「すでに取込済み」は前に入れたもの。
 // 印を付けるだけで勝手には落とさない（同じ日に同じ額が2件、は実際に起きるため）。
-function プレビュー(明細, { match, nameOf, 済み }) {
+function プレビュー(明細, { match, nameOf, 済み, 除外 }) {
   const count = {};
   明細.forEach((r) => { const k = dupKey(r); count[k] = (count[k] || 0) + 1; });
   const seq = {};
@@ -88,24 +92,25 @@ function プレビュー(明細, { match, nameOf, 済み }) {
       照合できた: !!m.id,
       ファイル内で重複: count[k] > 1,
       すでに取込済み: 済み.has(k),
+      // 取り込まないと決めてある振込人。呼んだ側で表から外す
+      除外された: !!(除外 && 除外.has(normPayer(r.振込人))),
     };
   });
 }
 
-// 自動で取り込んだ入金は、通常（月額）の回にだけ充てる。
+// 充てる先の種類。何も選ばれていなければ月額（通常）。
 //
-// 充当は期日の古い順に埋めるので、これを付けないと、
-// 月々の振り込みがボーナスの回（金額が大きい）に食われて、
-// 台帳の金額がおかしくなる。振込人名からは、その入金が
-// 月額ぶんなのかボーナスぶんなのかを見分けられない。
-// ボーナスは、人が「入金種類：ボーナス」を選んで手動で入れる。
-const 自動の充当先 = '通常';
+// 充当は期日の古い順に埋めるので、種類を決めないと、月々の振り込みが
+// ボーナスの回（金額が大きい）に食われて、台帳の金額がおかしくなる。
+// 振込人名からは、その入金が月額ぶんかボーナスぶんかを見分けられない。
+// だから機械には決めさせず、確認画面で人が行ごとに選ぶ。既定は月額。
+const 充てる先 = (r) => 入金種類(r && r.入金種類) || '通常';
 
 // 人が確かめて残した行を、入金として保存する。
 // 区分は 'CSV' か '銀行'。画面で行の色を変えるためと、あとから出所をたどるため。
 async function 取り込む(sql, who, rows, 区分 = 'CSV') {
-  const { match } = await 照合の道具(sql);
-  let 取込 = 0, 見送り = 0, 未割当 = 0;
+  const { match, 除外 } = await 照合の道具(sql);
+  let 取込 = 0, 見送り = 0, 未割当 = 0, 除いた = 0;
   const 残り = [];
 
   // 読み取れる行に絞り、二重取込の鍵を作る
@@ -116,6 +121,9 @@ async function 取り込む(sql, who, rows, 区分 = 'CSV') {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r.日付 || '')) || !amount || amount <= 0) {
       見送り++; continue;
     }
+    // 取り込まないと決めた振込人は、ここでも弾く。
+    // 画面ですでに外してあるはずだが、古い画面から送られてくることもある
+    if (除外.has(normPayer(r.振込人))) { 除いた++; continue; }
     const base = dupKey(r);
     seen[base] = (seen[base] || 0) + 1;
     有効.push({ r, amount, key: String(r.鍵 || importKey(r, seen[base])) });
@@ -145,8 +153,9 @@ async function 取り込む(sql, who, rows, 区分 = 'CSV') {
     入れる.forEach((x) => {
       const cid = x.r.顧客id ? Number(x.r.顧客id) : match(x.r.振込人, x.amount).id;
       x.cid = cid || null;
+      x.種類 = 充てる先(x.r);
       引数.push(x.cid, x.r.日付, x.amount, 区分, String(x.r.付番 || '') || null,
-               String(x.r.振込人 || '') || null, x.key, 自動の充当先, who);
+               String(x.r.振込人 || '') || null, x.key, x.種類, who);
       const i = 引数.length;
       値.push(`($${i - 8},$${i - 7},$${i - 6},'振込',$${i - 5},$${i - 4},$${i - 3},$${i - 2},$${i - 1},$${i})`);
     });
@@ -183,14 +192,16 @@ async function 取り込む(sql, who, rows, 区分 = 'CSV') {
   const 余った = [];
   await Promise.all([...顧客ごと.values()].map(async (組) => {
     for (const x of 組) {
-      const al = await allocate(sql, x.cid, x.pid, x.amount, 自動の充当先);
+      const al = await allocate(sql, x.cid, x.pid, x.amount, x.種類);
+      const 種類名 = x.種類 === 'ボーナス' ? 'ボーナス' : '月額';
       if (al.余り > 0) {
-        余った.push({ 入金id: x.pid, 顧客id: x.cid, 日付: x.r.日付,
+        余った.push({ 入金id: x.pid, 顧客id: x.cid, 日付: x.r.日付, 種類: 種類名,
                      金額: x.amount, 余り: al.余り, 振込人: x.r.振込人 || '' });
       }
       記録.push([x.cid, x.pid,
-        `${区分}から ${yen(x.amount)}円 を取り込み（${x.r.日付}・振込人：${x.r.振込人 || '—'}）`
-        + (al.余り ? `。余り ${yen(al.余り)}円（月額の回に充てきれませんでした）` : ''),
+        `${区分}から ${yen(x.amount)}円 を取り込み`
+        + `（${x.r.日付}・振込人：${x.r.振込人 || '—'}・入金種類：${種類名}）`
+        + (al.余り ? `。余り ${yen(al.余り)}円（${種類名}の回に充てきれませんでした）` : ''),
         normPayer(x.r.振込人)]);
     }
   }));
@@ -228,7 +239,7 @@ async function 取り込む(sql, who, rows, 区分 = 'CSV') {
     });
   }
 
-  return { 取込, 見送り, 未割当, 残り, 入れた, 余った };
+  return { 取込, 見送り, 未割当, 除いた, 残り, 入れた, 余った };
 }
 
 export { dupKey, importKey, matcher, 照合の道具, 取込済みの鍵, プレビュー, 取り込む, 自動の区分 };

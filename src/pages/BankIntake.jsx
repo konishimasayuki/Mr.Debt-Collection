@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, yen } from '../api';
 import { Err, Note } from '../components/ui';
-import { 明細の表 } from './PaymentEntry';
+import { 明細の表, 除外リスト } from './PaymentEntry';
 
 // 銀行から取ってきた明細を、人が確かめて入金にする欄。
 //
@@ -11,6 +11,8 @@ export default function BankIntake({ onChanged }) {
   const [d, setD] = useState(null);      // {口座, 明細, 概要, 顧客}
   const [keep, setKeep] = useState({});
   const [assignTo, setAssignTo] = useState({});
+  const [種類, set種類] = useState({});          // 行番号 → 月額 / ボーナス
+  const [除外を開く, set除外を開く] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState('');  // '取得' / '取込' / '見送'
 
@@ -21,7 +23,7 @@ export default function BankIntake({ onChanged }) {
       const k = {};
       x.明細.forEach((r) => { k[r.行] = !r.すでに取込済み; });
       setKeep(k);
-      setAssignTo({});
+      setAssignTo({}); set種類({});
     } catch (e) { setErr(e.message); }
   };
   useEffect(() => { load(); }, []);
@@ -44,6 +46,7 @@ export default function BankIntake({ onChanged }) {
   const 取り込む = async () => {
     const rows = 残す行().map((r) => ({
       ...r, 顧客id: assignTo[r.行] ? Number(assignTo[r.行]) : r.顧客id,
+      入金種類: 種類[r.行] || '月額',
     }));
     if (!rows.length) { setErr('取り込む行がありません。'); return; }
     setBusy('取込'); setErr('');
@@ -54,7 +57,7 @@ export default function BankIntake({ onChanged }) {
         + (r.見送った件数 ? `\n${r.見送った件数}件は見送りました（すでに取り込み済みなど）。` : '')
         + (r.照合できなかった件数 ? `\n${r.照合できなかった件数}件は、まだどの顧客か決まっていません。`
            + '\n入金履歴から顧客を選んでください。' : '')
-        + (余.length ? `\n${余.length}件は、月額の回に充てきれず余りになりました。`
+        + (余.length ? `\n${余.length}件は、選んだ種類の回に充てきれず余りになりました。`
            + (余.filter((x) => x.ボーナスが残っている).length
              ? '\nボーナスの回が残っている方がいます。入金履歴で入金種類を「ボーナス」に直してください。' : '')
            : ''));
@@ -141,13 +144,24 @@ export default function BankIntake({ onChanged }) {
             <b>ここに出ているだけでは、まだ入金になっていません。</b>
             残す行にチェックを付けて「取り込む」を押してください。
             <br />
-            <b>ボーナスの回には充てません。</b>{' '}
-            ボーナス分は「手動入金登録」で<b>入金種類：ボーナス</b>を選んで入れてください。
+            <b>入金種類は「月額」から始まります。</b>{' '}
+            ボーナス払いの方で、その入金が賞与ぶんなら、その行の入金種類を
+            <b>「ボーナス」</b>に変えてください。
           </Note>
+
+          <div className="row-btn" style={{ marginBottom: 10 }}>
+            <button className="btn btn-sm" onClick={() => set除外を開く(true)}>
+              除外リストを確認・編集
+            </button>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>
+              入れておくと、次からは毎回この振込人を自動で外します
+            </span>
+          </div>
 
           <明細の表 明細={d.明細} 顧客={d.顧客}
                     keep={keep} setKeep={setKeep}
-                    assignTo={assignTo} setAssignTo={setAssignTo} />
+                    assignTo={assignTo} setAssignTo={setAssignTo}
+                    種類={種類} set種類={set種類} />
 
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12,
                         flexWrap: 'wrap' }}>
@@ -163,6 +177,15 @@ export default function BankIntake({ onChanged }) {
             </span>
           </div>
         </>
+      )}
+
+      {除外を開く && (
+        <除外リスト
+          候補={[...new Set(((d && d.明細) || [])
+            .filter((r) => !r.照合できた).map((r) => r.振込人).filter(Boolean))].sort()}
+          onClose={() => set除外を開く(false)}
+          onChanged={() => { set除外を開く(false); load(); }}
+        />
       )}
 
       {d && d.明細.length === 0 && 口座.length > 0 && (
