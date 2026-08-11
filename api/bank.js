@@ -133,7 +133,9 @@ export default async (req, res) => {
         const [道具, 済み] = await Promise.all([照合の道具(sql), 取込済みの鍵(sql)]);
         customers = 道具.customers;
         明細 = プレビュー(未確認.map(明細にする), { ...道具, 済み })
-          .map((r, i) => ({ ...r, 明細id: 未確認[i].id, 銀行: 未確認[i].bank_name }));
+          .map((r, i) => ({ ...r, 明細id: 未確認[i].id, 銀行: 未確認[i].bank_name }))
+          // 取り込まないと決めた振込人は、確認の表に出さない
+          .filter((r) => !r.除外された);
       } else {
         customers = (await 照合の道具(sql)).customers;
       }
@@ -153,7 +155,12 @@ export default async (req, res) => {
           合計: 明細.reduce((s, r) => s + r.金額, 0),
         },
         明細,
-        顧客: customers.map((c) => ({ id: c.id, 氏名: c.name, よみ: c.kana || '' })),
+        顧客: customers.map((c) => ({
+          id: c.id, 氏名: c.name, よみ: c.kana || '',
+          月額: c.monthly_amount,
+          ボーナス金額: (c.bonus_months && c.bonus_months.length && c.bonus_amount)
+            ? c.bonus_amount : null,
+        })),
         本日: today(),
       });
     }
@@ -214,7 +221,7 @@ export default async (req, res) => {
       }
       return ok(res, { done: true, 取り込んだ件数: r.取込, 見送った件数: r.見送り,
                        照合できなかった件数: r.未割当, 照合できなかった明細: r.残り,
-                       余った: r.余った });
+                       除いた件数: r.除いた, 余った: r.余った });
     }
 
     // ── 入金ではないと決める ──────────────────────

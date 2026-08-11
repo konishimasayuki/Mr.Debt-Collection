@@ -7,7 +7,7 @@
 // 銀行APIから来た明細も同じところを通る（2か所に書くと、いつか食い違うため）。
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
-import { readBody, yen, normPayer, allocate } from './_lib.js';
+import { readBody, yen, normPayer, allocate, 入金種類 } from './_lib.js';
 import { parseCsv } from './_csv.js';
 import { importKey, 照合の道具, 取込済みの鍵, プレビュー, 取り込む } from './_intake.js';
 
@@ -55,13 +55,14 @@ export default async (req, res) => {
         pid = (await sql(
           `INSERT INTO payment (customer_id, paid_on, amount, method, source, ref_no,
                                 payer_name, import_key, alloc_kind, recorded_by)
-           VALUES ($1,$2,$3,'振込','CSV',$4,$5,$6,'通常',$7) RETURNING id`,
+           VALUES ($1,$2,$3,'振込','CSV',$4,$5,$6,$7,$8) RETURNING id`,
           [cid, a.日付, amount, String(a.付番 || '') || null,
-           String(a.振込人 || '') || null, key, who]))[0].id;
+           String(a.振込人 || '') || null, key, 入金種類(a.入金種類) || '通常', who]))[0].id;
       }
-      // 自動で来た入金は、通常（月額）の回にだけ充てる。
-      // ボーナスは人が「入金種類：ボーナス」を選んで手動で入れる
-      const r = await allocate(sql, cid, pid, amount, '通常');
+      // どの回に充てるかは人が選ぶ。何も選ばれていなければ月額（通常）
+      const 種類 = 入金種類(a.入金種類) || '通常';
+      await sql('UPDATE payment SET alloc_kind=$1 WHERE id=$2', [種類, pid]);
+      const r = await allocate(sql, cid, pid, amount, 種類);
       await sql(`INSERT INTO event (customer_id, payment_id, recorded_by, kind, text, memo)
                  VALUES ($1,$2,$3,'入金',$4,$5)`,
         [cid, pid, who, `${yen(amount)}円 を人が選んで割り当て（振込人：${a.振込人 || '—'}）`, null]);
@@ -80,7 +81,7 @@ export default async (req, res) => {
       const r = await 取り込む(sql, who, rows, 'CSV');
       return ok(res, { done: true, 取り込んだ件数: r.取込, 見送った件数: r.見送り,
                        照合できなかった件数: r.未割当, 照合できなかった明細: r.残り,
-                       余った: r.余った });
+                       除いた件数: r.除いた, 余った: r.余った });
     }
 
     // ── プレビュー（読み取るだけ。保存しない）──────────────
@@ -89,10 +90,14 @@ export default async (req, res) => {
     try { parsed = parseCsv(b.text); }
     catch (e) { return bad(res, 400, { error: 'CSVとして読み取れません。', 理由: e.message }); }
 
-    const [{ customers, match, nameOf }, 済み] = await Promise.all([
+    const [{ customers, match, nameOf, 除外 }, 済み] = await Promise.all([
       照合の道具(sql), 取込済みの鍵(sql),
     ]);
-    const 明細 = プレビュー(parsed.明細, { match, nameOf, 済み });
+    const 全部 = プレビュー(parsed.明細, { match, nameOf, 済み, 除外 });
+    // 取り込まないと決めた振込人は、表に出さない。
+    // 毎回チェックを外す手間と、外し忘れをなくすため
+    const 明細 = 全部.filter((r) => !r.除外された);
+    const 除いた行 = 全部.filter((r) => r.除外された);
 
     // 読めなかった行は、理由ごとにまとめて返す。
     // 明細は多くなりすぎないよう10件まで（出金の行は大量に出るため）。
@@ -108,6 +113,11 @@ export default async (req, res) => {
         内訳: Object.entries(理由ごと).map(([理由, 件数]) => ({ 理由, 件数 })),
         明細: 飛ばし.slice(0, 10),
       },
+      // 除外リストで外した行。何を外したかは必ず見せる（黙って落とさない）
+      除いた: {
+        件数: 除いた行.length,
+        振込人: [...new Set(除いた行.map((r) => r.振込人))].filter(Boolean),
+      },
       概要: {
         件数: 明細.length,
         照合できた: 明細.filter((r) => r.照合できた).length,
@@ -118,7 +128,13 @@ export default async (req, res) => {
         ファイル検算: parsed.トレーラ ? parsed.トレーラ.合計 === sum : null,
       },
       明細,
-      顧客: customers.map((c) => ({ id: c.id, 氏名: c.name, よみ: c.kana || '' })),
+      顧客: customers.map((c) => ({
+        id: c.id, 氏名: c.name, よみ: c.kana || '',
+        月額: c.monthly_amount,
+        // ボーナス払いの設定がある方だけ、確認画面で「ボーナス」を選べる
+        ボーナス金額: (c.bonus_months && c.bonus_months.length && c.bonus_amount)
+          ? c.bonus_amount : null,
+      })),
     });
   } catch (e) {
     fail(res, e, 'import');

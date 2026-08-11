@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, yen, ymd, jpDate, 本日 } from '../api';
-import { Modal, Text, Money, Select, Picker, Err, Note, Empty } from '../components/ui';
+import { Modal, Text, Money, Select, Picker, Err, Note, Empty, Loading } from '../components/ui';
 import BankIntake from './BankIntake';
 
 // CSVは銀行によって Shift-JIS のことも UTF-8 のこともある。
@@ -32,7 +32,127 @@ async function readText(file) {
 // ── 取り込む前の確認の表。CSVからでも銀行からでも、同じものを使う ──────
 // 出所が違っても、人が見て確かめることは同じ。
 // 2つ作ると、片方だけ直されて見え方が食い違う。
-export function 明細の表({ 明細, 顧客, keep, setKeep, assignTo, setAssignTo }) {
+// 一押しで除外に入れられる候補は、顧客が決まっていない振込人だけにする。
+// お客様の名前まで並べると、押し間違えてその方の入金が
+// 二度と取り込まれなくなる。お客様を外したいときは手で打ってもらう。
+const 候補の振込人 = (d) => [...new Set(
+  ((d && d.明細) || []).filter((r) => !r.照合できた).map((r) => r.振込人).filter(Boolean),
+)].sort();
+
+// 取り込まない振込人のリスト。
+//
+// 会社の口座間の振替や、手数料の戻しは、毎月のCSVに必ず出てくる。
+// そのたびにチェックを外していると、いつか外し忘れて、
+// お客様の入金でないものが台帳に入ってしまう。
+// 一度ここに入れておけば、CSVからでも銀行からでも毎回自動で外れる。
+export function 除外リスト({ 候補, onClose, onChanged }) {
+  const [d, setD] = useState(null);
+  const [名前, set名前] = useState('');
+  const [メモ, setメモ] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [触った, set触った] = useState(false);
+
+  const load = () => api.excludes().then(setD).catch((e) => { setD({ 除外: [] }); setErr(e.message); });
+  useEffect(() => { load(); }, []);
+
+  const 足す = async (n, m) => {
+    const v = String(n || '').trim();
+    if (!v) { setErr('振込人名を入れてください。'); return; }
+    setBusy(true); setErr('');
+    try {
+      await api.addExclude({ 名前: v, メモ: m || '' });
+      set名前(''); setメモ(''); set触った(true);
+      await load();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const 外す = async (x) => {
+    if (!confirm(`「${x.名前}」を除外リストから外します。\n\n`
+      + '次からは、この振込人も確認の表に出るようになります。\nよろしいですか。')) return;
+    setBusy(true); setErr('');
+    try { await api.delExclude(x.id); set触った(true); await load(); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const 入っている = new Set((d ? d.除外 : []).map((x) => x.名前));
+  const まだの候補 = (候補 || []).filter((n) => !入っている.has(n));
+
+  return (
+    <Modal
+      wide
+      title="取り込まない振込人"
+      onClose={() => (触った ? onChanged() : onClose())}
+      foot={
+        <div className="right">
+          <button className="btn btn-main" onClick={() => (触った ? onChanged() : onClose())}>
+            {触った ? '閉じて読み直す' : '閉じる'}
+          </button>
+        </div>
+      }
+    >
+      <Note>
+        <b>ここに入れた振込人は、取り込みの表に出なくなります。</b>
+        {' '}CSVからでも銀行からでも、<b>毎回自動で外します。</b>
+        <br />
+        会社の口座どうしの振替や、手数料の戻しなど、
+        <b>お客様の入金ではないもの</b>を入れてください。
+        <br />
+        すでに取り込んだ入金は消えません。これから読むぶんに効きます。
+      </Note>
+
+      <Err>{err}</Err>
+
+      {まだの候補.length > 0 && (
+        <div className="ex-cand">
+          <b>顧客が決まっていない振込人（押すと入ります）</b>
+          <div>
+            {まだの候補.map((n) => (
+              <button key={n} className="btn btn-sm" disabled={busy}
+                      onClick={() => 足す(n, '')}>＋ {n}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="ex-add">
+        <input className="kana-in" value={名前} placeholder="振込人名（手で入れる）"
+               onChange={(e) => set名前(e.target.value)} />
+        <input className="kana-in" value={メモ} placeholder="覚え書き（任意）"
+               onChange={(e) => setメモ(e.target.value)} />
+        <button className="btn" disabled={busy || !名前.trim()}
+                onClick={() => 足す(名前, メモ)}>足す</button>
+      </div>
+
+      {/* 表にすると、スマホで右の「外す」まで手が届かない。
+          1件を1枚にして、狭いところでは折り返す */}
+      <div className="ex-list">
+        {d === null && <Loading 件数={3} 行={1} />}
+        {d && d.除外.length === 0 && (
+          <p className="ex-none">まだ1件も入っていません。</p>
+        )}
+        {d && d.除外.map((x) => (
+          <div className="ex-row" key={x.id}>
+            <b className="mono">{x.名前}</b>
+            <span className="ex-memo">{x.メモ || ''}</span>
+            <span className="ex-on">{x.入れた日}</span>
+            <button className="btn btn-sm btn-danger" disabled={busy}
+                    onClick={() => 外す(x)}>外す</button>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+export function 明細の表({ 明細, 顧客, keep, setKeep, assignTo, setAssignTo, 種類, set種類 }) {
+  const 顧客の = {};
+  顧客.forEach((c) => { 顧客の[c.id] = c; });
+  // その行がいま誰のものか。人が選び直していれば、そちらが優先
+  const 誰の = (r) => (assignTo[r.行] ? Number(assignTo[r.行]) : r.顧客id) || null;
+
   return (
     <div className="card tw meisai">
       <table>
@@ -40,11 +160,13 @@ export function 明細の表({ 明細, 顧客, keep, setKeep, assignTo, setAssig
           <tr>
             <th style={{ width: 44 }}>取込</th>
             <th>日付</th><th>付番</th><th className="num">金額</th><th>振込人</th>
-            <th>顧客</th><th>印</th>
+            <th>顧客</th><th>入金種類</th><th>印</th>
           </tr>
         </thead>
         <tbody>
-          {明細.map((r) => (
+          {明細.map((r) => {
+            const c = 顧客の[誰の(r)] || null;
+            return (
             <tr key={r.行} className={[
               keep[r.行] ? '' : 'off',
               r.すでに取込済み ? 'dupdone' : r.ファイル内で重複 ? 'dup' : '',
@@ -64,9 +186,25 @@ export function 明細の表({ 明細, 顧客, keep, setKeep, assignTo, setAssig
                   <select value={assignTo[r.行] || ''} className="assign"
                           onChange={(e) => setAssignTo((o) => ({ ...o, [r.行]: e.target.value }))}>
                     <option value="">選ぶ（{r.判断}）</option>
-                    {顧客.map((c) => (
-                      <option key={c.id} value={c.id}>{c.氏名}{c.よみ ? `（${c.よみ}）` : ''}</option>
+                    {顧客.map((x) => (
+                      <option key={x.id} value={x.id}>{x.氏名}{x.よみ ? `（${x.よみ}）` : ''}</option>
                     ))}
+                  </select>
+                )}
+              </td>
+              {/* どの回に充てるか。既定は月額。
+                  期日の古い順に埋めるので、種類を決めないとボーナスの回
+                  （金額が大きい）に食われて、台帳の金額がおかしくなる */}
+              <td>
+                {!c ? (
+                  <span style={{ color: 'var(--ink-3)', fontSize: 12.5 }}>顧客を選ぶと出ます</span>
+                ) : !c.ボーナス金額 ? (
+                  <span style={{ fontSize: 12.5 }}>月額 ¥{yen(c.月額)}-</span>
+                ) : (
+                  <select value={種類[r.行] || '月額'} className="assign kind"
+                          onChange={(e) => set種類((o) => ({ ...o, [r.行]: e.target.value }))}>
+                    <option value="月額">月額 ¥{yen(c.月額)}-</option>
+                    <option value="ボーナス">ボーナス ¥{yen(c.ボーナス金額)}-</option>
                   </select>
                 )}
               </td>
@@ -75,7 +213,8 @@ export function 明細の表({ 明細, 顧客, keep, setKeep, assignTo, setAssig
                 {!r.すでに取込済み && r.ファイル内で重複 && <span className="tag t-dup">重複</span>}
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -86,28 +225,47 @@ export default function PaymentEntry({ onChanged, goHistory }) {
   const [preview, setPreview] = useState(null);   // {形式, 概要, 明細, 顧客}
   const [keep, setKeep] = useState({});           // 行番号 → 残すか
   const [assignTo, setAssignTo] = useState({});   // 行番号 → 顧客id
+  const [種類, set種類] = useState({});           // 行番号 → 月額 / ボーナス
+  const [除外を開く, set除外を開く] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [manual, setManual] = useState(false);
   const [乗っている, set乗っている] = useState(false);   // ファイルを持ってきている最中か
   const file = useRef(null);
+  // 読み取ったファイルの中身。除外リストを直したあと、読み直すために持っておく
+  const 中身 = useRef('');
   const 深さ = useRef(0);          // 中の字の上を通るたびに離れた事にならないよう数える
+
+  const 見せる = (d) => {
+    setPreview(d);
+    // 取込済みの行は最初から外しておく（残したければ人が戻せる）
+    const k = {};
+    d.明細.forEach((r) => { k[r.行] = !r.すでに取込済み; });
+    setKeep(k);
+    setAssignTo({}); set種類({});
+  };
 
   const 読み取る = async (f) => {
     if (!f) return;
     setErr(''); setResult(null); setBusy(true);
     try {
       const text = await readText(f);
-      const d = await api.preview(text);
-      setPreview(d);
-      // 取込済みの行は最初から外しておく（残したければ人が戻せる）
-      const k = {};
-      d.明細.forEach((r) => { k[r.行] = !r.すでに取込済み; });
-      setKeep(k);
-      setAssignTo({});
+      中身.current = text;
+      見せる(await api.preview(text));
+      set除外を開く(false);
     } catch (e2) { setErr(e2.message); setPreview(null); }
     finally { setBusy(false); if (file.current) file.current.value = ''; }
+  };
+
+  // 除外リストを直したあと、同じファイルをもう一度読む。
+  // 外した振込人がその場で表から消えないと、直したかどうか分からない
+  const 読み直す = async () => {
+    if (!中身.current) return;
+    setBusy(true); setErr('');
+    try { 見せる(await api.preview(中身.current)); }
+    catch (e2) { setErr(e2.message); }
+    finally { setBusy(false); }
   };
 
   const pick = (e) => 読み取る(e.target.files && e.target.files[0]);
@@ -157,7 +315,8 @@ export default function PaymentEntry({ onChanged, goHistory }) {
   const commit = async () => {
     const rows = preview.明細
       .filter((r) => keep[r.行])
-      .map((r) => ({ ...r, 顧客id: assignTo[r.行] ? Number(assignTo[r.行]) : r.顧客id }));
+      .map((r) => ({ ...r, 顧客id: assignTo[r.行] ? Number(assignTo[r.行]) : r.顧客id,
+                     入金種類: 種類[r.行] || '月額' }));
     if (!rows.length) { setErr('取り込む行がありません。'); return; }
     setBusy(true); setErr('');
     try {
@@ -243,9 +402,9 @@ export default function PaymentEntry({ onChanged, goHistory }) {
             <b>取り込みたくない行は、左のチェックを外してください。</b>
             {' '}チェックの付いた行だけが入金になります。
             <br />
-            <b>ボーナスの回には充てません。</b>{' '}
-            月額の回だけに、古いほうから充てます。ボーナス分は
-            「手動入金登録」で<b>入金種類：ボーナス</b>を選んで入れてください。
+            <b>入金種類は「月額」から始まります。</b>{' '}
+            古いほうの回から充てます。ボーナス払いの方で、その入金が賞与ぶんなら、
+            その行の入金種類を<b>「ボーナス」</b>に変えてください。
             <br />
             {preview.概要.件数}件・合計 {yen(preview.概要.合計)}円。
             照合できた {preview.概要.照合できた}件、
@@ -290,11 +449,37 @@ export default function PaymentEntry({ onChanged, goHistory }) {
             </Note>
           )}
 
+          {/* 取り込まないと決めた振込人は、黙って落とさずに件数を出す */}
+          {preview.除いた && preview.除いた.件数 > 0 && (
+            <Note>
+              <b>{preview.除いた.件数}行は、除外リストにある振込人なので外しました。</b>{' '}
+              {preview.除いた.振込人.join('、')}
+            </Note>
+          )}
+
+          <div className="row-btn" style={{ marginBottom: 10 }}>
+            <button className="btn btn-sm" onClick={() => set除外を開く(true)}>
+              除外リストを確認・編集
+            </button>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>
+              入れておくと、次からは毎回この振込人を自動で外します
+            </span>
+          </div>
+
           <Err>{err}</Err>
           <明細の表 明細={preview.明細} 顧客={preview.顧客}
                     keep={keep} setKeep={setKeep}
-                    assignTo={assignTo} setAssignTo={setAssignTo} />
+                    assignTo={assignTo} setAssignTo={setAssignTo}
+                    種類={種類} set種類={set種類} />
         </Modal>
+      )}
+
+      {除外を開く && (
+        <除外リスト
+          候補={候補の振込人(preview)}
+          onClose={() => set除外を開く(false)}
+          onChanged={() => { set除外を開く(false); 読み直す(); }}
+        />
       )}
 
       {/* ── 中：銀行から取り込む ── */}
@@ -420,7 +605,7 @@ function 余りの知らせ({ 余った }) {
   const ボ = 一覧.filter((x) => x.ボーナスが残っている);
   return (
     <Note kind="warn">
-      <b>{一覧.length}件は、月額の回に充てきれませんでした。</b>
+      <b>{一覧.length}件は、選んだ種類の回に充てきれませんでした。</b>
       {' '}余ったお金は、まだどの回にも充てていません（残債は減っていません）。
       {ボ.length > 0 && (
         <>
@@ -435,6 +620,7 @@ function 余りの知らせ({ 余った }) {
           <li key={x.入金id}>
             {ymd(x.日付)}　{x.顧客名 || x.振込人 || '（名前なし）'}　
             {yen(x.金額)}円 のうち <b>{yen(x.余り)}円</b> が余り
+            {x.種類 && <span className="tag t-csv">{x.種類}で充当</span>}
             {x.ボーナスが残っている && <span className="tag t-bonus">ボーナス残あり</span>}
           </li>
         ))}

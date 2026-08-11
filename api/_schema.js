@@ -282,6 +282,18 @@ const STATEMENTS = [
      ON bank_txn (state, paid_on DESC, id DESC)`,
 
   // ── 名寄せ辞書(CSVの振込人名 → 顧客)──────────────
+  // 取り込まない振込人。ここに入れた名前は、CSVでも銀行でも毎回外す。
+  // 会社の口座間の振替や、手数料の戻しなど、お客様の入金ではないもの。
+  // 顧客に結び付けない（顧客とは関係のない入金なので）。
+  `CREATE TABLE IF NOT EXISTS payer_exclude (
+     id              serial PRIMARY KEY,
+     normalized_name text NOT NULL UNIQUE,
+     raw_name        text NOT NULL,
+     memo            text,
+     created_by      text NOT NULL,
+     created_at      timestamptz NOT NULL DEFAULT now()
+   )`,
+
   `CREATE TABLE IF NOT EXISTS payer_alias (
      id              serial PRIMARY KEY,
      normalized_name text NOT NULL UNIQUE,
