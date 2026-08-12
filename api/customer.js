@@ -31,8 +31,8 @@ function 並びが崩れているか(予定, 入金, 充当) {
   // 記録した順（id順）。api/_lib.js の詰め直すと同じ数え方
   for (const p of [...入金].sort((a, b) => a.id - b.id)) {
     let 残 = p.amount;
-    const 絞る = p.alloc_kind === 'ボーナス' ? 'ボーナス'
-      : p.alloc_kind === '通常' ? '通常' : null;
+    // 種類を決めていない入金は月額として扱う（api/_lib.js の詰め直すと同じ）
+    const 絞る = p.alloc_kind === 'ボーナス' ? 'ボーナス' : '通常';
     for (const s of 予定) {
       if (残 <= 0) break;
       if (絞る && (s.kind || '通常') !== 絞る) continue;
