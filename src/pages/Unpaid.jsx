@@ -1,99 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, yen, ymd, md } from '../api';
-import { Modal, Text, Err, Empty, Note, Loading } from '../components/ui';
+import { Modal, Err, Empty, Note, Loading } from '../components/ui';
 import { ManualPayment } from './PaymentEntry';
-
-// 入金の割り当て直し。
-//
-// 「月額のつもりの入金がボーナスに入っている」「その逆」を、
-// 電話中にその場で直せるようにする。入金履歴まで行かなくて済む。
-// 直したあとは、その顧客のお金を古い回から順に詰め直す。
-function 割り当て直し({ 顧客, onClose, onDone }) {
-  const [d, setD] = useState(null);
-  const [選び, set選び] = useState({});      // 入金id → 月額 / ボーナス
-  const [メモ, setメモ] = useState('');
-  const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    api.customer(顧客.id).then(setD).catch((e) => setErr(e.message));
-  }, [顧客.id]);
-
-  const いま = (p) => (選び[p.id] !== undefined ? 選び[p.id] : p.入金種類);
-  const 変えた = d ? d.入金.filter((p) => いま(p) !== p.入金種類) : [];
-
-  const save = async () => {
-    setBusy(true); setErr('');
-    try {
-      const r = await api.reassign(顧客.id,
-        変えた.map((p) => ({ 入金id: p.id, 入金種類: いま(p) })), メモ);
-      alert(`${r.変えた件数}件の割り当てを直しました。`);
-      onDone();
-    } catch (e) { setErr(e.message); setBusy(false); }
-  };
-
-  return (
-    <Modal
-      wide
-      title={`${顧客.氏名} さんの入金の割り当て直し`}
-      onClose={onClose}
-      foot={
-        <>
-          <button className="btn" onClick={onClose} disabled={busy}>キャンセル</button>
-          <div className="right">
-            <button className="btn btn-main" onClick={save} disabled={busy || !変えた.length}>
-              {busy ? '直しています…' : `${変えた.length}件を直す`}
-            </button>
-          </div>
-        </>
-      }
-    >
-      <Note>
-        <b>月額のつもりの入金がボーナスに入っていたときに、ここで直せます。</b>
-        {' '}その逆も直せます。
-        <br />
-        <b>入金の金額・件数・残債は変わりません。</b>どの回に充てるかだけが変わります。
-        直したあとは、古い回から順に詰め直します。
-      </Note>
-      <Err>{err}</Err>
-
-      {d === null && <Loading 件数={3} 行={1} />}
-      {d && d.入金.length === 0 && <Empty>まだ入金がありません。</Empty>}
-
-      {d && d.入金.length > 0 && (
-        <div className="ex-list">
-          {d.入金.map((p) => (
-            <div className="ex-row" key={p.id}>
-              <b>{ymd(p.日付)}</b>
-              <span className="ex-on">{yen(p.金額)}円</span>
-              <span className="ex-memo">{p.振込人 || p.メモ || p.区分}</span>
-              <select className="assign kind" value={いま(p)}
-                      onChange={(e) => set選び((o) => ({ ...o, [p.id]: e.target.value }))}>
-                <option value="月額">月額</option>
-                <option value="ボーナス">ボーナス</option>
-              </select>
-              {いま(p) !== p.入金種類 && <span className="tag t-done">直した</span>}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {変えた.length > 0 && (
-        <div style={{ marginTop: 12 }}>
-          <Text label="直した理由（任意）" value={メモ} onChange={setメモ}
-                placeholder="例：本人に確認したところ賞与分だった"
-                hint="記録に残ります" />
-        </div>
-      )}
-    </Modal>
-  );
-}
 
 export default function Unpaid({ onOpen, onChanged }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [入金する, set入金する] = useState(null);   // 手動入金を入れる顧客
-  const [割り当て, set割り当て] = useState(null);   // 入金の種類を直す顧客
   const [busy, setBusy] = useState(0);              // 督促を書き込んでいる顧客id
   const [戻すか, set戻すか] = useState(null);       // 取り消した督促がある行（聞き直す）
 
@@ -241,14 +154,6 @@ export default function Unpaid({ onOpen, onChanged }) {
                     className="btn btn-sm btn-main"
                     onClick={(e) => { e.stopPropagation(); set入金する(r); }}
                   >手動入金登録</button>
-                  {/* 月額に入るはずの入金がボーナスに入っていた、という取り違えを
-                      電話中にその場で直せるように。入金履歴まで行かなくて済む */}
-                  {r.ボーナス回数 > 0 && (
-                    <button
-                      className="btn btn-sm"
-                      onClick={(e) => { e.stopPropagation(); set割り当て(r); }}
-                    >割り当て直し</button>
-                  )}
                 </td>
               </tr>
             ))}
@@ -295,14 +200,6 @@ export default function Unpaid({ onOpen, onChanged }) {
             今日の日付で、1回目から数え直します。
           </Note>
         </Modal>
-      )}
-
-      {割り当て && (
-        <割り当て直し
-          顧客={割り当て}
-          onClose={() => set割り当て(null)}
-          onDone={() => { set割り当て(null); load(); onChanged && onChanged(); }}
-        />
       )}
 
       {入金する && (

@@ -44,7 +44,9 @@ export default async (req, res) => {
       const [rows, 総数] = await Promise.all([
         sql(`SELECT p.id, p.paid_on, p.amount, p.method, p.source, p.ref_no, p.memo,
                     p.payer_name, p.recorded_by, p.customer_id,
-                    c.name AS customer_name, c.kana AS customer_kana, c.is_test
+                    c.name AS customer_name, c.kana AS customer_kana, c.is_test,
+                    -- ボーナス払いの方にだけ「割り当て直し」を出すため
+                    (c.bonus_months IS NOT NULL AND c.bonus_amount IS NOT NULL) AS has_bonus
                FROM payment p LEFT JOIN customer c ON c.id = p.customer_id
               ORDER BY p.paid_on DESC, p.id DESC
               LIMIT $1`, [key ? 5000 : limit]),
@@ -57,6 +59,7 @@ export default async (req, res) => {
         顧客名: p.customer_name || '（未割当）', テスト: !!p.is_test, 金額: p.amount,
         入金方法: p.method, 区分: p.source, 付番: p.ref_no || '',
         振込人: p.payer_name || '', メモ: p.memo || '', 記録者: p.recorded_by,
+        ボーナスあり: !!p.has_bonus,
       }));
       return ok(res, { 入金: list, 件数: list.length,
         全件: 総数 ? 総数[0].n : 当たり.length, 本日: today() });
