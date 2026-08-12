@@ -31,6 +31,7 @@ export default function CustomerPage({ id, onChanged }) {
   const [editCustomer, setEditCustomer] = useState(false);
   const [振替, set振替] = useState(false);   // 口座振替の状態を変える欄
   const [メモ欄, setメモ欄] = useState(null); // メモを足そうとしている回（'通常-3' の形）
+  const [入金月, set入金月] = useState(false); // 未払いの回から先をずらす欄
 
   const load = useCallback(() => {
     setErr('');
@@ -173,6 +174,12 @@ export default function CustomerPage({ id, onChanged }) {
                   onDone={() => { set振替(false); load(); onChanged && onChanged(); }} />
       )}
 
+      {入金月 && (
+        <入金月変更 c={c} 支払予定={d.支払予定}
+                    onClose={() => set入金月(false)}
+                    onDone={() => { set入金月(false); load(); onChanged && onChanged(); }} />
+      )}
+
       <div className="cols">
         {/* ── 左7割：月カレンダー ── */}
         <div>
@@ -251,9 +258,16 @@ export default function CustomerPage({ id, onChanged }) {
 
         {/* ── 右3割：支払いの記録 ── */}
         <div className="sec">
-          <h3>
-            支払いの記録（全{c.回数}回{c.ボーナス回数 > 0 && ` + ボーナス${c.ボーナス回数}回`}）
-          </h3>
+          {/* 見出しと同じ行の右端に、未払いの回から先をずらすボタンを置く。
+              電話で「今月は払えない、来月から」と言われたその場で押せるように */}
+          <div className="rec-top">
+            <h3>
+              支払いの記録（全{c.回数}回{c.ボーナス回数 > 0 && ` + ボーナス${c.ボーナス回数}回`}）
+            </h3>
+            {!c.完済 && (
+              <button className="btn btn-sm" onClick={() => set入金月(true)}>入金月変更</button>
+            )}
+          </div>
           <p className="rec-hint">回を押すと、その回にメモを足せます。</p>
           <div className="rec">
             {d.支払予定.map((s) => {
@@ -523,6 +537,95 @@ function DebitBox({ c, onClose, onDone }) {
         {状態 !== c.引き落とし && <> → 変更後：<b>{振替の文(状態, 日が要る ? 日 : null)}</b></>}
       </Note>
       <Err>{err}</Err>
+    </Modal>
+  );
+}
+
+// 未払いの回から先を、まとめてずらす。
+//
+// 「今月は払えないので、11月から仕切り直したい」というときに使う。
+// 払い終えた回は動かさない。入金の行き先も動かさない。
+// なぜ動かしたのかが分からないと、電話口でお客様と話が食い違うので、
+// メモは必ず書いてもらう。
+function 入金月変更({ c, 支払予定, onClose, onDone }) {
+  const 未払い = (支払予定 || []).filter((s) => s.状態 !== '入金済み');
+  const 基準 = 未払い[0] || null;
+  const [月, set月] = useState(基準 ? 基準.期日.slice(0, 7) : '');
+  const [メモ, setメモ] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // 何か月ずれるか。日はそのままなので、月の差だけを見る
+  const ずれ = (() => {
+    if (!基準 || !/^\d{4}-\d{2}$/.test(月)) return null;
+    const [by, bm] = 基準.期日.split('-').map(Number);
+    const [ny, nm] = 月.split('-').map(Number);
+    return (ny * 12 + nm) - (by * 12 + bm);
+  })();
+  const 新しい期日 = (() => {
+    if (!基準 || ずれ === null) return '';
+    const [y, m, dd] = 基準.期日.split('-').map(Number);
+    const t = y * 12 + (m - 1) + ずれ;
+    const y2 = Math.floor(t / 12), m2 = (t % 12) + 1;
+    return isoOf(y2, m2, Math.min(dd, new Date(y2, m2, 0).getDate()));
+  })();
+
+  const save = async () => {
+    setBusy(true); setErr('');
+    try {
+      await api.postCustomer({ id: c.id, 種類: '入金月変更', 新しい月: 月, メモ });
+      onDone();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal
+      title="入金月の変更"
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn" onClick={onClose} disabled={busy}>キャンセル</button>
+          <div className="right">
+            <button className="btn btn-main" onClick={save}
+                    disabled={busy || !基準 || !メモ.trim() || !ずれ}>
+              {busy ? '変えています…' : '変更する'}
+            </button>
+          </div>
+        </>
+      }
+    >
+      {!基準 ? (
+        <Note>未払いの回がありません。</Note>
+      ) : (
+        <>
+          <Note>
+            <b>未払いの回から先を、まとめてずらします。</b>
+            {' '}いま未払いなのは <b>{未払い.length}回</b>（
+            {基準.種類 === 'ボーナス' ? `賞与${基準.回次}` : `${基準.回次}回目`}・
+            {ymd(基準.期日)}）からです。
+            <br />
+            <b>払い終えた回は動きません。入金の行き先も動きません。</b>
+            金額・回数・残債も変わりません。
+          </Note>
+
+          <Text label="新しい入金月" type="month" value={月} onChange={set月}
+                hint="日はいまのままです。その月に無い日は末日にします" />
+
+          {ずれ !== null && ずれ !== 0 && (
+            <Note kind="warn">
+              {ymd(基準.期日)} → <b>{ymd(新しい期日)}</b>（
+              {ずれ > 0 ? `${ずれ}か月あと` : `${-ずれ}か月まえ`}）。
+              <br />
+              未払いの <b>{未払い.length}回</b>が、そろって同じだけずれます。
+            </Note>
+          )}
+
+          <Text label="変更の理由（必ず書いてください）" value={メモ} onChange={setメモ}
+                placeholder="例：入院のため、11月から再開すると本人と合意"
+                hint="支払いの記録にも残り、あとから誰でも読めます" />
+          <Err>{err}</Err>
+        </>
+      )}
     </Modal>
   );
 }

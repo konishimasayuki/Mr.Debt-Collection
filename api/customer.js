@@ -447,6 +447,67 @@ export default async (req, res) => {
       // ── 回ごとのメモ（支払いの記録の各回の下）────────
       // ボーナスの回にも足せる。通常の3回目とボーナスの3回目は別ものなので、
       // どちらの回かを一緒に持つ
+      // ── 入金月の変更 ────────────────────────
+      //
+      // 「今月から払えないので、11月から仕切り直す」というときに使う。
+      // 未払いの回から先だけを、まとめて後ろ（または前）へずらす。
+      // すでに払い終えた回は動かさない。入金の行き先も動かさない。
+      //
+      // 顧客情報の「支払い開始月」は登録の間違いを直すもので、全部の回を
+      // ずらす。こちらは払いの立て直しなので、未払いの回だけをずらす。
+      if (b.種類 === '入金月変更') {
+        const 新 = String(b.新しい月 || '').trim();
+        if (!/^\d{4}-\d{2}$/.test(新)) {
+          return bad(res, '新しい月は 2026-11 の形で選んでください。');
+        }
+        const メモ = String(b.メモ || '').trim();
+        // メモを必ず書かせる。あとから「なぜ期日が動いたのか」が分からないと、
+        // 電話口でお客様と話が食い違う
+        if (!メモ) return bad(res, '変更の理由をメモに書いてください。');
+
+        const 未払い = await sql(
+          `SELECT id, no, kind, to_char(due_date,'YYYY-MM-DD') AS due
+             FROM schedule
+            WHERE customer_id=$1 AND state <> '入金済み'
+            ORDER BY due_date, kind, no`, [id]);
+        if (!未払い.length) return bad(res, '未払いの回がありません。');
+
+        const 基準 = 未払い[0];
+        const [by, bm] = 基準.due.split('-').map(Number);
+        const [ny, nm] = 新.split('-').map(Number);
+        if (nm < 1 || nm > 12) return bad(res, '月が正しくありません。');
+        const ずれ = (ny * 12 + (nm - 1)) - (by * 12 + (bm - 1));
+        if (!ずれ) return bad(res, '同じ月です。変わりません。');
+
+        // 未払いの回を、まとめて同じ月数だけずらす。日はそのまま
+        // （その月に無い日は末日にする）
+        const ids = [], dues = [];
+        未払い.forEach((s2) => {
+          const [y, m, dd] = s2.due.split('-').map(Number);
+          const t = y * 12 + (m - 1) + ずれ;
+          const y2 = Math.floor(t / 12), m2 = (t % 12) + 1;
+          ids.push(s2.id);
+          dues.push(`${y2}-${String(m2).padStart(2, '0')}-`
+            + String(Math.min(dd, new Date(y2, m2, 0).getDate())).padStart(2, '0'));
+        });
+        await sql(
+          `UPDATE schedule s SET due_date = u.d::date
+             FROM unnest($1::int[], $2::text[]) AS u(i, d)
+            WHERE s.id = u.i`, [ids, dues]);
+
+        const 前 = 基準.due, 後 = dues[0];
+        const 向き = ずれ > 0 ? `${ずれ}か月あと` : `${-ずれ}か月まえ`;
+        const 文 = `支払日を ${前} → ${後} に変更（${向き}）。${メモ}`;
+        // 支払いの記録にも出す。基準にした回に1行残す
+        await 回メモを足す(sql, id, 基準.no, 文, who, true, null, 基準.kind || '通常');
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'記録',$3,$4)`,
+          [id, who,
+           `入金月を変更した：${前} → ${後}（${向き}）。未払いの${未払い.length}回をずらした`,
+           メモ]);
+        return ok(res, { done: true, 前, 後, ずれ, 件数: 未払い.length });
+      }
+
       if (b.種類 === '回メモ') {
         const no = Number(b.回次);
         const kind = b.回の種類 === 'ボーナス' ? 'ボーナス' : '通常';
