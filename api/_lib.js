@@ -267,6 +267,63 @@ function 督促の様子(回) {
            取り消した督促: null };
 }
 
+// 顧客のお金を、記録した順に、古い回へ詰め直す。
+//
+// 台帳の決めごとは「古い回から順に充てる」。ところが、入金を消したり、
+// 顧客を付け替えたり、入金種類を変えたり、期日を動かしたりすると、
+// **その入金の充当だけ**が付け直され、ほかの入金は前の回に残ってしまう。
+// すると「1回目は未入金なのに3回目は入金済み」という並びになり、
+// 支払いの記録を見た人が、何が起きているのか分からなくなる。
+//
+// だから、そういう操作のあとは顧客まるごと詰め直す。
+// 入金の金額も件数も残債も変わらない。どの回に充てるかだけを並べ直す。
+// 人が「入金種類：ボーナス」と決めた入金は、ボーナスの回にだけ入る。
+//
+// 詰める順は「入金を記録した順（id順）」。入金日の順ではない。
+// あとから古い日付の入金を1件足しただけで、これまでの入金の行き先が
+// 総入れ替えになると、支払いの記録を見ている人が驚く。
+// もともとの台帳も、入れた順に古い回から充てていた。そこは変えない。
+//
+// 問い合わせは顧客1人につき4回。入金や回の数がいくつでも増えない。
+// 返すのは入金ごとの余り（充てきれなかった額）。
+async function 詰め直す(sql, customerId) {
+  const [入金, 予定] = await Promise.all([
+    sql(`SELECT id, amount, alloc_kind FROM payment
+          WHERE customer_id=$1 ORDER BY id`, [customerId]),
+    sql(`SELECT id, no, kind, planned_amount FROM schedule
+          WHERE customer_id=$1 ORDER BY due_date, kind, no`, [customerId]),
+  ]);
+  await sql(`DELETE FROM allocation WHERE payment_id IN
+               (SELECT id FROM payment WHERE customer_id=$1)`, [customerId]);
+
+  const 埋まり = new Map(予定.map((s) => [s.id, 0]));
+  const 余り = {};
+  const 値 = [], 引数 = [];
+  for (const p of 入金) {
+    let 残 = p.amount;
+    const 絞る = 入金種類(p.alloc_kind);
+    for (const s of 予定) {
+      if (残 <= 0) break;
+      if (絞る && (s.kind || '通常') !== 絞る) continue;
+      const あき = s.planned_amount - 埋まり.get(s.id);
+      if (あき <= 0) continue;
+      const 入 = Math.min(残, あき);
+      引数.push(p.id, s.id, 入);
+      const i = 引数.length;
+      値.push(`($${i - 2},$${i - 1},$${i})`);
+      埋まり.set(s.id, 埋まり.get(s.id) + 入);
+      残 -= 入;
+    }
+    余り[p.id] = 残;
+  }
+  if (値.length) {
+    await sql(`INSERT INTO allocation (payment_id, schedule_id, amount)
+               VALUES ${値.join(',')}`, 引数);
+  }
+  await restateMany(sql, 予定.map((s) => s.id));
+  return 余り;
+}
+
 // 入金を取り消す。充当を消して、触っていた回の状態を戻す
 async function unallocate(sql, paymentId) {
   const rows = await sql(
@@ -316,6 +373,7 @@ function summarize(cust, rows, paidBy) {
 
 export {
   norm, normPayer, カナにそろえる, よみか, pad, iso, isoOf, today, lastDay, dueOf, yen,
-  readBody, query, restateMany, allocate, unallocate, summarize, makeSchedule, 督促の様子,
+  readBody, query, restateMany, allocate, unallocate, 詰め直す, summarize, makeSchedule,
+  督促の様子,
   bonusDues, remakeBonus, 入金種類,
 };

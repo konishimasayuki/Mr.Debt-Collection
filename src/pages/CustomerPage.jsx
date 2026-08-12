@@ -72,6 +72,15 @@ export default function CustomerPage({ id, onChanged }) {
     }, 0);
   };
 
+  const 詰め直す = async () => {
+    if (!confirm('支払いの記録を、古い回から順に詰め直します。\n\n'
+      + '入金の金額・件数・残債は変わりません。\nよろしいですか。')) return;
+    try {
+      await api.postCustomer({ id: c.id, 種類: '詰め直す' });
+      load(); onChanged && onChanged();
+    } catch (e) { setErr(e.message); }
+  };
+
   const move = (n) => {
     if (!n) { setMonth(null); setDay(null); return; }
     const t = ym.y * 12 + (ym.m - 1) + n;
@@ -269,6 +278,24 @@ export default function CustomerPage({ id, onChanged }) {
             )}
           </div>
           <p className="rec-hint">回を押すと、その回にメモを足せます。</p>
+          {/* 前に入金を消したり付け替えたりしたときの、並びの崩れ。
+              いまはどの操作のあとも詰め直しているので、これから崩れることはない。
+              それより前に崩れた記録だけ、ここから直せるようにしてある */}
+          {c.並びが崩れている && (
+            <Note kind="warn">
+              <b>支払いの記録の並びがずれています。</b>
+              {' '}前の回が未入金のまま、あとの回にお金が入っています。
+              入金を消したり、顧客を付け替えたときに起きます。
+              <br />
+              <b>入金の金額・件数・残債は変わりません。</b>
+              どの回に充てるかだけを、古い順に並べ直します。
+              <div className="row-btn" style={{ marginTop: 8 }}>
+                <button className="btn btn-sm btn-main" onClick={詰め直す}>
+                  古い回から順に詰め直す
+                </button>
+              </div>
+            </Note>
+          )}
           <div className="rec">
             {d.支払予定.map((s) => {
               const late = s.状態 !== '入金済み' && s.期日 < today;
