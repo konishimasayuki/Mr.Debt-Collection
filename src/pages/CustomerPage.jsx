@@ -536,6 +536,7 @@ function EditCustomer({ c, onClose, onDone }) {
     状態: c.状態 || '通常', 状態日: c.状態日 || 本日(),
     ボーナス月: c.ボーナス月 || [], ボーナス日: c.ボーナス日 || 27,
     ボーナス金額: c.ボーナス金額 || '',
+    開始月: (c.開始日 || '').slice(0, 7), 支払日: c.支払日 || 27,
   });
   const [companies, setCompanies] = useState([]);
   const [err, setErr] = useState('');
@@ -583,6 +584,24 @@ function EditCustomer({ c, onClose, onDone }) {
         <Text label="契約日" type="date" value={v.契約日} onChange={set('契約日')} />
         <Text label="車種" value={v.車種} onChange={set('車種')} />
       </div>
+      {/* 支払いの始まり。登録のときに間違えると、期日がまるごとずれる。
+          期日を動かすだけで、入金の行き先は動かさない */}
+      <div className="grid2">
+        <Text label="支払い開始月" type="month" value={v.開始月} onChange={set('開始月')} />
+        <Text label="毎月の支払日" type="number" min="1" max="31"
+              value={v.支払日} onChange={(x) => set('支払日')(Number(x) || '')}
+              hint="その月に無い日は末日にします" />
+      </div>
+      {(v.開始月 !== (c.開始日 || '').slice(0, 7) || Number(v.支払日) !== Number(c.支払日)) && (
+        <Note kind="warn">
+          <b>全{c.回数}回の期日が、まとめてずれます。</b>
+          {v.開始月 && <> 1回目は <b>{v.開始月}-{String(v.支払日).padStart(2, '0')}</b> になります。</>}
+          <br />
+          <b>入金は動きません。</b>どの回にいくら入っているかはそのままで、
+          期日だけを直します。金額・回数・残債も変わりません。
+        </Note>
+      )}
+
       <div className="grid2">
         <Select label="債権譲渡会社" value={v.債権譲渡会社} onChange={set('債権譲渡会社')}
                 placeholder={opts.length ? '選択しない' : '設定タブで登録してください'}
@@ -660,11 +679,13 @@ function EditCustomer({ c, onClose, onDone }) {
       )}
 
       <Note>
-        月々の金額 {yen(c.月々の金額)}円 ／ 全{c.回数}回 ／ 毎月{c.支払日}日 ／
-        {c.開始日} から。
-        <b>この4つはここでは変えられません。</b>
+        月々の金額 {yen(c.月々の金額)}円 ／ 全{c.回数}回。
+        <b>この2つはここでは変えられません。</b>
         変えると支払予定を作り直すことになり、すでに充てた入金の行き先が消えるためです。
         直す必要があるときは声をかけてください。
+        <br />
+        支払い開始月と毎月の支払日は、上で変えられます。
+        <b>期日をずらすだけなので、入金の行き先は消えません。</b>
       </Note>
       <Err>{err}</Err>
     </Modal>

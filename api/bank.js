@@ -160,6 +160,7 @@ export default async (req, res) => {
           月額: c.monthly_amount,
           ボーナス金額: (c.bonus_months && c.bonus_months.length && c.bonus_amount)
             ? c.bonus_amount : null,
+          追う回の種類: c.追う回の種類 || '通常',
         })),
         本日: today(),
       });

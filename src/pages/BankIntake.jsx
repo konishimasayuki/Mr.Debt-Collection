@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, yen } from '../api';
 import { Err, Note } from '../components/ui';
-import { 明細の表, 除外リスト } from './PaymentEntry';
+import { 明細の表, 除外リスト, 既定の入金種類 } from './PaymentEntry';
 
 // 銀行から取ってきた明細を、人が確かめて入金にする欄。
 //
@@ -44,10 +44,11 @@ export default function BankIntake({ onChanged }) {
   const 残す行 = () => (d ? d.明細.filter((r) => keep[r.行]) : []);
 
   const 取り込む = async () => {
-    const rows = 残す行().map((r) => ({
-      ...r, 顧客id: assignTo[r.行] ? Number(assignTo[r.行]) : r.顧客id,
-      入金種類: 種類[r.行] || '月額',
-    }));
+    const rows = 残す行().map((r) => {
+      const cid = assignTo[r.行] ? Number(assignTo[r.行]) : r.顧客id;
+      const c = (d.顧客 || []).find((x) => x.id === cid) || null;
+      return { ...r, 顧客id: cid, 入金種類: 種類[r.行] || 既定の入金種類(c) };
+    });
     if (!rows.length) { setErr('取り込む行がありません。'); return; }
     setBusy('取込'); setErr('');
     try {
@@ -144,9 +145,9 @@ export default function BankIntake({ onChanged }) {
             <b>ここに出ているだけでは、まだ入金になっていません。</b>
             残す行にチェックを付けて「取り込む」を押してください。
             <br />
-            <b>入金種類は「月額」から始まります。</b>{' '}
-            ボーナス払いの方で、その入金が賞与ぶんなら、その行の入金種類を
-            <b>「ボーナス」</b>に変えてください。
+            <b>入金種類は、いま払えていない回に合わせてあります。</b>{' '}
+            月額を予定どおり払い終えている方は<b>「ボーナス」</b>から始まります。
+            違っていたら、その行で選び直してください。
           </Note>
 
           <div className="row-btn" style={{ marginBottom: 10 }}>

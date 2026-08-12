@@ -4,7 +4,7 @@
 // POST  /api/customer             … {id, 種類:'約束'|'約束変更'|'約束削除', …}
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
-import { readBody, query, isoOf, today, yen, norm, remakeBonus } from './_lib.js';
+import { readBody, query, isoOf, today, yen, norm, remakeBonus, dueOf } from './_lib.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -238,6 +238,50 @@ export default async (req, res) => {
         put('debit_date', 日が要る ? (b.引き落とし日 || today()) : null);
       }
 
+      // 支払いの始まり（開始月・毎月の支払日）。
+      //
+      // 期日を動かすだけで、回の番号も金額も入金の行き先も動かさない。
+      // 予定を作り直すと充当が消え、どの回に入ったお金か分からなくなる。
+      // 「1回目の期日が3月6日ではなく6月6日だった」という登録の間違いを、
+      // 入金を入れ直さずに直せるようにするため。
+      let 期日結果 = null;
+      if (b.開始月 !== undefined || b.支払日 !== undefined) {
+        const 開始 = b.開始月 !== undefined
+          ? String(b.開始月).trim() : isoOf(c.start_date).slice(0, 7);
+        if (!/^\d{4}-\d{2}$/.test(開始)) {
+          return bad(res, '支払い開始月は 2026-06 の形で入れてください。');
+        }
+        const [y0, m0] = 開始.split('-').map(Number);
+        if (m0 < 1 || m0 > 12) return bad(res, '支払い開始月の月が正しくありません。');
+        const 日 = b.支払日 !== undefined ? (Number(b.支払日) || 0) : c.pay_day;
+        if (!日 || 日 < 1 || 日 > 31) {
+          return bad(res, '毎月の支払日を1〜31で入れてください。');
+        }
+        const 前の開始 = isoOf(c.start_date).slice(0, 7);
+        const 前の日 = c.pay_day;
+
+        if (開始 !== 前の開始 || 日 !== 前の日) {
+          // 通常の回の期日を、まとめて1回で書き換える
+          const no = [], due = [];
+          for (let k = 1; k <= c.term_count; k++) {
+            no.push(k); due.push(dueOf(y0, m0, 日, k));
+          }
+          await sql(
+            `UPDATE schedule s SET due_date = u.d::date
+               FROM unnest($2::int[], $3::text[]) AS u(n, d)
+              WHERE s.customer_id=$1 AND s.kind='通常' AND s.no = u.n`, [id, no, due]);
+          // ボーナスの回も契約の期間に合わせて置き直す。
+          // 入金が充てられている回は触らない（remakeBonus のきまり）
+          if (c.bonus_months && c.bonus_months.length && c.bonus_amount) {
+            await remakeBonus(sql, id, y0, m0, 日, c.term_count,
+              c.bonus_months, c.bonus_day, c.bonus_amount);
+          }
+          put('start_date', dueOf(y0, m0, 日, 1));
+          if (日 !== 前の日) put('pay_day', 日);
+          期日結果 = { 前: `${前の開始}（毎月${前の日}日）`, 後: `${開始}（毎月${日}日）` };
+        }
+      }
+
       // ボーナス払い。月は複数、日と金額は共通。
       // 予定を作り直すが、**入金が充てられている回は触らない**（remakeBonus）。
       let ボ結果 = null;
@@ -263,8 +307,12 @@ export default async (req, res) => {
         put('bonus_day', 使う月 ? 日 : null);
         put('bonus_amount', 使う月 ? 額 : null);
 
-        const [y0, m0] = isoOf(c.start_date).split('-').map(Number);
-        ボ結果 = await remakeBonus(sql, id, y0, m0, c.pay_day, c.term_count,
+        // 開始月を同時に変えているなら、変えたあとの期日で作る
+        const 始 = b.開始月 !== undefined
+          ? String(b.開始月).trim() : isoOf(c.start_date).slice(0, 7);
+        const [y0, m0] = 始.split('-').map(Number);
+        const 支払日 = b.支払日 !== undefined ? (Number(b.支払日) || c.pay_day) : c.pay_day;
+        ボ結果 = await remakeBonus(sql, id, y0, m0, 支払日, c.term_count,
           使う月, 日, 額);
         // 支払総額はボーナスを含める。残債はここから引いて出すため
         const ボ合計 = (await sql(
@@ -297,6 +345,9 @@ export default async (req, res) => {
         何を = b.状態 === '回収'
           ? `車両を引き上げた扱いにした（${b.状態日 || today()}）。督促の対象から外れる`
           : '取引の状態を「通常」に戻した。督促の対象に戻る';
+      } else if (期日結果) {
+        何を = `支払いの始まりを ${期日結果.前} → ${期日結果.後} に直した。`
+          + `全${c.term_count}回の期日をずらした（入金の行き先は動かしていない）`;
       } else if (ボ結果) {
         const 月 = (b.ボーナス月 || []).join('月・');
         何を = 月

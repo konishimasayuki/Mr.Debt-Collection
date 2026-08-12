@@ -32,6 +32,14 @@ async function readText(file) {
 // ── 取り込む前の確認の表。CSVからでも銀行からでも、同じものを使う ──────
 // 出所が違っても、人が見て確かめることは同じ。
 // 2つ作ると、片方だけ直されて見え方が食い違う。
+// 入金種類の既定。いま払えていない回の種類に合わせる。
+//
+// 月額の回を予定どおり払い終えている方に振り込みが来たら、それはボーナスぶんの
+// 見込みが高い。既定を月額のままにすると、毎回選び直すことになり、直し忘れる。
+// 手動入金登録の「払えていない分の種類」と同じ考え方。
+export const 既定の入金種類 = (c) =>
+  (c && c.ボーナス金額 && c.追う回の種類 === 'ボーナス') ? 'ボーナス' : '月額';
+
 // 一押しで除外に入れられる候補は、顧客が決まっていない振込人だけにする。
 // お客様の名前まで並べると、押し間違えてその方の入金が
 // 二度と取り込まれなくなる。お客様を外したいときは手で打ってもらう。
@@ -201,7 +209,7 @@ export function 明細の表({ 明細, 顧客, keep, setKeep, assignTo, setAssig
                 ) : !c.ボーナス金額 ? (
                   <span style={{ fontSize: 12.5 }}>月額 ¥{yen(c.月額)}-</span>
                 ) : (
-                  <select value={種類[r.行] || '月額'} className="assign kind"
+                  <select value={種類[r.行] || 既定の入金種類(c)} className="assign kind"
                           onChange={(e) => set種類((o) => ({ ...o, [r.行]: e.target.value }))}>
                     <option value="月額">月額 ¥{yen(c.月額)}-</option>
                     <option value="ボーナス">ボーナス ¥{yen(c.ボーナス金額)}-</option>
@@ -315,8 +323,11 @@ export default function PaymentEntry({ onChanged, goHistory }) {
   const commit = async () => {
     const rows = preview.明細
       .filter((r) => keep[r.行])
-      .map((r) => ({ ...r, 顧客id: assignTo[r.行] ? Number(assignTo[r.行]) : r.顧客id,
-                     入金種類: 種類[r.行] || '月額' }));
+      .map((r) => {
+        const cid = assignTo[r.行] ? Number(assignTo[r.行]) : r.顧客id;
+        const c = preview.顧客.find((x) => x.id === cid) || null;
+        return { ...r, 顧客id: cid, 入金種類: 種類[r.行] || 既定の入金種類(c) };
+      });
     if (!rows.length) { setErr('取り込む行がありません。'); return; }
     setBusy(true); setErr('');
     try {
@@ -402,9 +413,9 @@ export default function PaymentEntry({ onChanged, goHistory }) {
             <b>取り込みたくない行は、左のチェックを外してください。</b>
             {' '}チェックの付いた行だけが入金になります。
             <br />
-            <b>入金種類は「月額」から始まります。</b>{' '}
-            古いほうの回から充てます。ボーナス払いの方で、その入金が賞与ぶんなら、
-            その行の入金種類を<b>「ボーナス」</b>に変えてください。
+            <b>入金種類は、いま払えていない回に合わせてあります。</b>{' '}
+            月額を予定どおり払い終えている方は<b>「ボーナス」</b>から始まります。
+            違っていたら、その行で選び直してください。
             <br />
             {preview.概要.件数}件・合計 {yen(preview.概要.合計)}円。
             照合できた {preview.概要.照合できた}件、

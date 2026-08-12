@@ -48,14 +48,23 @@ function matcher(aliases, customers) {
 
 // 照合に使う道具を一度に用意する。顧客と名寄せ辞書は同時に取ってくる
 async function 照合の道具(sql) {
-  const [customers, aliases, 除外行] = await Promise.all([
+  const [customers, aliases, 除外行, 追う回] = await Promise.all([
     // ボーナス金額も一緒に取る。確認画面で「ボーナス ¥100,000-」を選べるようにするため
     sql(`SELECT id, name, kana, monthly_amount, bonus_amount, bonus_months
            FROM customer WHERE archived=false ORDER BY id`),
     sql(`SELECT normalized_name, customer_id FROM payer_alias`),
     sql('SELECT normalized_name FROM payer_exclude'),
+    // いま追いかけている回（期日がいちばん早い未済の回）の種類。
+    // 入金種類の既定に使う。月額を払い終えている方に振り込みが来たら、
+    // それはボーナスぶんである見込みが高い。1回の問い合わせで全員ぶん取る
+    sql(`SELECT DISTINCT ON (customer_id) customer_id, kind
+           FROM schedule WHERE state <> '入金済み'
+          ORDER BY customer_id, due_date, kind, no`),
   ]);
   const 除外 = new Set(除外行.map((x) => x.normalized_name));
+  const 追う = {};
+  追う回.forEach((r) => { 追う[r.customer_id] = r.kind || '通常'; });
+  customers.forEach((c) => { c.追う回の種類 = 追う[c.id] || '通常'; });
   // 顧客を選ぶ欄に出すので、あいうえお順にそろえる。
   // 顧客一覧と並びが違うと、同じ人を探すのに二度手間になる
   customers.sort(あいうえお順);

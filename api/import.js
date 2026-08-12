@@ -134,6 +134,8 @@ export default async (req, res) => {
         // ボーナス払いの設定がある方だけ、確認画面で「ボーナス」を選べる
         ボーナス金額: (c.bonus_months && c.bonus_months.length && c.bonus_amount)
           ? c.bonus_amount : null,
+        // いま払えていない回の種類。入金種類の既定に使う
+        追う回の種類: c.追う回の種類 || '通常',
       })),
     });
   } catch (e) {
