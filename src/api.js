@@ -117,6 +117,10 @@ export const api = {
   bankSkip: (ids) => call('/api/bank', { method: 'POST', body: { 見送る: ids } }),
   saveBankAccount: (口座) => call('/api/bank', { method: 'POST', body: { 口座 } }),
 
+  // 入金の割り当て直し（未入金タブから）
+  reassign: (id, 変更, メモ) => call('/api/customer', { method: 'POST',
+    body: { id, 種類: '割り当て直し', 変更, メモ } }),
+
   // 取り込まない振込人
   excludes: () => call('/api/excludes', { 取り直す: true }),
   addExclude: (body) => call('/api/excludes', { method: 'POST', body }),

@@ -48,7 +48,7 @@ function matcher(aliases, customers) {
 
 // 照合に使う道具を一度に用意する。顧客と名寄せ辞書は同時に取ってくる
 async function 照合の道具(sql) {
-  const [customers, aliases, 除外行, 追う回] = await Promise.all([
+  const [customers, aliases, 除外行, 追う回, ボ残] = await Promise.all([
     // ボーナス金額も一緒に取る。確認画面で「ボーナス ¥100,000-」を選べるようにするため
     sql(`SELECT id, name, kana, monthly_amount, bonus_amount, bonus_months
            FROM customer WHERE archived=false ORDER BY id`),
@@ -60,11 +60,26 @@ async function 照合の道具(sql) {
     sql(`SELECT DISTINCT ON (customer_id) customer_id, kind
            FROM schedule WHERE state <> '入金済み'
           ORDER BY customer_id, due_date, kind, no`),
+    // まだ払っていないボーナスの回のうち、いちばん古いものの残額。
+    // 月額を超える振り込みが来たとき、「ボーナスにも割り当てますか」と
+    // 聞くかどうかの判断に使う
+    sql(`SELECT DISTINCT ON (s.customer_id) s.customer_id,
+                (s.planned_amount
+                 - COALESCE((SELECT sum(a.amount) FROM allocation a
+                              WHERE a.schedule_id = s.id),0))::int AS 残り
+           FROM schedule s
+          WHERE s.kind='ボーナス' AND s.state <> '入金済み'
+          ORDER BY s.customer_id, s.due_date, s.no`),
   ]);
   const 除外 = new Set(除外行.map((x) => x.normalized_name));
   const 追う = {};
   追う回.forEach((r) => { 追う[r.customer_id] = r.kind || '通常'; });
-  customers.forEach((c) => { c.追う回の種類 = 追う[c.id] || '通常'; });
+  const ボの残り = {};
+  ボ残.forEach((r) => { ボの残り[r.customer_id] = r.残り; });
+  customers.forEach((c) => {
+    c.追う回の種類 = 追う[c.id] || '通常';
+    c.ボーナス未払い額 = ボの残り[c.id] || 0;
+  });
   // 顧客を選ぶ欄に出すので、あいうえお順にそろえる。
   // 顧客一覧と並びが違うと、同じ人を探すのに二度手間になる
   customers.sort(あいうえお順);

@@ -40,6 +40,12 @@ async function readText(file) {
 export const 既定の入金種類 = (c) =>
   (c && c.ボーナス金額 && c.追う回の種類 === 'ボーナス') ? 'ボーナス' : '月額';
 
+// 月額を超える振り込みで、ボーナスがまだ払われていない行。
+// 月々のぶんと賞与のぶんを、まとめて1回で振り込む方がいる。
+// 黙って月額の回だけに充てると、ボーナスがいつまでも未払いで残る。
+export const ボーナスも聞く = (c, 金額) =>
+  !!(c && c.ボーナス未払い額 > 0 && 金額 > c.月額);
+
 // 一押しで除外に入れられる候補は、顧客が決まっていない振込人だけにする。
 // お客様の名前まで並べると、押し間違えてその方の入金が
 // 二度と取り込まれなくなる。お客様を外したいときは手で打ってもらう。
@@ -209,11 +215,29 @@ export function 明細の表({ 明細, 顧客, keep, setKeep, assignTo, setAssig
                 ) : !c.ボーナス金額 ? (
                   <span style={{ fontSize: 12.5 }}>月額 ¥{yen(c.月額)}-</span>
                 ) : (
-                  <select value={種類[r.行] || 既定の入金種類(c)} className="assign kind"
-                          onChange={(e) => set種類((o) => ({ ...o, [r.行]: e.target.value }))}>
-                    <option value="月額">月額 ¥{yen(c.月額)}-</option>
-                    <option value="ボーナス">ボーナス ¥{yen(c.ボーナス金額)}-</option>
-                  </select>
+                  <>
+                    <select value={種類[r.行] || 既定の入金種類(c)} className="assign kind"
+                            onChange={(e) => set種類((o) => ({ ...o, [r.行]: e.target.value }))}>
+                      <option value="月額">月額 ¥{yen(c.月額)}-</option>
+                      <option value="ボーナス">ボーナス ¥{yen(c.ボーナス金額)}-</option>
+                      {/* 月額を超えていて、ボーナスがまだ払われていないときだけ */}
+                      {ボーナスも聞く(c, r.金額) && (
+                        <option value="月額＋ボーナス">
+                          月額＋ボーナス ¥{yen(c.ボーナス未払い額)}-
+                        </option>
+                      )}
+                    </select>
+                    {ボーナスも聞く(c, r.金額) && (種類[r.行] || 既定の入金種類(c)) === '月額' && (
+                      <div className="kind-ask">
+                        月額を超えています。ボーナス（残 {yen(c.ボーナス未払い額)}円）にも
+                        割り当てますか。
+                        <button type="button" className="btn btn-sm"
+                                onClick={() => set種類((o) => ({ ...o, [r.行]: '月額＋ボーナス' }))}>
+                          ボーナスにも割り当てる
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </td>
               <td>
@@ -338,6 +362,14 @@ export default function PaymentEntry({ onChanged, goHistory }) {
     finally { setBusy(false); }
   };
 
+  // 月額を超えていて、ボーナスがまだ払われていない行の数。上の注意書きに出す
+  const 聞く数 = preview
+    ? preview.明細.filter((r) => {
+      const cid = assignTo[r.行] ? Number(assignTo[r.行]) : r.顧客id;
+      return ボーナスも聞く(preview.顧客.find((x) => x.id === cid), r.金額);
+    }).length
+    : 0;
+
   const 残す数 = preview ? preview.明細.filter((r) => keep[r.行]).length : 0;
   const 残す額 = preview
     ? preview.明細.filter((r) => keep[r.行]).reduce((s, r) => s + r.金額, 0) : 0;
@@ -416,6 +448,16 @@ export default function PaymentEntry({ onChanged, goHistory }) {
             <b>入金種類は、いま払えていない回に合わせてあります。</b>{' '}
             月額を予定どおり払い終えている方は<b>「ボーナス」</b>から始まります。
             違っていたら、その行で選び直してください。
+            {聞く数 > 0 && (
+              <>
+                <br />
+                <b style={{ color: 'var(--overdue)' }}>
+                  {聞く数}件は、月額を超える振り込みで、ボーナスがまだ払われていません。
+                </b>
+                {' '}ボーナスにも割り当てるかを、その行で選んでください。
+                選ばなければ、月額の回にだけ充てます。
+              </>
+            )}
             <br />
             {preview.概要.件数}件・合計 {yen(preview.概要.合計)}円。
             照合できた {preview.概要.照合できた}件、
