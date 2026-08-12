@@ -32,6 +32,7 @@ export default function CustomerPage({ id, onChanged }) {
   const [振替, set振替] = useState(false);   // 口座振替の状態を変える欄
   const [メモ欄, setメモ欄] = useState(null); // メモを足そうとしている回（'通常-3' の形）
   const [入金月, set入金月] = useState(false); // 未払いの回から先をずらす欄
+  const [割り当て, set割り当て] = useState(null); // 割り当てを変える入金
 
   const load = useCallback(() => {
     setErr('');
@@ -183,6 +184,12 @@ export default function CustomerPage({ id, onChanged }) {
                   onDone={() => { set振替(false); load(); onChanged && onChanged(); }} />
       )}
 
+      {割り当て && (
+        <入金の割り当て 顧客={c} 入金={割り当て}
+          onClose={() => set割り当て(null)}
+          onDone={() => { set割り当て(null); load(); onChanged && onChanged(); }} />
+      )}
+
       {入金月 && (
         <入金月変更 c={c} 支払予定={d.支払予定}
                     onClose={() => set入金月(false)}
@@ -331,6 +338,20 @@ export default function CustomerPage({ id, onChanged }) {
                   {/* その回に、いつ・いくら入ったか。
                       期日だけでは、遅れて払われたのかが分からない */}
                   {s.入金明細.map((p, i) => (
+                    /* ボーナス払いの方は、この入金を押すと割り当てを変えられる。
+                       月額とボーナスをまとめて振り込まれたとき、月額の回に
+                       あふれたぶんをボーナスへ回すため */
+                    c.ボーナス回数 > 0 ? (
+                      <button type="button" className="rec-p rec-p-tap" key={i}
+                              onClick={() => set割り当て(p)}>
+                        <span className="rec-p-d">{md(p.日付)}</span>
+                        <span className="rec-p-w">
+                          入金{p.日付 > s.期日 && <span className="rec-p-late">（期日より後）</span>}
+                          <span className="rec-p-kind">{p.入金種類}</span>
+                        </span>
+                        <span className="rec-p-a">{yen(p.金額)}</span>
+                      </button>
+                    ) : (
                     <div className="rec-p" key={i}>
                       <span className="rec-p-d">{md(p.日付)}</span>
                       <span className="rec-p-w">
@@ -338,6 +359,7 @@ export default function CustomerPage({ id, onChanged }) {
                       </span>
                       <span className="rec-p-a">{yen(p.金額)}</span>
                     </div>
+                    )
                   ))}
                   {開いている && (
                     <RecMemoAdd
@@ -563,6 +585,80 @@ function DebitBox({ c, onClose, onDone }) {
         いま：<b>{振替の文(c.引き落とし, c.引き落とし日)}</b>
         {状態 !== c.引き落とし && <> → 変更後：<b>{振替の文(状態, 日が要る ? 日 : null)}</b></>}
       </Note>
+      <Err>{err}</Err>
+    </Modal>
+  );
+}
+
+// この振り込みを、月額とボーナスのどちらへ充てるか。
+//
+// 月々のぶんと賞与のぶんを、1回でまとめて振り込む方がいる。
+// 取り込むときに「月額」のままにしていると、あふれたぶんが次の月額の回へ
+// 入ってしまい、ボーナスがいつまでも未払いで残る。
+// 支払いの記録でその入金を押して、ここから直す。
+function 入金の割り当て({ 顧客, 入金, onClose, onDone }) {
+  const [種類, set種類] = useState(入金.入金種類 || '月額');
+  const [メモ, setメモ] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const 説明 = {
+    月額: '月額の回にだけ、古い順に充てます。',
+    ボーナス: 'ボーナスの回にだけ充てます。月額の回には入りません。',
+    '月額＋ボーナス': 'ボーナスの回を1回ぶん先に埋めて、残りを月額の回へ充てます。',
+  };
+
+  const save = async () => {
+    setBusy(true); setErr('');
+    try {
+      await api.reassign(顧客.id, [{ 入金id: 入金.入金id, 入金種類: 種類 }], メモ);
+      onDone();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal
+      title="この入金の割り当て"
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn" onClick={onClose} disabled={busy}>キャンセル</button>
+          <div className="right">
+            <button className="btn btn-main" onClick={save}
+                    disabled={busy || 種類 === (入金.入金種類 || '月額')}>
+              {busy ? '直しています…' : '割り当てを変える'}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <Note>
+        <b>{ymd(入金.日付)} の振り込み {yen(入金.入金の総額)}円</b>
+        {入金.入金の総額 !== 入金.金額 && (
+          <>（この回に入っているのは {yen(入金.金額)}円）</>
+        )}
+        。いまは<b>{入金.入金種類}</b>として充てています。
+        <br />
+        <b>入金の金額・件数・残債は変わりません。</b>どの回に充てるかだけが変わります。
+      </Note>
+
+      <Select label="入金種類" value={種類} onChange={set種類}
+              options={[{ value: '月額', label: `月額（月々 ${yen(顧客.月々の金額)}円）` },
+                        { value: 'ボーナス',
+                          label: `ボーナス（1回 ${yen(顧客.ボーナス金額 || 0)}円）` },
+                        { value: '月額＋ボーナス', label: '月額＋ボーナス（分けて充てる）' }]}
+              hint={説明[種類]} />
+
+      {種類 !== (入金.入金種類 || '月額') && (
+        <Note kind="warn">
+          <b>{入金.入金種類} → {種類}</b> に変えます。
+          このあと、この方のお金を古い回から順に詰め直します。
+        </Note>
+      )}
+
+      <Text label="直した理由（任意）" value={メモ} onChange={setメモ}
+            placeholder="例：本人に確認したところ、月額と賞与をまとめて振り込んだ"
+            hint="記録に残ります" />
       <Err>{err}</Err>
     </Modal>
   );
