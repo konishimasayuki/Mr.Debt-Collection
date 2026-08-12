@@ -8,6 +8,7 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
   const [edit, setEdit] = useState(null);
+  const [割り当て, set割り当て] = useState(null);   // 入金の種類をまとめて直す顧客
 
   const load = useCallback(() => {
     setErr('');
@@ -61,12 +62,13 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
             <tr>
               <th>日付</th><th>顧客名</th><th className="num">金額</th>
               <th>入金方法</th><th>区分</th><th>付番 / 振込人</th><th>メモ</th><th>記録者</th>
+              <th />
             </tr>
           </thead>
           <tbody>
-            {d === null && <tr><td colSpan={8}><Loading 件数={4} /></td></tr>}
+            {d === null && <tr><td colSpan={9}><Loading 件数={4} /></td></tr>}
             {d && d.入金.length === 0 && (
-              <tr><td colSpan={8}><Empty>
+              <tr><td colSpan={9}><Empty>
                 {key ? `「${key}」に当たる入金はありません。` : '入金がまだありません。'}
               </Empty></td></tr>
             )}
@@ -93,11 +95,30 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
                 </td>
                 <td data-label="メモ" className="memo">{p.メモ || ''}</td>
                 <td data-label="記録者" className="who">{p.記録者}</td>
+                <td className="act">
+                  {/* 月額とボーナスの取り違えを、まとめて見比べながら直せる。
+                      ボーナス払いの方にだけ出す */}
+                  {p.顧客id && p.ボーナスあり && (
+                    <button className="btn btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              set割り当て({ id: p.顧客id, 氏名: p.顧客名 });
+                            }}>割り当て直し</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {割り当て && (
+        <割り当て直し
+          顧客id={割り当て.id} 顧客名={割り当て.氏名}
+          onClose={() => set割り当て(null)}
+          onDone={() => { set割り当て(null); load(); onChanged && onChanged(); }}
+        />
+      )}
 
       {edit && (
         <EditPayment
@@ -106,6 +127,96 @@ export default function History({ jump, onJumped, onOpen, onChanged }) {
         />
       )}
     </>
+  );
+}
+
+// 入金の割り当て直し。
+//
+// 「月額のつもりの入金がボーナスに入っている」「その逆」を直す。
+// 1件ずつ「直す」から入金種類を変えることもできるが、
+// 同じ方の入金をまとめて見比べながら直せたほうが早い。
+// 直したあとは、その顧客のお金を古い回から順に詰め直す。
+function 割り当て直し({ 顧客id, 顧客名, onClose, onDone }) {
+  const [d, setD] = useState(null);
+  const [選び, set選び] = useState({});      // 入金id → 月額 / ボーナス
+  const [メモ, setメモ] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.customer(顧客id).then(setD).catch((e) => setErr(e.message));
+  }, [顧客id]);
+
+  const いま = (p) => (選び[p.id] !== undefined ? 選び[p.id] : p.入金種類);
+  const 変えた = d ? d.入金.filter((p) => いま(p) !== p.入金種類) : [];
+
+  const save = async () => {
+    setBusy(true); setErr('');
+    try {
+      const r = await api.reassign(顧客id,
+        変えた.map((p) => ({ 入金id: p.id, 入金種類: いま(p) })), メモ);
+      alert(`${r.変えた件数}件の割り当てを直しました。`);
+      onDone();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal
+      wide
+      title={`${顧客名} さんの入金の割り当て直し`}
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn" onClick={onClose} disabled={busy}>キャンセル</button>
+          <div className="right">
+            <button className="btn btn-main" onClick={save} disabled={busy || !変えた.length}>
+              {busy ? '直しています…' : `${変えた.length}件を直す`}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <Note>
+        <b>月額のつもりの入金がボーナスに入っていたときに、ここで直せます。</b>
+        {' '}その逆も直せます。この方の入金をまとめて見比べられます。
+        <br />
+        <b>入金の金額・件数・残債は変わりません。</b>どの回に充てるかだけが変わります。
+        直したあとは、古い回から順に詰め直します。
+      </Note>
+      <Err>{err}</Err>
+
+      {d === null && <Loading 件数={3} 行={1} />}
+      {d && d.入金.length === 0 && <Empty>まだ入金がありません。</Empty>}
+      {d && !d.顧客.ボーナス回数 && (
+        <Note kind="warn">この方にはボーナス払いの設定がありません。</Note>
+      )}
+
+      {d && d.入金.length > 0 && (
+        <div className="ex-list">
+          {d.入金.map((p) => (
+            <div className="ex-row" key={p.id}>
+              <b>{ymd(p.日付)}</b>
+              <span className="ex-on">{yen(p.金額)}円</span>
+              <span className="ex-memo">{p.振込人 || p.メモ || p.区分}</span>
+              <select className="assign kind" value={いま(p)}
+                      onChange={(e) => set選び((o) => ({ ...o, [p.id]: e.target.value }))}>
+                <option value="月額">月額</option>
+                <option value="ボーナス">ボーナス</option>
+              </select>
+              {いま(p) !== p.入金種類 && <span className="tag t-done">直した</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {変えた.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <Text label="直した理由（任意）" value={メモ} onChange={setメモ}
+                placeholder="例：本人に確認したところ賞与分だった"
+                hint="記録に残ります" />
+        </div>
+      )}
+    </Modal>
   );
 }
 
