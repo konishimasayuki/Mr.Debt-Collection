@@ -161,6 +161,8 @@ export default async (req, res) => {
           ボーナス金額: (c.bonus_months && c.bonus_months.length && c.bonus_amount)
             ? c.bonus_amount : null,
           追う回の種類: c.追う回の種類 || '通常',
+          // まだ払っていないボーナスの回の残り。0なら「ボーナスにも」は出さない
+          ボーナス未払い額: c.ボーナス未払い額 || 0,
         })),
         本日: today(),
       });

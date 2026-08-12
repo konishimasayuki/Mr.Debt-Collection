@@ -196,8 +196,24 @@ const 入金種類 = (v) => {
   const t = String(v == null ? '' : v).trim();
   if (t === '月額' || t === '通常') return '通常';
   if (t === 'ボーナス' || t === '賞与') return 'ボーナス';
+  // 月々のぶんと賞与のぶんを、まとめて1回で振り込む方がいる。
+  // その1件を、ボーナスの回1回ぶんと、残りの月額の回へ分けて充てる。
+  if (t === '月額＋ボーナス' || t === '月額+ボーナス' || t === '両方') return '両方';
   return null;
 };
+
+// 充てる先の回を、種類のきまりに沿って選び出す。
+// '両方' は、いちばん古い未払いのボーナスの回を1回だけ先に置き、
+// そのあとに月額の回を古い順に並べる。
+// ボーナスを先にするのは、人が「ボーナスにも割り当てる」と決めたのだから、
+// 月額の回に食われてボーナスが埋まらないのでは意味がないため。
+// 1回だけにするのは、1度の振り込みで賞与2回ぶんを払うことは無いから。
+function 充てる順(rows, 絞る) {
+  if (絞る !== '両方') return rows.filter((s) => (s.kind || '通常') === 絞る);
+  const ボ = rows.filter((s) => s.kind === 'ボーナス');
+  const 月 = rows.filter((s) => (s.kind || '通常') === '通常');
+  return ボ.length ? [ボ[0], ...月] : 月;
+}
 
 // 入金を、未入金でいちばん古い回から順に充てる。
 // 満額に届いた回だけ「入金済み」にし、途中は「一部入金」のまま残りを持つ。
@@ -215,15 +231,14 @@ async function allocate(sql, customerId, paymentId, amount, 種類) {
   // ボーナスの回に入れてよいのは、人が「入金種類：ボーナス」と決めた入金だけ。
   const 絞る = 入金種類(種類) || '通常';
   // 各回の「すでに入っている額」も一緒に持ってくる(回ごとに聞き直さない)
-  const rows = await sql(
+  const 全部 = await sql(
     `SELECT s.id, s.no, s.kind, s.planned_amount,
             COALESCE((SELECT sum(a.amount) FROM allocation a
                        WHERE a.schedule_id = s.id),0)::int AS paid
        FROM schedule s
       WHERE s.customer_id=$1 AND s.state <> '入金済み'
-        ${絞る ? "AND COALESCE(s.kind,'通常') = $2" : ''}
-      ORDER BY s.due_date, s.kind, s.no`,
-    絞る ? [customerId, 絞る] : [customerId]);
+      ORDER BY s.due_date, s.kind, s.no`, [customerId]);
+  const rows = 充てる順(全部, 絞る);
 
   const 値 = [], 引数 = [], 済み = [], 一部 = [];
   for (const s of rows) {
@@ -309,9 +324,10 @@ async function 詰め直す(sql, customerId) {
     let 残 = p.amount;
     // 種類が決まっていない入金は月額として扱う（allocate と同じ決めごと）
     const 絞る = 入金種類(p.alloc_kind) || '通常';
-    for (const s of 予定) {
+    // '両方' のときだけ、まだ埋まっていないボーナスの回を1つ先に置く
+    const 順 = 充てる順(予定.filter((s) => 埋まり.get(s.id) < s.planned_amount), 絞る);
+    for (const s of 順) {
       if (残 <= 0) break;
-      if (絞る && (s.kind || '通常') !== 絞る) continue;
       const あき = s.planned_amount - 埋まり.get(s.id);
       if (あき <= 0) continue;
       const 入 = Math.min(残, あき);
@@ -381,6 +397,6 @@ function summarize(cust, rows, paidBy) {
 export {
   norm, normPayer, カナにそろえる, よみか, pad, iso, isoOf, today, lastDay, dueOf, yen,
   readBody, query, restateMany, allocate, unallocate, 詰め直す, summarize, makeSchedule,
-  督促の様子,
+  督促の様子, 充てる順,
   bonusDues, remakeBonus, 入金種類,
 };

@@ -5,7 +5,7 @@
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
 import { readBody, query, isoOf, today, yen, norm, remakeBonus, dueOf,
-         詰め直す } from './_lib.js';
+         詰め直す, 入金種類, 充てる順 } from './_lib.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -32,10 +32,10 @@ function 並びが崩れているか(予定, 入金, 充当) {
   for (const p of [...入金].sort((a, b) => a.id - b.id)) {
     let 残 = p.amount;
     // 種類を決めていない入金は月額として扱う（api/_lib.js の詰め直すと同じ）
-    const 絞る = p.alloc_kind === 'ボーナス' ? 'ボーナス' : '通常';
-    for (const s of 予定) {
+    const 絞る = 入金種類(p.alloc_kind) || '通常';
+    const 順 = 充てる順(予定.filter((s) => 埋まり.get(s.id) < s.planned_amount), 絞る);
+    for (const s of 順) {
       if (残 <= 0) break;
-      if (絞る && (s.kind || '通常') !== 絞る) continue;
       const あき = s.planned_amount - 埋まり.get(s.id);
       if (あき <= 0) continue;
       const 入 = Math.min(残, あき);
@@ -47,6 +47,9 @@ function 並びが崩れているか(予定, 入金, 充当) {
   const 今 = 充当.map((a) => `${a.payment_id}:${a.schedule_id}:${a.amount}`).sort();
   return 今.join('|') !== 正.sort().join('|');
 }
+
+// 画面に出す入金種類の呼び名。台帳の中では '通常'、画面では「月額」
+const 種類名 = (k) => (k === 'ボーナス' ? 'ボーナス' : k === '両方' ? '月額＋ボーナス' : '月額');
 
 const 回メモを足す = (sql, id, no, text, who, auto = true, 約束id = null, kind = '通常') => (no
   ? sql(`INSERT INTO schedule_memo (customer_id, schedule_no, kind, text, auto,
@@ -208,6 +211,8 @@ export default async (req, res) => {
           id: p.id, 日付: isoOf(p.paid_on), 金額: p.amount, 入金方法: p.method,
           区分: p.source, 付番: p.ref_no || '', メモ: p.memo || '',
           振込人: p.payer_name || '', 記録者: p.recorded_by,
+          // 月額かボーナスか。未入金タブの「割り当て直し」で選び直せる
+          入金種類: 種類名(p.alloc_kind),
         })),
         約束: promises.map((p) => ({
           id: p.id, 日付: isoOf(p.promised_on), 時刻: hhmm(p.until_time),
@@ -484,6 +489,53 @@ export default async (req, res) => {
       // ── 回ごとのメモ（支払いの記録の各回の下）────────
       // ボーナスの回にも足せる。通常の3回目とボーナスの3回目は別ものなので、
       // どちらの回かを一緒に持つ
+      // ── 入金の種類（月額 / ボーナス）をまとめて直す ─────
+      //
+      // 未入金タブから、電話中にその場で直せるようにするための口。
+      // 1件ずつ直すと、そのたびに顧客まるごと詰め直すことになる。
+      // まとめて受けて、詰め直しは最後に一度だけにする。
+      if (b.種類 === '割り当て直し') {
+        const 変更 = Array.isArray(b.変更) ? b.変更 : [];
+        if (!変更.length) return bad(res, '直すものがありません。');
+        const ids = 変更.map((x) => Number(x.入金id)).filter(Boolean);
+        if (ids.length !== 変更.length) return bad(res, 'どの入金かを指定してください。');
+
+        const 今 = await sql(
+          `SELECT id, amount, alloc_kind, to_char(paid_on,'YYYY-MM-DD') AS on
+             FROM payment WHERE id = ANY($1::int[]) AND customer_id=$2`, [ids, id]);
+        if (今.length !== ids.length) {
+          return bad(res, 'その入金が見つかりません。', 'この顧客の入金だけを直せます');
+        }
+        const ボ = await sql(
+          `SELECT 1 FROM schedule WHERE customer_id=$1 AND kind='ボーナス' LIMIT 1`, [id]);
+
+        const 種類ごと = {}, 記す = [];
+        for (const x of 変更) {
+          const k = 入金種類(x.入金種類);
+          if (!k) return bad(res, '入金種類が正しくありません。');
+          if (k !== '通常' && !ボ.length) {
+            return bad(res, 'この方にはボーナス払いの設定がありません。');
+          }
+          const p2 = 今.find((y) => y.id === Number(x.入金id));
+          if ((p2.alloc_kind || '通常') === k) continue;   // 変わらないものは触らない
+          (種類ごと[k] = 種類ごと[k] || []).push(p2.id);
+          記す.push(`${p2.on} の ${yen(p2.amount)}円 を`
+            + `${種類名(p2.alloc_kind)}→${種類名(k)}`);
+        }
+        if (!記す.length) return ok(res, { done: true, 変えた件数: 0 });
+
+        // 種類ごとに1回ずつ書き換える。件数がいくつでも問い合わせは増えない
+        await Promise.all(Object.entries(種類ごと).map(([k, 群]) =>
+          sql('UPDATE payment SET alloc_kind=$1, updated_at=now() WHERE id = ANY($2::int[])',
+            [k, 群])));
+        await 詰め直す(sql, id);
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'訂正',$3,$4)`,
+          [id, who, `入金の割り当てを直した：${記す.join('、')}`,
+           String(b.メモ || '').trim() || null]);
+        return ok(res, { done: true, 変えた件数: 記す.length });
+      }
+
       // ── 支払いの記録を詰め直す ─────────────────
       //
       // 「1回目は未入金なのに3回目は入金済み」という並びを直す。
