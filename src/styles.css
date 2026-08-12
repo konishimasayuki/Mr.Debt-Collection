@@ -375,6 +375,11 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .rec-p-w{white-space:nowrap}
 .rec-p-a{font-variant-numeric:tabular-nums;white-space:nowrap}
 .rec-p-late{color:var(--overdue)}
+/* 押すと、その振り込みの割り当て（月額／ボーナス）を変えられる */
+.rec-p-tap{width:100%;text-align:left;border:0;cursor:pointer;font:inherit;
+  align-items:center}
+.rec-p-tap:hover{background:var(--paper-2)}
+.rec-p-kind{margin-left:6px;color:var(--ink-3);font-size:11px}
 
 .rec-ms{border-bottom:1px solid var(--rule);background:#FCFBF8;padding:2px 10px 6px 10px}
 .rec-m{display:flex;align-items:flex-start;gap:6px;padding:4px 0 4px 8px;

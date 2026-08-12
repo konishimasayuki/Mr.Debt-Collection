@@ -113,7 +113,8 @@ export default async (req, res) => {
               GROUP BY a.schedule_id`, [id]),
         // その回に「いつ・いくら」入ったか。
         // 期日だけでは、遅れて払われたのか期日どおりだったのかが分からない。
-        sql(`SELECT a.schedule_id, a.amount, a.payment_id, p.paid_on, p.method, p.source
+        sql(`SELECT a.schedule_id, a.amount, a.payment_id, p.paid_on, p.method, p.source,
+                    p.amount AS pay_amount, p.alloc_kind
                FROM allocation a
                JOIN schedule s ON s.id = a.schedule_id
                JOIN payment p  ON p.id = a.payment_id
@@ -150,6 +151,11 @@ export default async (req, res) => {
       充当明細.forEach((r) => {
         (入金明細[r.schedule_id] = 入金明細[r.schedule_id] || []).push({
           日付: isoOf(r.paid_on), 金額: r.amount, 入金方法: r.method, 区分: r.source,
+          // その回に入っている額（金額）と、振り込みそのものの額（入金の総額）は違う。
+          // 1回の振り込みが複数の回にまたがるため。
+          // 支払いの記録から、この振り込みの割り当てを変えられるようにする
+          入金id: r.payment_id, 入金の総額: r.pay_amount,
+          入金種類: 種類名(r.alloc_kind),
         });
       });
 
