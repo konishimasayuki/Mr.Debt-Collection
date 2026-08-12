@@ -222,6 +222,13 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .ex-add{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
 .ex-add .kana-in{flex:1 1 180px;min-width:0}
 /* 入金種類の選択欄。金額まで出すので、顧客の欄より狭くてよい */
+/* 支払いの記録の見出し。右端に「入金月変更」を置く。
+   下線は見出しだけでなく、行いっぱいに引く（途中で切れると崩れて見える） */
+.rec-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+.rec-top h3{margin:0;padding:0;border:0;flex:1 1 auto;min-width:0}
+.rec-top .btn{flex:0 0 auto}
+
 .ex-list{border:1px solid var(--rule);background:var(--paper)}
 .ex-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   padding:8px 12px;border-bottom:1px solid var(--rule);font-size:13px}
