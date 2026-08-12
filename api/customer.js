@@ -184,6 +184,8 @@ export default async (req, res) => {
           引き落とし: c.debit_state || '未申込', 引き落とし日: isoOf(c.debit_date),
           ボーナス月: c.bonus_months || [], ボーナス日: c.bonus_day || null,
           ボーナス金額: c.bonus_amount || null,
+          // ボーナス払いを始める月。空なら契約の初回から
+          ボーナス開始月: (isoOf(c.bonus_start) || '').slice(0, 7),
           性別: c.gender || '',
           生年月日: isoOf(c.birthday), 住所: c.address || '', 電話番号: c.tel || '',
           契約日: isoOf(c.contract_date), 車種: c.car || '',
@@ -317,7 +319,7 @@ export default async (req, res) => {
           // 入金が充てられている回は触らない（remakeBonus のきまり）
           if (c.bonus_months && c.bonus_months.length && c.bonus_amount) {
             await remakeBonus(sql, id, y0, m0, 日, c.term_count,
-              c.bonus_months, c.bonus_day, c.bonus_amount);
+              c.bonus_months, c.bonus_day, c.bonus_amount, isoOf(c.bonus_start));
           }
           await 詰め直す(sql, id);
           put('start_date', dueOf(y0, m0, 日, 1));
@@ -330,7 +332,7 @@ export default async (req, res) => {
       // 予定を作り直すが、**入金が充てられている回は触らない**（remakeBonus）。
       let ボ結果 = null;
       if (b.ボーナス月 !== undefined || b.ボーナス日 !== undefined
-          || b.ボーナス金額 !== undefined) {
+          || b.ボーナス金額 !== undefined || b.ボーナス開始月 !== undefined) {
         const 月 = b.ボーナス月 !== undefined
           ? [...new Set((b.ボーナス月 || []).map(Number).filter((m) => m >= 1 && m <= 12))]
             .sort((x, y) => x - y)
@@ -346,10 +348,20 @@ export default async (req, res) => {
         if (月.length && (!額 || 額 <= 0)) {
           return bad(res, 'ボーナスの金額を入れてください。');
         }
+
+        // ボーナス払いを始める月。契約の途中から賞与を入れる方がいる。
+        // 空なら契約の初回から（選んだ月が来るたびに作る）
+        let 賞開始 = b.ボーナス開始月 !== undefined
+          ? String(b.ボーナス開始月).trim() : (isoOf(c.bonus_start) || '').slice(0, 7);
+        if (賞開始 && !/^\d{4}-\d{2}$/.test(賞開始)) {
+          return bad(res, 'ボーナス払いの開始月は 2027-07 の形で選んでください。');
+        }
+
         const 使う月 = 月.length ? 月 : null;
         put('bonus_months', 使う月);
         put('bonus_day', 使う月 ? 日 : null);
         put('bonus_amount', 使う月 ? 額 : null);
+        put('bonus_start', 使う月 && 賞開始 ? `${賞開始}-01` : null);
 
         // 開始月を同時に変えているなら、変えたあとの期日で作る
         const 始 = b.開始月 !== undefined
@@ -357,7 +369,7 @@ export default async (req, res) => {
         const [y0, m0] = 始.split('-').map(Number);
         const 支払日 = b.支払日 !== undefined ? (Number(b.支払日) || c.pay_day) : c.pay_day;
         ボ結果 = await remakeBonus(sql, id, y0, m0, 支払日, c.term_count,
-          使う月, 日, 額);
+          使う月, 日, 額, 賞開始 ? `${賞開始}-01` : null);
         // ここでは詰め直さない。remakeBonus は「入金が充てられている回は
         // 消さない」という決めごとで動いている。先に詰め直すと、そのお金が
         // 新しく作った別のボーナスの回へ移り、消してよい回・残す回の
@@ -400,6 +412,7 @@ export default async (req, res) => {
         const 月 = (b.ボーナス月 || []).join('月・');
         何を = 月
           ? `ボーナス払いを設定した：${月}月の${b.ボーナス日}日に ${yen(b.ボーナス金額)}円`
+            + (b.ボーナス開始月 ? `（${b.ボーナス開始月} から）` : '')
             + `（全${ボ結果.全体}回）`
           : 'ボーナス払いをやめた';
       } else if (b.引き落とし !== undefined) {

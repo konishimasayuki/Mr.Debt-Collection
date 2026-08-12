@@ -46,6 +46,9 @@ const STATEMENTS = [
      bonus_months    integer[],
      bonus_day       integer CHECK (bonus_day BETWEEN 1 AND 31),
      bonus_amount    integer CHECK (bonus_amount > 0),
+     -- ボーナス払いを始める月。契約の途中から賞与を入れる方がいる。
+     -- 空なら契約の初回から（選んだ月が来るたびに作る）。
+     bonus_start     date,
      is_test         boolean NOT NULL DEFAULT false,   -- 動作を試すための顧客
      archived        boolean NOT NULL DEFAULT false,
      created_at      timestamptz NOT NULL DEFAULT now(),
@@ -61,6 +64,7 @@ const STATEMENTS = [
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS bonus_months integer[]`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS bonus_day integer`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS bonus_amount integer`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS bonus_start date`,
   // 制約はあとから足す。すでに列がある場合は CHECK が付いていないため
   `DO $$ BEGIN
      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='customer_status_ck') THEN
