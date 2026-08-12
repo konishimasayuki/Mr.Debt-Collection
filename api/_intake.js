@@ -4,7 +4,7 @@
 // 振込人名から顧客を当てる・二重取込を弾く・古い回から充てる、は
 // どこから来た明細でも同じでなければならない。
 // 2か所に書くと、いつか片方だけ直されて食い違う。だから1か所に置く。
-import { isoOf, yen, normPayer, allocate, 入金種類 } from './_lib.js';
+import { isoOf, yen, normPayer, allocate, 詰め直す, 入金種類 } from './_lib.js';
 import { あいうえお順 } from './_yomi_dict.js';
 
 // 重複判定の鍵。日付+付番+金額
@@ -199,18 +199,22 @@ async function 取り込む(sql, who, rows, 区分 = 'CSV') {
 
   const 記録 = [];
   const 余った = [];
-  await Promise.all([...顧客ごと.values()].map(async (組) => {
+  await Promise.all([...顧客ごと.entries()].map(async ([cid, 組]) => {
+    for (const x of 組) await allocate(sql, x.cid, x.pid, x.amount, x.種類);
+    // 顧客まるごと詰め直す。古い日付の入金をあとから取り込むと順番が入れ替わり、
+    // 「1回目は未入金なのに3回目は入金済み」という並びになってしまうため
+    const 余り = await 詰め直す(sql, cid);
     for (const x of 組) {
-      const al = await allocate(sql, x.cid, x.pid, x.amount, x.種類);
+      const あまり = 余り[x.pid] || 0;
       const 種類名 = x.種類 === 'ボーナス' ? 'ボーナス' : '月額';
-      if (al.余り > 0) {
+      if (あまり > 0) {
         余った.push({ 入金id: x.pid, 顧客id: x.cid, 日付: x.r.日付, 種類: 種類名,
-                     金額: x.amount, 余り: al.余り, 振込人: x.r.振込人 || '' });
+                     金額: x.amount, 余り: あまり, 振込人: x.r.振込人 || '' });
       }
       記録.push([x.cid, x.pid,
         `${区分}から ${yen(x.amount)}円 を取り込み`
         + `（${x.r.日付}・振込人：${x.r.振込人 || '—'}・入金種類：${種類名}）`
-        + (al.余り ? `。余り ${yen(al.余り)}円（${種類名}の回に充てきれませんでした）` : ''),
+        + (あまり ? `。余り ${yen(あまり)}円（${種類名}の回に充てきれませんでした）` : ''),
         normPayer(x.r.振込人)]);
     }
   }));

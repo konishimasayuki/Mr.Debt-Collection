@@ -7,7 +7,7 @@
 // 銀行APIから来た明細も同じところを通る（2か所に書くと、いつか食い違うため）。
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
-import { readBody, yen, normPayer, allocate, 入金種類 } from './_lib.js';
+import { readBody, yen, normPayer, allocate, 詰め直す, 入金種類 } from './_lib.js';
 import { parseCsv } from './_csv.js';
 import { importKey, 照合の道具, 取込済みの鍵, プレビュー, 取り込む } from './_intake.js';
 
@@ -63,6 +63,9 @@ export default async (req, res) => {
       const 種類 = 入金種類(a.入金種類) || '通常';
       await sql('UPDATE payment SET alloc_kind=$1 WHERE id=$2', [種類, pid]);
       const r = await allocate(sql, cid, pid, amount, 種類);
+      // 付け替えた入金だけを充てると、ほかの入金が前の回に残る。まるごと詰め直す
+      const 余り = await 詰め直す(sql, cid);
+      r.余り = 余り[pid] || 0;
       await sql(`INSERT INTO event (customer_id, payment_id, recorded_by, kind, text, memo)
                  VALUES ($1,$2,$3,'入金',$4,$5)`,
         [cid, pid, who, `${yen(amount)}円 を人が選んで割り当て（振込人：${a.振込人 || '—'}）`, null]);

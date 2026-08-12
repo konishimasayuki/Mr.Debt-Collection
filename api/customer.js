@@ -4,7 +4,8 @@
 // POST  /api/customer             … {id, 種類:'約束'|'約束変更'|'約束削除', …}
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
-import { readBody, query, isoOf, today, yen, norm, remakeBonus, dueOf } from './_lib.js';
+import { readBody, query, isoOf, today, yen, norm, remakeBonus, dueOf,
+         詰め直す } from './_lib.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -18,6 +19,35 @@ const jp = (d) => String(d).replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1年$2月$3�
 // 回が決まっていない約束は、どの回に出すか決められないので足さない。
 // 通常とボーナスで回次の番号がぶつかるので、どちらの回かも一緒に持つ。
 // 約束は通常の回にしか付かないので、既定は '通常'。
+// いまの充当が「記録した順に、古い回へ詰めた形」になっているか。
+//
+// 入金を消したり顧客を付け替えたりすると、その入金の充当だけが外れ、
+// ほかの入金は前の回に残る。すると「1回目は未入金なのに3回目は入金済み」
+// という並びになる。いまはどの操作のあとも詰め直しているが、
+// その前に崩れた記録はそのまま残っているので、画面で直せるようにする。
+function 並びが崩れているか(予定, 入金, 充当) {
+  const 埋まり = new Map(予定.map((s) => [s.id, 0]));
+  const 正 = [];
+  // 記録した順（id順）。api/_lib.js の詰め直すと同じ数え方
+  for (const p of [...入金].sort((a, b) => a.id - b.id)) {
+    let 残 = p.amount;
+    const 絞る = p.alloc_kind === 'ボーナス' ? 'ボーナス'
+      : p.alloc_kind === '通常' ? '通常' : null;
+    for (const s of 予定) {
+      if (残 <= 0) break;
+      if (絞る && (s.kind || '通常') !== 絞る) continue;
+      const あき = s.planned_amount - 埋まり.get(s.id);
+      if (あき <= 0) continue;
+      const 入 = Math.min(残, あき);
+      正.push(`${p.id}:${s.id}:${入}`);
+      埋まり.set(s.id, 埋まり.get(s.id) + 入);
+      残 -= 入;
+    }
+  }
+  const 今 = 充当.map((a) => `${a.payment_id}:${a.schedule_id}:${a.amount}`).sort();
+  return 今.join('|') !== 正.sort().join('|');
+}
+
 const 回メモを足す = (sql, id, no, text, who, auto = true, 約束id = null, kind = '通常') => (no
   ? sql(`INSERT INTO schedule_memo (customer_id, schedule_no, kind, text, auto,
                                     promise_id, created_by)
@@ -80,14 +110,14 @@ export default async (req, res) => {
               GROUP BY a.schedule_id`, [id]),
         // その回に「いつ・いくら」入ったか。
         // 期日だけでは、遅れて払われたのか期日どおりだったのかが分からない。
-        sql(`SELECT a.schedule_id, a.amount, p.paid_on, p.method, p.source
+        sql(`SELECT a.schedule_id, a.amount, a.payment_id, p.paid_on, p.method, p.source
                FROM allocation a
                JOIN schedule s ON s.id = a.schedule_id
                JOIN payment p  ON p.id = a.payment_id
               WHERE s.customer_id=$1
               ORDER BY p.paid_on, p.id`, [id]),
         sql(`SELECT p.id, p.paid_on, p.amount, p.method, p.source, p.ref_no, p.memo,
-                    p.payer_name, p.recorded_by, p.created_at
+                    p.payer_name, p.recorded_by, p.created_at, p.alloc_kind
                FROM payment p WHERE p.customer_id=$1
               ORDER BY p.paid_on DESC, p.id DESC`, [id]),
         sql(`SELECT id, promised_on, until_time, schedule_no, amount, memo, done, created_by
@@ -164,6 +194,8 @@ export default async (req, res) => {
           この回の残り: cur ? Math.max(0, cur.planned_amount - (paidBy[cur.id] || 0)) : 0,
           次の期日: cur ? isoOf(cur.due_date) : null,
           完済: !cur,
+          // 支払いの記録の並びが崩れているか。崩れているときだけ画面に入口を出す
+          並びが崩れている: 並びが崩れているか(rows, payments, 充当明細),
         },
         支払予定: rows.map((s) => ({
           回次: s.no, 種類: s.kind || '通常',
@@ -276,6 +308,7 @@ export default async (req, res) => {
             await remakeBonus(sql, id, y0, m0, 日, c.term_count,
               c.bonus_months, c.bonus_day, c.bonus_amount);
           }
+          await 詰め直す(sql, id);
           put('start_date', dueOf(y0, m0, 日, 1));
           if (日 !== 前の日) put('pay_day', 日);
           期日結果 = { 前: `${前の開始}（毎月${前の日}日）`, 後: `${開始}（毎月${日}日）` };
@@ -314,6 +347,10 @@ export default async (req, res) => {
         const 支払日 = b.支払日 !== undefined ? (Number(b.支払日) || c.pay_day) : c.pay_day;
         ボ結果 = await remakeBonus(sql, id, y0, m0, 支払日, c.term_count,
           使う月, 日, 額);
+        // ここでは詰め直さない。remakeBonus は「入金が充てられている回は
+        // 消さない」という決めごとで動いている。先に詰め直すと、そのお金が
+        // 新しく作った別のボーナスの回へ移り、消してよい回・残す回の
+        // 判断とちぐはぐになる。
         // 支払総額はボーナスを含める。残債はここから引いて出すため
         const ボ合計 = (await sql(
           `SELECT COALESCE(sum(planned_amount),0)::int AS n FROM schedule
@@ -447,6 +484,18 @@ export default async (req, res) => {
       // ── 回ごとのメモ（支払いの記録の各回の下）────────
       // ボーナスの回にも足せる。通常の3回目とボーナスの3回目は別ものなので、
       // どちらの回かを一緒に持つ
+      // ── 支払いの記録を詰め直す ─────────────────
+      //
+      // 「1回目は未入金なのに3回目は入金済み」という並びを直す。
+      // 入金の金額も件数も残債も変わらない。どの回に充てるかだけを並べ直す。
+      if (b.種類 === '詰め直す') {
+        await 詰め直す(sql, id);
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text)
+                   VALUES ($1,$2,'記録',$3)`,
+          [id, who, '支払いの記録を詰め直した（古い回から順に充て直した）']);
+        return ok(res, { done: true });
+      }
+
       // ── 入金月の変更 ────────────────────────
       //
       // 「今月から払えないので、11月から仕切り直す」というときに使う。
@@ -494,6 +543,10 @@ export default async (req, res) => {
           `UPDATE schedule s SET due_date = u.d::date
              FROM unnest($1::int[], $2::text[]) AS u(i, d)
             WHERE s.id = u.i`, [ids, dues]);
+
+        // 期日が動くと、古い順の並びが変わる。まるごと詰め直して、
+        // 「1回目は未入金なのに3回目は入金済み」という並びを作らない
+        await 詰め直す(sql, id);
 
         const 前 = 基準.due, 後 = dues[0];
         const 向き = ずれ > 0 ? `${ずれ}か月あと` : `${-ずれ}か月まえ`;

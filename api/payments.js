@@ -5,7 +5,8 @@
 // DELETE /api/payments?id=1             … 入金を取り消す
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
-import { readBody, query, isoOf, today, yen, norm, allocate, unallocate, 入金種類 } from './_lib.js';
+import { readBody, query, isoOf, today, yen, norm, allocate, unallocate, 詰め直す,
+         入金種類 } from './_lib.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -95,7 +96,11 @@ export default async (req, res) => {
                               alloc_kind, recorded_by)
          VALUES ($1,$2,$3,$4,'手動',$5,$6,$7) RETURNING id`,
         [cid, day, amount, m, memo, kind, who]))[0];
+      // 充てたあと、顧客まるごと詰め直す。
+      // 古い日付の入金をあとから足したときに、順番が入れ替わるため
       const r = await allocate(sql, cid, pay.id, amount, kind);
+      const 余り = await 詰め直す(sql, cid);
+      r.余り = 余り[pay.id] || 0;
 
       await sql(`INSERT INTO event (customer_id, payment_id, recorded_by, kind, text, memo)
                  VALUES ($1,$2,$3,'入金',$4,$5)`,
@@ -159,8 +164,16 @@ export default async (req, res) => {
       await sql(`UPDATE payment SET paid_on=$1, amount=$2, customer_id=$3, method=$4,
                    memo=$5, alloc_kind=$6, updated_at=now() WHERE id=$7`,
         [day, amount, cid, m, memo || null, kind, id]);
+      // 直した入金だけを付け直すと、ほかの入金は前の回に残ってしまう。
+      // 「1回目は未入金なのに3回目は入金済み」になるので、顧客まるごと詰め直す。
+      // 顧客を移したときは、移す前の相手も詰め直す（そこに穴が空くため）
       let r = { 充当: [], 余り: amount };
-      if (cid) r = await allocate(sql, cid, id, amount, kind);
+      if (cid) {
+        r = await allocate(sql, cid, id, amount, kind);
+        const 余り = await 詰め直す(sql, cid);
+        r.余り = 余り[id] || 0;
+      }
+      if (p.customer_id && p.customer_id !== cid) await 詰め直す(sql, p.customer_id);
 
       // 顧客を移したときは、移す前の相手にも記録を残す(片方だけに残らないように)
       if (p.customer_id && p.customer_id !== cid) {
@@ -184,6 +197,8 @@ export default async (req, res) => {
       if (!p) return bad(res, 'その入金が見つかりません。');
       await unallocate(sql, id);
       await sql('DELETE FROM payment WHERE id=$1', [id]);
+      // 消したぶんの回だけが空いたままにならないよう、まるごと詰め直す
+      if (p.customer_id) await 詰め直す(sql, p.customer_id);
       if (p.customer_id) {
         await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                    VALUES ($1,$2,'取消',$3,$4)`,
