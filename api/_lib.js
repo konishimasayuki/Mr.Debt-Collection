@@ -76,11 +76,14 @@ async function makeSchedule(sql, customerId, y0, m0, payDay, term, monthly) {
 
 // 契約の期間に入るボーナスの期日を、古い順に出す。
 // 初回の期日から最終回の期日までのあいだにある月だけを拾う。
-function bonusDues(y0, m0, payDay, term, months, day) {
+//
+// 開始（'YYYY-MM-DD'）を渡すと、その日より前は作らない。
+// 契約の途中から賞与を入れる方がいるため。渡さなければ契約の初回から。
+function bonusDues(y0, m0, payDay, term, months, day, 開始) {
   const 月 = [...new Set((months || []).map(Number).filter((m) => m >= 1 && m <= 12))]
     .sort((a, b) => a - b);
   if (!月.length || !day) return [];
-  const 初回 = dueOf(y0, m0, payDay, 1);
+  const 初回 = 開始 && 開始 > dueOf(y0, m0, payDay, 1) ? 開始 : dueOf(y0, m0, payDay, 1);
   const 最終 = dueOf(y0, m0, payDay, term);
   const out = [];
   const 始 = y0 * 12 + (m0 - 1);
@@ -99,7 +102,7 @@ function bonusDues(y0, m0, payDay, term, months, day) {
 // ボーナスの支払予定を作り直す。
 // **入金が充てられている回は触らない。** 消すと入金の行き先が消えるため。
 // 返すのは {足した, 消した, 直した}。
-async function remakeBonus(sql, customerId, y0, m0, payDay, term, months, day, amount) {
+async function remakeBonus(sql, customerId, y0, m0, payDay, term, months, day, amount, 開始) {
   const 今 = await sql(
     `SELECT s.id, s.no, s.due_date, s.planned_amount,
             COALESCE((SELECT sum(a.amount) FROM allocation a
@@ -109,7 +112,7 @@ async function remakeBonus(sql, customerId, y0, m0, payDay, term, months, day, a
       ORDER BY s.no`, [customerId]);
 
   const 欲しい = (months && months.length && day && amount)
-    ? bonusDues(y0, m0, payDay, term, months, day) : [];
+    ? bonusDues(y0, m0, payDay, term, months, day, 開始) : [];
 
   // 入金のある回は残す。残りは作り直す
   const 残す = 今.filter((s) => s.paid > 0);
