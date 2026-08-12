@@ -114,6 +114,7 @@ export default function CustomerPage({ id, onChanged }) {
           c={c}
           onClose={() => setEditCustomer(false)}
           onDone={() => { setEditCustomer(false); load(); onChanged && onChanged(); }}
+          on入金月={() => { setEditCustomer(false); set入金月(true); }}
         />
       )}
 
@@ -280,9 +281,6 @@ export default function CustomerPage({ id, onChanged }) {
             <h3>
               支払いの記録（全{c.回数}回{c.ボーナス回数 > 0 && ` + ボーナス${c.ボーナス回数}回`}）
             </h3>
-            {!c.完済 && (
-              <button className="btn btn-sm" onClick={() => set入金月(true)}>入金月変更</button>
-            )}
           </div>
           <p className="rec-hint">回を押すと、その回にメモを足せます。</p>
           {/* 前に入金を消したり付け替えたりしたときの、並びの崩れ。
@@ -753,7 +751,7 @@ function 入金月変更({ c, 支払予定, onClose, onDone }) {
   );
 }
 
-function EditCustomer({ c, onClose, onDone }) {
+function EditCustomer({ c, onClose, onDone, on入金月 }) {
   const [v, setV] = useState({
     名前: c.氏名, よみ: c.よみ, 性別: c.性別, 生年月日: c.生年月日 || '',
     住所: c.住所, 電話番号: c.電話番号, 契約日: c.契約日 || '', 車種: c.車種,
@@ -818,6 +816,18 @@ function EditCustomer({ c, onClose, onDone }) {
               value={v.支払日} onChange={(x) => set('支払日')(Number(x) || '')}
               hint="その月に無い日は末日にします" />
       </div>
+      {/* 未払いの回から先だけをずらすほうは、別の欄で受ける。
+          こちらは全部の回をずらすので、取り違えないよう並べて置く */}
+      {!c.完済 && (
+        <div className="row-btn" style={{ margin: '-4px 0 12px' }}>
+          <button className="btn btn-sm" onClick={on入金月}>入金月変更</button>
+          <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>
+            払えなくなって仕切り直すときは、こちら。
+            <b>未払いの回から先だけ</b>をずらします（上の開始月は<b>全部の回</b>）
+          </span>
+        </div>
+      )}
+
       {(v.開始月 !== (c.開始日 || '').slice(0, 7) || Number(v.支払日) !== Number(c.支払日)) && (
         <Note kind="warn">
           <b>全{c.回数}回の期日が、まとめてずれます。</b>
