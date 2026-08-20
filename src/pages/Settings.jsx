@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, yen, norm } from '../api';
 import { Modal, Text, Select, Err, Note, Empty, Loading } from '../components/ui';
 
 export default function Settings({ onOpen, onChanged }) {
@@ -69,6 +69,8 @@ export default function Settings({ onOpen, onChanged }) {
 
       <BankAccounts />
 
+      <DeleteCustomer onChanged={onChanged} />
+
 
       <TestCustomer onOpen={onOpen} onChanged={onChanged} />
 
@@ -80,6 +82,94 @@ export default function Settings({ onOpen, onChanged }) {
         />
       )}
     </>
+  );
+}
+
+// ── 顧客を消す ───────────────────────────────
+//
+// 登録し間違えた顧客を片づけるための道。
+// 消せるのは、入金が1件も無い顧客だけ。1円でも受け取っていれば出さない。
+// お金の跡を消させないため。消したことは記録に残す。
+function DeleteCustomer({ onChanged }) {
+  const [d, setD] = useState(null);
+  const [key, setKey] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(0);
+
+  const load = () => api.deletable().then(setD).catch((e) => { setD({ 顧客: [] }); setErr(e.message); });
+  useEffect(() => { load(); }, []);
+
+  const 消す = async (c) => {
+    // 名前を出して二度聞く。押し間違いで消えては困る
+    if (!confirm(`${c.氏名} さんを消します。\n\n`
+      + '支払予定・入金約束・メモも一緒に消えます。\n'
+      + '**元には戻せません。**\n\nよろしいですか。')) return;
+    if (!confirm(`もう一度お聞きします。\n\n「${c.氏名}」を消してよろしいですか。`)) return;
+    setBusy(c.id); setErr('');
+    try {
+      await api.deleteCustomer(c.id);
+      await load();
+      onChanged && onChanged();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(0); }
+  };
+
+  // かな・カナ・漢字のどれで打っても当たる（顧客一覧の検索と同じそろえ方）
+  const k = norm(key);
+  const 出す = d
+    ? d.顧客.filter((c) => !k || norm(c.氏名).includes(k) || norm(c.よみ).includes(k))
+    : [];
+
+  return (
+    <div className="sec">
+      <h3>顧客を消す</h3>
+      <Note kind="warn">
+        <b>入金が1件も無い顧客だけが、ここに出ます。</b>
+        {' '}1円でも受け取っている顧客は出しません。お金の跡を消さないためです。
+        <br />
+        登録し間違えた顧客を片づけるための欄です。
+        <b>消すと支払予定・入金約束・メモも一緒に消え、元には戻せません。</b>
+        消したことは記録に残ります。
+      </Note>
+      <Err>{err}</Err>
+
+      {d === null && <Loading 件数={3} 行={1} />}
+      {d && d.顧客.length === 0 && (
+        <Empty>消せる顧客はいません。全員に入金があります。</Empty>
+      )}
+
+      {d && d.顧客.length > 0 && (
+        <>
+          <div className="row-btn" style={{ marginBottom: 10 }}>
+            <input className="search" placeholder="氏名・よみで絞る"
+                   value={key} onChange={(e) => setKey(e.target.value)} />
+            <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>
+              消せる顧客 {d.顧客.length}名
+            </span>
+          </div>
+          <div className="ex-list">
+            {出す.map((c) => (
+              <div className="ex-row" key={c.id}>
+                <b>{c.氏名}</b>
+                {c.テスト && <span className="tag t-test">テスト</span>}
+                <span className="ex-memo">
+                  {c.よみ || 'よみ未入力'}　月々 {yen(c.月々の金額)}円 × {c.回数}回
+                  {c.車種 ? `　${c.車種}` : ''}
+                </span>
+                <span className="ex-on">{c.登録日} 登録</span>
+                {/* 「消す」だけでは何が消えるのか分からない。
+                    台帳の言葉づかいの決めごとに合わせて、何を消すかまで書く */}
+                <button className="btn btn-sm btn-danger" disabled={busy === c.id}
+                        onClick={() => 消す(c)}>
+                  {busy === c.id ? '消しています…' : 'この顧客を削除'}
+                </button>
+              </div>
+            ))}
+            {出す.length === 0 && <p className="ex-none">当たる顧客がいません。</p>}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

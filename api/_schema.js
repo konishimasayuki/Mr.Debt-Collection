@@ -323,11 +323,22 @@ const STATEMENTS = [
   // 動作を試すための顧客(is_test)の記録だけは、片づけられるようにする。
   // 顧客の行より先に記録を消すこと。顧客を消してから消すと、
   // ここの EXISTS がもう当たらず、追記のみに引っかかる。
+  //
+  // 入金が1件も無い顧客の記録も、片づけられるようにする。
+  // 追記のみにしているのは「お金の跡を消させない」ため。
+  // 1円も受け取っていない顧客には、守るべきお金の跡がない。
+  // 登録し間違えた顧客を、いつまでも一覧に残さずに済むようにする。
   `CREATE OR REPLACE FUNCTION event_append_only() RETURNS trigger AS $$
    BEGIN
      IF TG_OP = 'DELETE' AND OLD.customer_id IS NOT NULL
         AND EXISTS (SELECT 1 FROM customer
                      WHERE id = OLD.customer_id AND is_test) THEN
+       RETURN OLD;
+     END IF;
+     IF TG_OP = 'DELETE' AND OLD.customer_id IS NOT NULL
+        AND EXISTS (SELECT 1 FROM customer WHERE id = OLD.customer_id)
+        AND NOT EXISTS (SELECT 1 FROM payment
+                         WHERE customer_id = OLD.customer_id) THEN
        RETURN OLD;
      END IF;
      RAISE EXCEPTION '記録は追記のみです。訂正は「取消」を足してください。';
