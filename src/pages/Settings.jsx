@@ -88,22 +88,36 @@ export default function Settings({ onOpen, onChanged }) {
 // ── 顧客を消す ───────────────────────────────
 //
 // 登録し間違えた顧客を片づけるための道。
-// 消せるのは、入金が1件も無い顧客だけ。1円でも受け取っていれば出さない。
+// 消せるのは、入金が1件も無い顧客だけ。1円でも受け取っていれば消せない。
 // お金の跡を消させないため。消したことは記録に残す。
+//
+// 一覧には**全員を出す**。同じ氏名の方が2人いるとき、消せるほうだけを
+// 出すと、どちらを消しているのか分からないまま押すことになる。
 function DeleteCustomer({ onChanged }) {
   const [d, setD] = useState(null);
   const [key, setKey] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(0);
 
-  const load = () => api.deletable().then(setD).catch((e) => { setD({ 顧客: [] }); setErr(e.message); });
+  const load = () => api.deletable().then(setD)
+    .catch((e) => { setD({ 顧客: [] }); setErr(e.message); });
   useEffect(() => { load(); }, []);
 
+  // 一緒に消えるもの。押す前に「何か書いてないか」「約束していないか」を確かめる
+  const 消えるもの = (c) => [
+    c.支払予定回数 ? `支払予定 ${c.支払予定回数}回` : '',
+    c.約束件数 ? `入金約束 ${c.約束件数}件` : '',
+    c.メモ件数 ? `回のメモ ${c.メモ件数}件` : '',
+    c.顧客メモあり ? 'この顧客についてのメモ' : '',
+    c.記録件数 ? `記録 ${c.記録件数}件` : '',
+  ].filter(Boolean);
+
   const 消す = async (c) => {
+    const 中身 = 消えるもの(c);
     // 名前を出して二度聞く。押し間違いで消えては困る
-    if (!confirm(`${c.氏名} さんを消します。\n\n`
-      + '支払予定・入金約束・メモも一緒に消えます。\n'
-      + '**元には戻せません。**\n\nよろしいですか。')) return;
+    if (!confirm(`${c.氏名}${c.よみ ? `（${c.よみ}）` : ''} さんを消します。\n\n`
+      + `一緒に消えるもの：\n${中身.map((x) => `・${x}`).join('\n')}\n\n`
+      + '元には戻せません。よろしいですか。')) return;
     if (!confirm(`もう一度お聞きします。\n\n「${c.氏名}」を消してよろしいですか。`)) return;
     setBusy(c.id); setErr('');
     try {
@@ -119,13 +133,17 @@ function DeleteCustomer({ onChanged }) {
   const 出す = d
     ? d.顧客.filter((c) => !k || norm(c.氏名).includes(k) || norm(c.よみ).includes(k))
     : [];
+  const 消せる数 = d ? d.顧客.filter((c) => c.消せる).length : 0;
 
   return (
     <div className="sec">
       <h3>顧客を消す</h3>
       <Note kind="warn">
-        <b>入金が1件も無い顧客だけが、ここに出ます。</b>
-        {' '}1円でも受け取っている顧客は出しません。お金の跡を消さないためです。
+        <b>消せるのは、入金が1件も無い顧客だけです。</b>
+        {' '}1円でも受け取っている顧客は消せません。お金の跡を消さないためです。
+        <br />
+        <b>同じ氏名の方がいても分かるように、一覧には全員を出しています。</b>
+        よみ・車種・登録日で見分けてください。
         <br />
         登録し間違えた顧客を片づけるための欄です。
         <b>消すと支払予定・入金約束・メモも一緒に消え、元には戻せません。</b>
@@ -134,9 +152,7 @@ function DeleteCustomer({ onChanged }) {
       <Err>{err}</Err>
 
       {d === null && <Loading 件数={3} 行={1} />}
-      {d && d.顧客.length === 0 && (
-        <Empty>消せる顧客はいません。全員に入金があります。</Empty>
-      )}
+      {d && d.顧客.length === 0 && <Empty>顧客の登録がありません。</Empty>}
 
       {d && d.顧客.length > 0 && (
         <>
@@ -144,25 +160,43 @@ function DeleteCustomer({ onChanged }) {
             <input className="search" placeholder="氏名・よみで絞る"
                    value={key} onChange={(e) => setKey(e.target.value)} />
             <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>
-              消せる顧客 {d.顧客.length}名
+              全{d.顧客.length}名 ／ 消せる <b>{消せる数}名</b>
             </span>
           </div>
           <div className="ex-list">
             {出す.map((c) => (
-              <div className="ex-row" key={c.id}>
-                <b>{c.氏名}</b>
-                {c.テスト && <span className="tag t-test">テスト</span>}
-                <span className="ex-memo">
-                  {c.よみ || 'よみ未入力'}　月々 {yen(c.月々の金額)}円 × {c.回数}回
-                  {c.車種 ? `　${c.車種}` : ''}
-                </span>
-                <span className="ex-on">{c.登録日} 登録</span>
-                {/* 「消す」だけでは何が消えるのか分からない。
-                    台帳の言葉づかいの決めごとに合わせて、何を消すかまで書く */}
-                <button className="btn btn-sm btn-danger" disabled={busy === c.id}
-                        onClick={() => 消す(c)}>
-                  {busy === c.id ? '消しています…' : 'この顧客を削除'}
-                </button>
+              <div className={'del-row' + (c.消せる ? '' : ' keep')} key={c.id}>
+                <div className="del-who">
+                  <b>{c.氏名}</b>
+                  {c.よみ && <span className="del-kana">{c.よみ}</span>}
+                  {c.テスト && <span className="tag t-test">テスト</span>}
+                  {c.引き上げ && <span className="tag t-warn">引き上げ</span>}
+                </div>
+                <div className="del-what">
+                  月々 {yen(c.月々の金額)}円 × {c.回数}回
+                  {c.車種 ? `　${c.車種}` : ''}　{c.登録日} 登録
+                </div>
+                {/* 何が入っているか。押す前にここで確かめられる */}
+                <div className="del-has">
+                  {c.入金件数 > 0
+                    ? <b className="del-ng">入金 {c.入金件数}件</b>
+                    : <span>入金 なし</span>}
+                  {c.約束件数 > 0 && <b>入金約束 {c.約束件数}件</b>}
+                  {c.メモ件数 > 0 && <b>回のメモ {c.メモ件数}件</b>}
+                  {c.顧客メモあり && <b>顧客のメモ あり</b>}
+                  {c.約束件数 === 0 && c.メモ件数 === 0 && !c.顧客メモあり
+                    && <span>約束・メモ なし</span>}
+                </div>
+                <div className="del-act">
+                  {c.消せる ? (
+                    <button className="btn btn-sm btn-danger" disabled={busy === c.id}
+                            onClick={() => 消す(c)}>
+                      {busy === c.id ? '消しています…' : 'この顧客を削除'}
+                    </button>
+                  ) : (
+                    <span className="del-lock">入金があるので消せません</span>
+                  )}
+                </div>
               </div>
             ))}
             {出す.length === 0 && <p className="ex-none">当たる顧客がいません。</p>}
