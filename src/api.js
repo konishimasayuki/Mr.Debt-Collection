@@ -117,6 +117,10 @@ export const api = {
   bankSkip: (ids) => call('/api/bank', { method: 'POST', body: { 見送る: ids } }),
   saveBankAccount: (口座) => call('/api/bank', { method: 'POST', body: { 口座 } }),
 
+  // 顧客を消す（設定タブ。入金が1件も無い顧客だけ）
+  deletable: () => call('/api/customers?削除できる=1', { 取り直す: true }),
+  deleteCustomer: (id) => call('/api/customers' + q({ id }), { method: 'DELETE' }),
+
   // 入金の割り当て直し（未入金タブから）
   reassign: (id, 変更, メモ) => call('/api/customer', { method: 'POST',
     body: { id, 種類: '割り当て直し', 変更, メモ } }),

@@ -25,6 +25,26 @@ export default async (req, res) => {
     if (method === 'GET') {
       const q = query(req);
 
+      // ── 削除できる顧客の一覧（設定タブ）────────────
+      // 入金が1件も無い顧客だけ。登録し間違えた顧客を片づけるための道。
+      // 1円でも受け取っていれば出さない。お金の跡は消させない。
+      if (q['削除できる']) {
+        const rows = await sql(
+          `SELECT c.id, c.name, c.kana, c.car, c.monthly_amount, c.term_count,
+                  c.is_test,
+                  to_char(c.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') AS on
+             FROM customer c
+            WHERE NOT EXISTS (SELECT 1 FROM payment p WHERE p.customer_id = c.id)
+            ORDER BY c.id DESC`);
+        return ok(res, {
+          顧客: rows.map((c) => ({
+            id: c.id, 氏名: c.name, よみ: c.kana || '', 車種: c.car || '',
+            月々の金額: c.monthly_amount, 回数: c.term_count,
+            テスト: !!c.is_test, 登録日: c.on,
+          })),
+        });
+      }
+
       // ── よみをまとめて入れる画面のための一覧 ──────────
       // 氏名と、いまのよみと、苗字の辞書から出した候補だけを返す。
       // 候補は「たたき台」であって正解ではない。読みが分かれる苗字は
@@ -231,6 +251,36 @@ export default async (req, res) => {
           [who, `まとめて変更：${説明.join('、')}した`, done.map((r) => r.id)]);
       }
       return ok(res, { done: true, 変えた人数: done.length, 内容: 説明.join('、') });
+    }
+
+    // ── 顧客を消す ──────────────────────────
+    //
+    // 消せるのは、入金が1件も無い顧客だけ。
+    // 1円でも受け取っていれば消せない。お金の跡は消させない。
+    // 登録し間違えた顧客を、いつまでも一覧に残さずに済むようにするための道。
+    if (method === 'DELETE') {
+      const who = recordedBy(req);
+      const id = Number(query(req).id);
+      if (!id) return bad(res, 'どの顧客かを指定してください。');
+      const c = (await sql('SELECT id, name, is_test FROM customer WHERE id=$1', [id]))[0];
+      if (!c) return bad(res, 'その顧客が見つかりません。');
+      const 入 = await sql(
+        'SELECT count(*)::int AS n FROM payment WHERE customer_id=$1', [id]);
+      if (入[0].n > 0) {
+        return bad(res, `${c.name} さんには入金が ${入[0].n}件 あります。消せません。`,
+          '入金のある顧客は消せません。お金の跡を残すためです');
+      }
+
+      // 消したことだけは残す。顧客の行にぶら下げると一緒に消えるので、
+      // 顧客に結び付けない記録として書く（customer_id は空のまま）
+      await sql(`INSERT INTO event (recorded_by, kind, text)
+                 VALUES ($1,'設定',$2)`,
+        [who, `顧客「${c.name}」を削除した（入金は1件も無し）`]);
+      // 記録を先に消す。顧客を消してからでは、追記のみの決まりに引っかかる
+      await sql('DELETE FROM event WHERE customer_id=$1', [id]);
+      // 支払予定・約束・回のメモ・名寄せ辞書は、顧客と一緒に消える
+      await sql('DELETE FROM customer WHERE id=$1', [id]);
+      return ok(res, { done: true, 氏名: c.name });
     }
 
     return bad(res, '対応していない操作です。');
