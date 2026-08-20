@@ -25,22 +25,38 @@ export default async (req, res) => {
     if (method === 'GET') {
       const q = query(req);
 
-      // ── 削除できる顧客の一覧（設定タブ）────────────
-      // 入金が1件も無い顧客だけ。登録し間違えた顧客を片づけるための道。
-      // 1円でも受け取っていれば出さない。お金の跡は消させない。
+      // ── 顧客を消す画面の一覧（設定タブ）─────────────
+      //
+      // **全員を返す。** 入金のある方も出す。
+      // 同じ氏名の方が2人いるとき、消せるほうだけを出すと、
+      // どちらを消しているのか分からないまま押すことになる。
+      // 消せるかどうかは印で分け、消せない方は理由（入金◯件）を添える。
+      //
+      // 一緒に消えるものの数も返す。押す前に「何か書いてないか」
+      // 「約束していないか」を確かめられるようにするため。
       if (q['削除できる']) {
         const rows = await sql(
           `SELECT c.id, c.name, c.kana, c.car, c.monthly_amount, c.term_count,
-                  c.is_test,
-                  to_char(c.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') AS on
-             FROM customer c
-            WHERE NOT EXISTS (SELECT 1 FROM payment p WHERE p.customer_id = c.id)
-            ORDER BY c.id DESC`);
+                  c.is_test, c.status,
+                  to_char(c.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY-MM-DD') AS on,
+                  (c.memo IS NOT NULL AND btrim(c.memo) <> '') AS has_memo,
+                  (SELECT count(*) FROM payment       x WHERE x.customer_id=c.id)::int AS pays,
+                  (SELECT count(*) FROM promise       x WHERE x.customer_id=c.id)::int AS proms,
+                  (SELECT count(*) FROM schedule_memo x WHERE x.customer_id=c.id)::int AS memos,
+                  (SELECT count(*) FROM schedule      x WHERE x.customer_id=c.id)::int AS scheds,
+                  (SELECT count(*) FROM event         x WHERE x.customer_id=c.id)::int AS evs
+             FROM customer c`);
+        // 顧客一覧と同じあいうえお順。同じ氏名の方が並んで見える
+        rows.sort(あいうえお順);
         return ok(res, {
           顧客: rows.map((c) => ({
             id: c.id, 氏名: c.name, よみ: c.kana || '', 車種: c.car || '',
             月々の金額: c.monthly_amount, 回数: c.term_count,
             テスト: !!c.is_test, 登録日: c.on,
+            引き上げ: c.status === '回収',
+            消せる: c.pays === 0,
+            入金件数: c.pays, 約束件数: c.proms, メモ件数: c.memos,
+            顧客メモあり: !!c.has_memo, 支払予定回数: c.scheds, 記録件数: c.evs,
           })),
         });
       }

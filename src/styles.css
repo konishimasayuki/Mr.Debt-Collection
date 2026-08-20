@@ -237,6 +237,25 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .ex-memo{flex:1 1 120px;min-width:0;color:var(--ink-2);font-size:12.5px}
 .ex-on{color:var(--ink-3);font-size:12px}
 .ex-none{margin:0;padding:14px;color:var(--ink-2);font-size:13px}
+/* 顧客を消す欄。1人を1枚にして、何が入っているかまで見せる。
+   同じ氏名の方が並ぶので、よみ・車種・登録日で見分けられるようにする */
+.del-row{display:grid;grid-template-columns:1fr auto;gap:2px 12px;
+  padding:9px 12px;border-bottom:1px solid var(--rule);font-size:13px}
+.del-row:last-child{border-bottom:0}
+.del-row.keep{background:var(--paper-2)}
+.del-who{grid-column:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.del-kana{color:var(--ink-2);font-size:12px}
+.del-what{grid-column:1;color:var(--ink-2);font-size:12px}
+.del-has{grid-column:1;display:flex;gap:10px;flex-wrap:wrap;font-size:12px;
+  color:var(--ink-3)}
+.del-has b{color:var(--ink)}
+.del-ng{color:var(--overdue)}
+.del-act{grid-column:2;grid-row:1 / span 3;display:flex;align-items:center}
+.del-lock{color:var(--ink-3);font-size:12px;white-space:nowrap}
+@media (max-width:560px){
+  .del-row{grid-template-columns:1fr}
+  .del-act{grid-column:1;grid-row:auto;margin-top:6px}
+}
 .meisai .assign.kind{min-width:170px;max-width:220px}
 /* 月額を超える振り込みで、ボーナスが未払いのときの問いかけ */
 .kind-ask{margin-top:4px;font-size:12px;line-height:1.6;color:var(--overdue);
