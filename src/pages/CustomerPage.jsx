@@ -32,7 +32,8 @@ export default function CustomerPage({ id, onChanged }) {
   const [振替, set振替] = useState(false);   // 口座振替の状態を変える欄
   const [メモ欄, setメモ欄] = useState(null); // メモを足そうとしている回（'通常-3' の形）
   const [入金月, set入金月] = useState(false); // 未払いの回から先をずらす欄
-  const [割り当て, set割り当て] = useState(null); // 割り当てを変える入金
+  const [割り当て, set割り当て] = useState(null);
+  const [賞与移動, set賞与移動] = useState(null); // 別の月へ移す賞与の回 // 割り当てを変える入金
 
   const load = useCallback(() => {
     setErr('');
@@ -189,6 +190,12 @@ export default function CustomerPage({ id, onChanged }) {
         <入金の割り当て 顧客={c} 入金={割り当て}
           onClose={() => set割り当て(null)}
           onDone={() => { set割り当て(null); load(); onChanged && onChanged(); }} />
+      )}
+
+      {賞与移動 && (
+        <賞与を移す 顧客={c} 回={賞与移動} 支払予定={d.支払予定}
+          onClose={() => set賞与移動(null)}
+          onDone={() => { set賞与移動(null); load(); onChanged && onChanged(); }} />
       )}
 
       {入金月 && (
@@ -359,6 +366,17 @@ export default function CustomerPage({ id, onChanged }) {
                     </div>
                     )
                   ))}
+                  {/* ボーナスの回は、別の月へ移せる。
+                      「今年の賞与は出なかったので来年へ」というときのため */}
+                  {開いている && ボ && (
+                    <div className="rec-move">
+                      <button type="button" className="btn btn-sm"
+                              onClick={() => set賞与移動(s)}>
+                        この賞与を別の月へ移す
+                      </button>
+                      <span>金額も回数も変わりません。期日だけが動きます</span>
+                    </div>
+                  )}
                   {開いている && (
                     <RecMemoAdd
                       顧客id={c.id} 回次={s.回次} 回の種類={s.種類}
@@ -662,6 +680,95 @@ function 入金の割り当て({ 顧客, 入金, onClose, onDone }) {
   );
 }
 
+// ボーナスの回を、別の月へ移す。
+//
+// 「今年の賞与は出なかったので、来年の7月に回したい」というときに使う。
+// 金額も回数も変わらない。その1回の期日だけを動かす。
+// 動かしたあとは、賞与の番号を期日の古い順に振り直す。
+function 賞与を移す({ 顧客, 回, 支払予定, onClose, onDone }) {
+  const [月, set月] = useState(回.期日.slice(0, 7));
+  const [メモ, setメモ] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // 契約の期間。ここから外へは移せない
+  const 通常 = 支払予定.filter((s) => s.種類 === '通常');
+  const 初 = 通常.length ? 通常[0].期日 : null;
+  const 終 = 通常.length ? 通常[通常.length - 1].期日 : null;
+
+  const 新しい期日 = (() => {
+    if (!/^\d{4}-\d{2}$/.test(月)) return '';
+    const 日 = Number(回.期日.slice(8, 10));
+    const [y, m] = 月.split('-').map(Number);
+    return isoOf(y, m, Math.min(日, new Date(y, m, 0).getDate()));
+  })();
+  const 変わる = 新しい期日 && 新しい期日 !== 回.期日;
+  const 外 = 新しい期日 && 初 && (新しい期日 < 初 || 新しい期日 > 終);
+
+  const save = async () => {
+    setBusy(true); setErr('');
+    try {
+      await api.postCustomer({ id: 顧客.id, 種類: '賞与の移動',
+        回次: 回.回次, 新しい月: 月, メモ });
+      onDone();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal
+      title={`賞与${回.回次} を別の月へ移す`}
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn" onClick={onClose} disabled={busy}>キャンセル</button>
+          <div className="right">
+            <button className="btn btn-main" onClick={save} disabled={busy || !変わる || !!外}>
+              {busy ? '移しています…' : '移す'}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <Note>
+        <b>賞与{回.回次}（{ymd(回.期日)}・{yen(回.請求)}円）</b>を、別の月へ移します。
+        <br />
+        <b>金額も回数も変わりません。</b>この1回の期日だけが動きます。
+        {回.入金 > 0 && (
+          <>
+            <br />
+            <b>この回にはすでに {yen(回.入金)}円 入っています。</b>
+            入金はそのまま付いていきます。
+          </>
+        )}
+      </Note>
+
+      <Text label="移す先の年月" type="month" value={月} onChange={set月}
+            hint={`日はいまのまま（${回.期日.slice(8, 10)}日）です。`
+              + 'その月に無い日は末日にします'} />
+
+      {外 && (
+        <Note kind="warn">
+          <b>契約の外へは移せません。</b>
+          {初 && <>{ymd(初)} 〜 {ymd(終)} のあいだで選んでください。</>}
+        </Note>
+      )}
+
+      {変わる && !外 && (
+        <Note kind="warn">
+          {ymd(回.期日)} → <b>{ymd(新しい期日)}</b> に移します。
+          <br />
+          移したあと、賞与の番号は期日の古い順に振り直します。
+        </Note>
+      )}
+
+      <Text label="移す理由（任意）" value={メモ} onChange={setメモ}
+            placeholder="例：今年は賞与が出ないため、来年へ"
+            hint="記録に残ります" />
+      <Err>{err}</Err>
+    </Modal>
+  );
+}
+
 // 未払いの回から先を、まとめてずらす。
 //
 // 「今月は払えないので、11月から仕切り直したい」というときに使う。
@@ -760,6 +867,7 @@ function EditCustomer({ c, onClose, onDone, on入金月 }) {
     状態: c.状態 || '通常', 状態日: c.状態日 || 本日(),
     ボーナス月: c.ボーナス月 || [], ボーナス日: c.ボーナス日 || 27,
     ボーナス金額: c.ボーナス金額 || '', ボーナス開始月: c.ボーナス開始月 || '',
+    ボーナス回数: c.ボーナス回数の指定 || '',
     開始月: (c.開始日 || '').slice(0, 7), 支払日: c.支払日 || 27,
   });
   const [companies, setCompanies] = useState([]);
@@ -871,17 +979,42 @@ function EditCustomer({ c, onClose, onDone, on入金月 }) {
             <Money label="1回あたりのボーナス金額" value={v.ボーナス金額}
                    onChange={set('ボーナス金額')} placeholder="100,000" />
           </div>
-          {/* 契約の途中から賞与を入れる方がいる。空なら契約の初回から */}
-          <Text label="ボーナス払いの開始月（空なら契約の初めから）" type="month"
-                value={v.ボーナス開始月} onChange={set('ボーナス開始月')}
-                hint="この月より前の賞与は作りません" />
+          {/* 契約の途中から賞与を入れる方がいる。空なら契約の初回から。
+              回数は、選んだ月が来るたびに作ると多すぎるときに減らすための欄 */}
+          <div className="grid2">
+            <Text label="ボーナス払いの開始月（空なら契約の初めから）" type="month"
+                  value={v.ボーナス開始月} onChange={set('ボーナス開始月')}
+                  hint="この月より前の賞与は作りません" />
+            <div className="f">
+              <label>ボーナスの回数（空なら契約の期間ぶん全部）</label>
+              <div className="cnt-pick">
+                <button className="btn btn-sm"
+                        onClick={() => set('ボーナス回数')(
+                          Math.max(1, (Number(v.ボーナス回数) || 1) - 1))}>−</button>
+                <input type="number" min="1" max="200" value={v.ボーナス回数}
+                       onChange={(e) => set('ボーナス回数')(e.target.value)}
+                       placeholder="全部" />
+                <button className="btn btn-sm"
+                        onClick={() => set('ボーナス回数')(
+                          (Number(v.ボーナス回数) || 0) + 1)}>＋</button>
+                {v.ボーナス回数 !== '' && (
+                  <button className="btn btn-sm"
+                          onClick={() => set('ボーナス回数')('')}>全部にする</button>
+                )}
+              </div>
+              <i className="hint">古いほうから、この回数ぶんだけ作ります</i>
+            </div>
+          </div>
           <Note kind="ok">
             {v.ボーナス月.join('月・')}月の{v.ボーナス日}日に
             <b> {yen(v.ボーナス金額 || 0)}円</b>。
             {v.ボーナス開始月
               ? <><b> {v.ボーナス開始月} から</b>、契約の最終回（全{c.回数}回）までに
-                  入るぶんだけ作ります。</>
-              : <>契約の期間（{c.開始日} 〜 全{c.回数}回）に入るぶんだけ作ります。</>}
+                  入るぶん</>
+              : <>契約の期間（{c.開始日} 〜 全{c.回数}回）に入るぶん</>}
+            {v.ボーナス回数 !== '' && Number(v.ボーナス回数) > 0
+              ? <>のうち、<b>古いほうから{v.ボーナス回数}回ぶん</b>を作ります。</>
+              : <>だけ作ります。</>}
             <br />
             <b>すでに入金が充てられているボーナスの回は動かしません。</b>
             通常の{c.回数}回には影響しません。

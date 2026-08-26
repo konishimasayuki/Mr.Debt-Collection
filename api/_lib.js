@@ -79,7 +79,10 @@ async function makeSchedule(sql, customerId, y0, m0, payDay, term, monthly) {
 //
 // 開始（'YYYY-MM-DD'）を渡すと、その日より前は作らない。
 // 契約の途中から賞与を入れる方がいるため。渡さなければ契約の初回から。
-function bonusDues(y0, m0, payDay, term, months, day, 開始) {
+//
+// 回数を渡すと、古いほうからその回数ぶんだけにする。
+// 「7月と12月だが、賞与は6回ぶんだけ」という契約があるため。
+function bonusDues(y0, m0, payDay, term, months, day, 開始, 回数) {
   const 月 = [...new Set((months || []).map(Number).filter((m) => m >= 1 && m <= 12))]
     .sort((a, b) => a - b);
   if (!月.length || !day) return [];
@@ -96,13 +99,15 @@ function bonusDues(y0, m0, payDay, term, months, day, 開始) {
     if (d < 初回 || d > 最終) continue;
     out.push(d);
   }
-  return out;
+  const n = Number(回数) || 0;
+  return n > 0 ? out.slice(0, n) : out;
 }
 
 // ボーナスの支払予定を作り直す。
 // **入金が充てられている回は触らない。** 消すと入金の行き先が消えるため。
 // 返すのは {足した, 消した, 直した}。
-async function remakeBonus(sql, customerId, y0, m0, payDay, term, months, day, amount, 開始) {
+async function remakeBonus(sql, customerId, y0, m0, payDay, term, months, day, amount,
+                           開始, 回数) {
   const 今 = await sql(
     `SELECT s.id, s.no, s.due_date, s.planned_amount,
             COALESCE((SELECT sum(a.amount) FROM allocation a
@@ -112,7 +117,7 @@ async function remakeBonus(sql, customerId, y0, m0, payDay, term, months, day, a
       ORDER BY s.no`, [customerId]);
 
   const 欲しい = (months && months.length && day && amount)
-    ? bonusDues(y0, m0, payDay, term, months, day, 開始) : [];
+    ? bonusDues(y0, m0, payDay, term, months, day, 開始, 回数) : [];
 
   // 入金のある回は残す。残りは作り直す
   const 残す = 今.filter((s) => s.paid > 0);
