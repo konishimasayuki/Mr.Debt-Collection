@@ -48,6 +48,43 @@ function 並びが崩れているか(予定, 入金, 充当) {
   return 今.join('|') !== 正.sort().join('|');
 }
 
+// ボーナスの回の番号を、期日の古い順に振り直す。
+//
+// 期日を動かすと「賞与2が賞与1より前」という並びになってしまう。
+// 回のメモは「種類＋回次」でぶら下がっているので、番号を振り替えるときは
+// メモの番号も一緒に振り替える。片方だけ直すと、メモが別の回に付く。
+//
+// UNIQUE(customer_id, kind, no) があるので、いったん大きな番号へ逃がしてから
+// 本来の番号へ入れる。逃がさずに入れ替えると、途中でぶつかる。
+async function 賞与の番号を振り直す(sql, customerId) {
+  const 回 = await sql(
+    `SELECT id, no FROM schedule WHERE customer_id=$1 AND kind='ボーナス'
+      ORDER BY due_date, no`, [customerId]);
+  const 変える = 回.map((s, i) => ({ id: s.id, 前: s.no, 後: i + 1 }))
+    .filter((x) => x.前 !== x.後);
+  if (!変える.length) return;
+  const 逃がす = 10000;
+  await sql(
+    `UPDATE schedule SET no = no + $2 WHERE id = ANY($1::int[])`,
+    [変える.map((x) => x.id), 逃がす]);
+  await sql(
+    `UPDATE schedule s SET no = u.n
+       FROM unnest($1::int[], $2::int[]) AS u(i, n)
+      WHERE s.id = u.i`, [変える.map((x) => x.id), 変える.map((x) => x.後)]);
+  // 回のメモも同じように付け替える
+  await sql(
+    `UPDATE schedule_memo SET schedule_no = schedule_no + $2
+      WHERE customer_id=$1 AND COALESCE(kind,'通常')='ボーナス'
+        AND schedule_no = ANY($3::int[])`,
+    [customerId, 逃がす, 変える.map((x) => x.前)]);
+  await sql(
+    `UPDATE schedule_memo m SET schedule_no = u.n
+       FROM unnest($2::int[], $3::int[]) AS u(o, n)
+      WHERE m.customer_id=$1 AND COALESCE(m.kind,'通常')='ボーナス'
+        AND m.schedule_no = u.o + $4`,
+    [customerId, 変える.map((x) => x.前), 変える.map((x) => x.後), 逃がす]);
+}
+
 // 画面に出す入金種類の呼び名。台帳の中では '通常'、画面では「月額」
 const 種類名 = (k) => (k === 'ボーナス' ? 'ボーナス' : k === '両方' ? '月額＋ボーナス' : '月額');
 
@@ -186,6 +223,8 @@ export default async (req, res) => {
           ボーナス金額: c.bonus_amount || null,
           // ボーナス払いを始める月。空なら契約の初回から
           ボーナス開始月: (isoOf(c.bonus_start) || '').slice(0, 7),
+          // 何回ぶん作るか。空なら契約の期間に入るだけ全部
+          ボーナス回数の指定: c.bonus_count || '',
           性別: c.gender || '',
           生年月日: isoOf(c.birthday), 住所: c.address || '', 電話番号: c.tel || '',
           契約日: isoOf(c.contract_date), 車種: c.car || '',
@@ -319,7 +358,8 @@ export default async (req, res) => {
           // 入金が充てられている回は触らない（remakeBonus のきまり）
           if (c.bonus_months && c.bonus_months.length && c.bonus_amount) {
             await remakeBonus(sql, id, y0, m0, 日, c.term_count,
-              c.bonus_months, c.bonus_day, c.bonus_amount, isoOf(c.bonus_start));
+              c.bonus_months, c.bonus_day, c.bonus_amount, isoOf(c.bonus_start),
+              c.bonus_count);
           }
           await 詰め直す(sql, id);
           put('start_date', dueOf(y0, m0, 日, 1));
@@ -332,7 +372,8 @@ export default async (req, res) => {
       // 予定を作り直すが、**入金が充てられている回は触らない**（remakeBonus）。
       let ボ結果 = null;
       if (b.ボーナス月 !== undefined || b.ボーナス日 !== undefined
-          || b.ボーナス金額 !== undefined || b.ボーナス開始月 !== undefined) {
+          || b.ボーナス金額 !== undefined || b.ボーナス開始月 !== undefined
+          || b.ボーナス回数 !== undefined) {
         const 月 = b.ボーナス月 !== undefined
           ? [...new Set((b.ボーナス月 || []).map(Number).filter((m) => m >= 1 && m <= 12))]
             .sort((x, y) => x - y)
@@ -357,11 +398,20 @@ export default async (req, res) => {
           return bad(res, 'ボーナス払いの開始月は 2027-07 の形で選んでください。');
         }
 
+        // ボーナスを何回ぶん作るか。空なら契約の期間に入るだけ全部
+        const 賞回数 = b.ボーナス回数 !== undefined
+          ? (String(b.ボーナス回数).trim() === '' ? null : Number(b.ボーナス回数))
+          : (c.bonus_count || null);
+        if (賞回数 !== null && (!Number.isInteger(賞回数) || 賞回数 < 1 || 賞回数 > 200)) {
+          return bad(res, 'ボーナスの回数は1以上の数で入れてください。');
+        }
+
         const 使う月 = 月.length ? 月 : null;
         put('bonus_months', 使う月);
         put('bonus_day', 使う月 ? 日 : null);
         put('bonus_amount', 使う月 ? 額 : null);
         put('bonus_start', 使う月 && 賞開始 ? `${賞開始}-01` : null);
+        put('bonus_count', 使う月 ? 賞回数 : null);
 
         // 開始月を同時に変えているなら、変えたあとの期日で作る
         const 始 = b.開始月 !== undefined
@@ -369,7 +419,7 @@ export default async (req, res) => {
         const [y0, m0] = 始.split('-').map(Number);
         const 支払日 = b.支払日 !== undefined ? (Number(b.支払日) || c.pay_day) : c.pay_day;
         ボ結果 = await remakeBonus(sql, id, y0, m0, 支払日, c.term_count,
-          使う月, 日, 額, 賞開始 ? `${賞開始}-01` : null);
+          使う月, 日, 額, 賞開始 ? `${賞開始}-01` : null, 賞回数);
         // ここでは詰め直さない。remakeBonus は「入金が充てられている回は
         // 消さない」という決めごとで動いている。先に詰め直すと、そのお金が
         // 新しく作った別のボーナスの回へ移り、消してよい回・残す回の
@@ -553,6 +603,58 @@ export default async (req, res) => {
           [id, who, `入金の割り当てを直した：${記す.join('、')}`,
            String(b.メモ || '').trim() || null]);
         return ok(res, { done: true, 変えた件数: 記す.length });
+      }
+
+      // ── ボーナスの回を、別の月へ移す ─────────────
+      //
+      // 「今年の賞与は出なかったので、来年の7月に回したい」というときに使う。
+      // 支払いの記録で、その賞与の回を押して移す。
+      // 金額も回数も変わらない。期日だけを動かす。
+      if (b.種類 === '賞与の移動') {
+        const no = Number(b.回次) || 0;
+        const 新 = String(b.新しい月 || '').trim();
+        if (!no) return bad(res, 'どの賞与かを指定してください。');
+        if (!/^\d{4}-\d{2}$/.test(新)) {
+          return bad(res, '移す先は 2027-07 の形で選んでください。');
+        }
+        const s2 = (await sql(
+          `SELECT id, to_char(due_date,'YYYY-MM-DD') AS due, planned_amount
+             FROM schedule WHERE customer_id=$1 AND kind='ボーナス' AND no=$2`,
+          [id, no]))[0];
+        if (!s2) return bad(res, 'その賞与の回が見つかりません。');
+
+        // 日はいまのまま。その月に無い日は末日にする
+        const 日 = Number(s2.due.slice(8, 10));
+        const [ny, nm] = 新.split('-').map(Number);
+        if (nm < 1 || nm > 12) return bad(res, '月が正しくありません。');
+        const 後 = `${ny}-${String(nm).padStart(2, '0')}-`
+          + String(Math.min(日, new Date(ny, nm, 0).getDate())).padStart(2, '0');
+        if (後 === s2.due) return bad(res, '同じ月です。変わりません。');
+
+        // 契約の外へは出さない。支払予定は契約の期間の中にあるもの
+        const 端 = (await sql(
+          `SELECT to_char(min(due_date),'YYYY-MM-DD') AS a,
+                  to_char(max(due_date),'YYYY-MM-DD') AS b
+             FROM schedule WHERE customer_id=$1 AND kind='通常'`, [id]))[0];
+        if (端 && (後 < 端.a || 後 > 端.b)) {
+          return bad(res, `契約の外へは移せません（${端.a} 〜 ${端.b} のあいだ）。`);
+        }
+        // 同じ日に別の賞与があると重なる
+        const 重 = await sql(
+          `SELECT no FROM schedule
+            WHERE customer_id=$1 AND kind='ボーナス' AND no<>$2 AND due_date=$3::date`,
+          [id, no, 後]);
+        if (重.length) return bad(res, `その日にはすでに賞与${重[0].no}があります。`);
+
+        await sql('UPDATE schedule SET due_date=$1::date WHERE id=$2', [後, s2.id]);
+        await 賞与の番号を振り直す(sql, id);
+        // 期日が動くと古い順の並びが変わる。まるごと詰め直す
+        await 詰め直す(sql, id);
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'記録',$3,$4)`,
+          [id, who, `賞与${no}の期日を ${s2.due} → ${後} に移した`,
+           String(b.メモ || '').trim() || null]);
+        return ok(res, { done: true, 前: s2.due, 後 });
       }
 
       // ── 支払いの記録を詰め直す ─────────────────
