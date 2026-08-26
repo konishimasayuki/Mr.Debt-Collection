@@ -202,3 +202,34 @@ export function Loading({ 件数 = 5, 行 = 4 }) {
     </div>
   );
 }
+
+// ── 連帯保証人・緊急連絡先の欄 ────────────────────
+//
+// 新規登録と顧客編集で同じ形にする。並びが違うと、片方で入れた人が
+// もう片方で見つからないように見える。
+//
+// 「間柄」は打ち込みではなく選ばせる。電話を受けた新人が
+// 「父」「実父」「お父さん」と書き分けると、あとで数えられない。
+// 当てはまらないときのために、その他は自由に打てるようにしてある。
+export const 間柄一覧 = ['父', '母', '配偶者', '子', '兄', '姉', '弟', '妹',
+  '祖父', '祖母', '叔父', '叔母', '友人', '勤務先', 'その他'];
+
+export function ContactFields({ 見出し, 印, 説明, v, set }) {
+  const k = (名) => `${印}${名}`;
+  return (
+    <div className="contact">
+      <h4>{見出し}</h4>
+      {説明 && <p className="contact-note">{説明}</p>}
+      <div className="grid2">
+        <Text label="名前" value={v[k('名前')]} onChange={set(k('名前'))}
+              placeholder="山田 花子" />
+        <Select label="間柄" value={v[k('間柄')]} onChange={set(k('間柄'))}
+                placeholder="選択しない"
+                options={間柄一覧.map((x) => ({ value: x, label: x }))} />
+      </div>
+      <Text label="電話番号" value={v[k('電話番号')]} onChange={set(k('電話番号'))}
+            placeholder="090-0000-0000" />
+      <Text label="住所" value={v[k('住所')]} onChange={set(k('住所'))} />
+    </div>
+  );
+}

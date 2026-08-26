@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, yen, jpDate, md, ymd, 本日 } from '../api';
-import { Modal, Text, Money, Select, Err, Note, Empty, Loading } from '../components/ui';
+import { Modal, Text, Money, Select, Err, Note, Empty, Loading,
+         ContactFields } from '../components/ui';
 
 const p2 = (n) => String(n).padStart(2, '0');
 const isoOf = (y, m, d) => `${y}-${p2(m)}-${p2(d)}`;
@@ -142,6 +143,29 @@ export default function CustomerPage({ id, onChanged }) {
         {c.債権譲渡会社 && <span>譲渡会社：{c.債権譲渡会社}</span>}
         {c.債権譲渡先 && <span>譲渡先：{c.債権譲渡先}</span>}
       </div>
+
+      {/* 連帯保証人と緊急連絡先。本人と連絡が取れないときに見るので、
+          顧客情報の編集を開かなくてもここで番号を押せるようにする */}
+      {(c.保証人名前 || c.保証人電話番号 || c.緊急連絡先名前 || c.緊急連絡先電話番号) && (
+        <div className="kin">
+          {[['連帯保証人', '保証人'], ['緊急連絡先', '緊急連絡先']].map(([見出し, 印]) => {
+            const 名 = c[`${印}名前`], 電 = c[`${印}電話番号`];
+            const 柄 = c[`${印}間柄`], 所 = c[`${印}住所`];
+            if (!名 && !電) return null;
+            return (
+              <div className="kin-c" key={印}>
+                <h4>{見出し}</h4>
+                <div className="kin-n">
+                  {名 || '（お名前なし）'}
+                  {柄 && <span className="rel">{柄}</span>}
+                </div>
+                {電 && <a href={`tel:${電.replace(/-/g, '')}`}>{電}</a>}
+                {所 && <div className="kin-a">{所}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* 大事な数字。スマホでも折り返して全部見えるようにする（横に流さない） */}
       <div className="strip">
@@ -906,6 +930,11 @@ function EditCustomer({ c, onClose, onDone, on入金月 }) {
   const [v, setV] = useState({
     名前: c.氏名, よみ: c.よみ, 性別: c.性別, 生年月日: c.生年月日 || '',
     住所: c.住所, 電話番号: c.電話番号, 契約日: c.契約日 || '', 車種: c.車種,
+    保証人名前: c.保証人名前 || '', 保証人住所: c.保証人住所 || '',
+    保証人電話番号: c.保証人電話番号 || '', 保証人間柄: c.保証人間柄 || '',
+    緊急連絡先名前: c.緊急連絡先名前 || '', 緊急連絡先住所: c.緊急連絡先住所 || '',
+    緊急連絡先電話番号: c.緊急連絡先電話番号 || '',
+    緊急連絡先間柄: c.緊急連絡先間柄 || '',
     債権譲渡会社: c.債権譲渡会社id ? String(c.債権譲渡会社id) : '',
     債権譲渡先: c.債権譲渡先id ? String(c.債権譲渡先id) : '',
     状態: c.状態 || '通常', 状態日: c.状態日 || 本日(),
@@ -971,6 +1000,10 @@ function EditCustomer({ c, onClose, onDone, on入金月 }) {
         <Text label="契約日" type="date" value={v.契約日} onChange={set('契約日')} />
         <Text label="車種" value={v.車種} onChange={set('車種')} />
       </div>
+      {/* 本人と連絡が取れないときに頼る相手。新規登録と同じ並びにそろえる */}
+      <ContactFields 見出し="連帯保証人" 印="保証人" v={v} set={set}
+                     説明="空にすると消えます。" />
+      <ContactFields 見出し="緊急連絡先" 印="緊急連絡先" v={v} set={set} />
       {/* 支払いの始まり。登録のときに間違えると、期日がまるごとずれる。
           期日を動かすだけで、入金の行き先は動かさない */}
       <div className="grid2">

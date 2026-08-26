@@ -228,6 +228,12 @@ export default async (req, res) => {
           性別: c.gender || '',
           生年月日: isoOf(c.birthday), 住所: c.address || '', 電話番号: c.tel || '',
           契約日: isoOf(c.contract_date), 車種: c.car || '',
+          // 連帯保証人と緊急連絡先。本人と連絡が取れないときに頼る相手
+          保証人名前: c.guarantor_name || '', 保証人住所: c.guarantor_address || '',
+          保証人電話番号: c.guarantor_tel || '', 保証人間柄: c.guarantor_relation || '',
+          緊急連絡先名前: c.emergency_name || '', 緊急連絡先住所: c.emergency_address || '',
+          緊急連絡先電話番号: c.emergency_tel || '',
+          緊急連絡先間柄: c.emergency_relation || '',
           債権譲渡会社: c.assignor_name || '', 債権譲渡先: c.assignee_name || '',
           債権譲渡会社id: c.assignor_id, 債権譲渡先id: c.assignee_id,
           月々の金額: c.monthly_amount, 回数: c.term_count, 支払日: c.pay_day,
@@ -299,6 +305,16 @@ export default async (req, res) => {
       if (b.性別 !== undefined) put('gender', String(b.性別).trim() || null);
       if (b.生年月日 !== undefined) put('birthday', b.生年月日 || null);
       if (b.契約日 !== undefined) put('contract_date', b.契約日 || null);
+
+      // 連帯保証人と緊急連絡先。空にすると消える（引っ越し・関係が切れたとき）
+      for (const [key, col] of [
+        ['保証人名前', 'guarantor_name'], ['保証人住所', 'guarantor_address'],
+        ['保証人電話番号', 'guarantor_tel'], ['保証人間柄', 'guarantor_relation'],
+        ['緊急連絡先名前', 'emergency_name'], ['緊急連絡先住所', 'emergency_address'],
+        ['緊急連絡先電話番号', 'emergency_tel'], ['緊急連絡先間柄', 'emergency_relation'],
+      ]) {
+        if (b[key] !== undefined) put(col, String(b[key]).trim() || null);
+      }
 
       // 取引の状態（通常 / 回収）。回収にすると督促の対象から外れる。
       // 値そのものは今も「回収」のまま持つ。画面での呼び名だけ「引き上げ」にしている
