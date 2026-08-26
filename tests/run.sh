@@ -9,3 +9,4 @@ for f in tests/t-bmove.js; do 出す "$f"; done
 
 # 画面の検査（狙った形を作ってから）
 node tests/bm-seed.mjs >/dev/null 2>&1; 出す tests/t-bmoveui.mjs
+node tests/bc-seed.mjs >/dev/null 2>&1; 出す tests/t-bcountui.mjs

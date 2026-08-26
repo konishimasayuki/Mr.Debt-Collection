@@ -367,19 +367,12 @@ export default function CustomerPage({ id, onChanged }) {
                     )
                   ))}
                   {/* ボーナスの回は、別の月へ移せる。
-                      「今年の賞与は出なかったので来年へ」というときのため */}
-                  {開いている && ボ && (
-                    <div className="rec-move">
-                      <button type="button" className="btn btn-sm"
-                              onClick={() => set賞与移動(s)}>
-                        この賞与を別の月へ移す
-                      </button>
-                      <span>金額も回数も変わりません。期日だけが動きます</span>
-                    </div>
-                  )}
+                      「今年の賞与は出なかったので来年へ」というときのため。
+                      押す場所は、メモの欄と同じ並びにそろえた */}
                   {開いている && (
                     <RecMemoAdd
                       顧客id={c.id} 回次={s.回次} 回の種類={s.種類}
+                      移す={ボ ? () => set賞与移動(s) : null}
                       onClose={() => setメモ欄(null)}
                       onDone={() => { load(); onChanged && onChanged(); }}
                     />
@@ -402,7 +395,7 @@ export default function CustomerPage({ id, onChanged }) {
 // ── その回にメモを足す欄（回を押すと下に出る）───────────
 // 電話を切った直後に、その回のことをその場で書き足せるようにする。
 // 書いた日と時刻はサーバーが入れる（created_at）。人が入れ間違えない。
-function RecMemoAdd({ 顧客id, 回次, 回の種類, onClose, onDone }) {
+function RecMemoAdd({ 顧客id, 回次, 回の種類, 移す, onClose, onDone }) {
   const 回の名 = `${回の種類 === 'ボーナス' ? '賞与' : ''}${回次}回目`;
   const [本文, set本文] = useState('');
   const [busy, setBusy] = useState(false);
@@ -438,6 +431,11 @@ function RecMemoAdd({ 顧客id, 回次, 回の種類, onClose, onDone }) {
           {busy ? '足しています…' : 'メモを足す'}
         </button>
         <button className="btn btn-sm" onClick={onClose} disabled={busy}>閉じる</button>
+        {移す && (
+          <button className="btn btn-sm rec-move" onClick={移す} disabled={busy}>
+            この賞与を別の月へ移す
+          </button>
+        )}
         <span className="hint">書いた日と時刻も一緒に残ります。</span>
       </div>
       <Err>{err}</Err>
@@ -858,6 +856,35 @@ function 入金月変更({ c, 支払予定, onClose, onDone }) {
   );
 }
 
+// 契約の期間に、賞与が何回入るかを数える。
+//
+// 「8回」と入れても、契約の最終回を越える月ぶんは作れない。
+// 保存してから「7回しかできていない」と気づくのでは遅いので、
+// 押す前にその場で数えて見せる。数え方は api/_lib.js の bonusDues と同じ。
+function 作れる賞与(c, 月ら, 日, 開始月) {
+  const 月数 = (iso) => {
+    const [y, m] = iso.split('-').map(Number);
+    return y * 12 + (m - 1);
+  };
+  const 末日 = (y, m) => new Date(y, m, 0).getDate();
+  if (!c.開始日 || !月ら.length || !日) return [];
+  const 初回 = c.開始日;
+  const 始 = 月数(初回);
+  const 終 = 始 + (c.回数 - 1);
+  const [ly, lm] = [Math.floor(終 / 12), (終 % 12) + 1];
+  const 最終 = isoOf(ly, lm, Math.min(c.支払日 || 27, 末日(ly, lm)));
+  const 下限 = 開始月 && 開始月 > 初回.slice(0, 7) ? `${開始月}-01` : 初回;
+  const out = [];
+  for (let t = 始; t <= 終; t++) {
+    const y = Math.floor(t / 12), m = (t % 12) + 1;
+    if (!月ら.includes(m)) continue;
+    const d = isoOf(y, m, Math.min(日, 末日(y, m)));
+    if (d < 下限 || d > 最終) continue;
+    out.push(d);
+  }
+  return out;
+}
+
 function EditCustomer({ c, onClose, onDone, on入金月 }) {
   const [v, setV] = useState({
     名前: c.氏名, よみ: c.よみ, 性別: c.性別, 生年月日: c.生年月日 || '',
@@ -867,13 +894,21 @@ function EditCustomer({ c, onClose, onDone, on入金月 }) {
     状態: c.状態 || '通常', 状態日: c.状態日 || 本日(),
     ボーナス月: c.ボーナス月 || [], ボーナス日: c.ボーナス日 || 27,
     ボーナス金額: c.ボーナス金額 || '', ボーナス開始月: c.ボーナス開始月 || '',
-    ボーナス回数: c.ボーナス回数の指定 || '',
+    // 空（全部）ではなく、いま実際にある回数を入れておく。
+    // 「何回あるのか」がひと目で分かるようにするため
+    ボーナス回数: c.ボーナス回数の指定 || c.ボーナス回数 || '',
     開始月: (c.開始日 || '').slice(0, 7), 支払日: c.支払日 || 27,
   });
   const [companies, setCompanies] = useState([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k) => (val) => setV((o) => ({ ...o, [k]: val }));
+
+  // 契約の期間に何回入るか（回数の指定を当てる前）と、実際に作られる回数
+  const 入る数 = 作れる賞与(c, v.ボーナス月, Number(v.ボーナス日) || 0, v.ボーナス開始月).length;
+  const 指定 = v.ボーナス回数 === '' ? 0 : Number(v.ボーナス回数) || 0;
+  const できる数 = 指定 > 0 ? Math.min(指定, 入る数) : 入る数;
+  const 足りない = 指定 > 入る数 ? 指定 - 入る数 : 0;
 
   useEffect(() => { api.companies().then((d) => setCompanies(d.会社)).catch(() => {}); }, []);
   const opts = companies.map((x) => ({ value: String(x.id), label: x.名前 }));
@@ -997,10 +1032,10 @@ function EditCustomer({ c, onClose, onDone, on入金月 }) {
                 <button className="btn btn-sm"
                         onClick={() => set('ボーナス回数')(
                           (Number(v.ボーナス回数) || 0) + 1)}>＋</button>
-                {v.ボーナス回数 !== '' && (
-                  <button className="btn btn-sm"
-                          onClick={() => set('ボーナス回数')('')}>全部にする</button>
-                )}
+                <button className="btn btn-sm" disabled={指定 === 入る数 || !入る数}
+                        onClick={() => set('ボーナス回数')(入る数 || '')}>
+                  入るだけ（{入る数}回）
+                </button>
               </div>
               <i className="hint">古いほうから、この回数ぶんだけ作ります</i>
             </div>
@@ -1010,15 +1045,28 @@ function EditCustomer({ c, onClose, onDone, on入金月 }) {
             <b> {yen(v.ボーナス金額 || 0)}円</b>。
             {v.ボーナス開始月
               ? <><b> {v.ボーナス開始月} から</b>、契約の最終回（全{c.回数}回）までに
-                  入るぶん</>
-              : <>契約の期間（{c.開始日} 〜 全{c.回数}回）に入るぶん</>}
-            {v.ボーナス回数 !== '' && Number(v.ボーナス回数) > 0
-              ? <>のうち、<b>古いほうから{v.ボーナス回数}回ぶん</b>を作ります。</>
-              : <>だけ作ります。</>}
+                  入るのは <b>{入る数}回</b>です。</>
+              : <>契約の期間（{c.開始日} 〜 全{c.回数}回）に入るのは
+                  <b> {入る数}回</b>です。</>}
+            {' '}
+            {できる数 === 入る数
+              ? <><b>{できる数}回</b>を作ります。</>
+              : <>そのうち<b>古いほうから{できる数}回ぶん</b>を作ります。</>}
             <br />
             <b>すでに入金が充てられているボーナスの回は動かしません。</b>
             通常の{c.回数}回には影響しません。
           </Note>
+          {/* 入れた回数が、契約の期間に収まらないとき。
+              保存してから「足りない」と気づくのでは遅い */}
+          {足りない > 0 && (
+            <Note kind="warn">
+              <b>{v.ボーナス回数}回と入れましたが、契約の期間に入るのは {入る数}回までです。</b>
+              {' '}残りの{足りない}回は、契約の最終回（
+              {c.開始日 && `${c.開始日.slice(0, 4)}年から全${c.回数}回`}）を越えるため作れません。
+              <br />
+              ボーナスの月を増やすか、支払回数を見直してください。
+            </Note>
+          )}
         </>
       )}
       {v.ボーナス月.length === 0 && c.ボーナス回数 > 0 && (

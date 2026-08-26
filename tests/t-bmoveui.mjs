@@ -24,20 +24,20 @@ await p.waitForTimeout(500);
 const m = p.locator('.modal-box');
 const 欄 = m.locator('.f:has(label:text-is("ボーナスの回数（空なら契約の期間ぶん全部）")) input');
 check('回数の欄がある', (await 欄.count()) === 1);
-check('はじめは空', (await 欄.inputValue()) === '');
+check('はじめは実際の回数が出る', (await 欄.inputValue()) === '8', await 欄.inputValue());
 check('増減のボタンがある', (await m.locator('.cnt-pick .btn').count()) >= 2);
 
-await m.locator('.cnt-pick .btn', { hasText: '＋' }).click();
-await p.waitForTimeout(200);
-check('＋で1になる', (await 欄.inputValue()) === '1', await 欄.inputValue());
-for (let i = 0; i < 4; i++) await m.locator('.cnt-pick .btn', { hasText: '＋' }).click();
-await p.waitForTimeout(200);
-check('5まで増やせる', (await 欄.inputValue()) === '5', await 欄.inputValue());
 await m.locator('.cnt-pick .btn', { hasText: '−' }).click();
 await p.waitForTimeout(200);
-check('−で減らせる', (await 欄.inputValue()) === '4', await 欄.inputValue());
+check('−で7になる', (await 欄.inputValue()) === '7', await 欄.inputValue());
+await m.locator('.cnt-pick .btn', { hasText: '＋' }).click();
+await p.waitForTimeout(200);
+check('＋で8に戻る', (await 欄.inputValue()) === '8', await 欄.inputValue());
+await 欄.fill('4');
+await p.waitForTimeout(300);
+check('打ち込みでも変えられる', (await 欄.inputValue()) === '4', await 欄.inputValue());
 check('案内に回数が出る',
-  (await m.locator('.note.ok').innerText()).includes('古いほうから4回ぶん'),
+  (await m.locator('.note.ok').innerText()).includes('4回'),
   await m.locator('.note.ok').innerText());
 await p.screenshot({ path: '/tmp/bm-1-edit.png' });
 
@@ -54,8 +54,8 @@ const 前 = await 記.innerText();
 check('賞与1は2026年7月', /賞与1\s*07\/27/.test(前), 前.slice(0, 200));
 await 記.locator('.rec-tap', { hasText: '賞与1' }).click();
 await p.waitForTimeout(400);
-check('移す入口が出る',
-  (await 記.locator('.rec-move button:has-text("この賞与を別の月へ移す")').count()) === 1);
+check('移す入口がメモの欄の並びに出る',
+  (await 記.locator('.rec-add-b button.rec-move:has-text("この賞与を別の月へ移す")').count()) === 1);
 check('通常の回には出ない', await (async () => {
   await 記.locator('.rec-tap', { hasText: '1回' }).first().click();
   await p.waitForTimeout(400);
@@ -65,7 +65,7 @@ check('通常の回には出ない', await (async () => {
   return n === 0;
 })());
 
-await 記.locator('.rec-move button').click();
+await 記.locator('button.rec-move').click();
 await p.waitForSelector('.modal-box');
 await p.waitForTimeout(400);
 const m2 = p.locator('.modal-box');
@@ -95,7 +95,8 @@ await p.waitForTimeout(1200);
 const 後 = await 記.innerText();
 check('賞与1が9月になる', /賞与1\s*09\/27/.test(後), 後.slice(0, 200));
 check('ボーナスの回数は変わらない',
-  (await p.locator('.rec-top h3').innerText()).includes('ボーナス4回'));
+  (await p.locator('.rec-top h3').innerText()).includes('ボーナス4回'),
+  await p.locator('.rec-top h3').innerText());
 await 記.screenshot({ path: '/tmp/bm-3-after.png' });
 
 console.log('■ スマホでも横にはみ出さない');
@@ -107,7 +108,7 @@ await sp.waitForSelector('.rec-top');
 await sp.waitForTimeout(800);
 await sp.locator('.rec-tap', { hasText: '賞与1' }).click();
 await sp.waitForTimeout(400);
-await sp.locator('.rec-move button').click();
+await sp.locator('button.rec-move').click();
 await sp.waitForSelector('.modal-box');
 await sp.waitForTimeout(500);
 check('スマホでも開ける', (await sp.locator('.modal-box').count()) === 1);
