@@ -308,10 +308,11 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .cust-head .btn,.cust-head .tag{flex:0 0 auto}
 .cust-sub{font-size:12.5px;color:var(--ink-2);margin-bottom:12px;display:flex;gap:14px;flex-wrap:wrap}
 
-/* 連帯保証人・緊急連絡先。入れる欄（登録・編集）と、顧客ページの見せ方 */
-.contact{border-top:1px solid var(--rule);margin:16px 0 4px;padding-top:12px}
-.contact h4{margin:0 0 2px;font-size:13.5px}
-.contact-note{margin:0 0 10px;font-size:12px;color:var(--ink-2)}
+/* 欄のかたまり（連帯保証人・緊急連絡先・入金月の変更）。
+   長い編集の欄を、見出しで区切って読めるようにする */
+.sect{border-top:1px solid var(--rule);margin:16px 0 4px;padding-top:12px}
+.sect h4{margin:0 0 2px;font-size:13.5px}
+.sect-note{margin:0 0 10px;font-size:12px;color:var(--ink-2)}
 
 /* 顧客ページ。電話が取れないときにここを見るので、番号を押せる大きさで出す */
 .kin{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;
