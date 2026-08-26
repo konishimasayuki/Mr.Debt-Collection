@@ -631,13 +631,18 @@ export default async (req, res) => {
           + String(Math.min(日, new Date(ny, nm, 0).getDate())).padStart(2, '0');
         if (後 === s2.due) return bad(res, '同じ月です。変わりません。');
 
-        // 契約の外へは出さない。支払予定は契約の期間の中にあるもの
+        // 契約の初回より前へは戻さない。まだ始まっていない月に賞与は置けない。
+        // 後ろは止めない。「今年の賞与が出なかったので来年へ」は、
+        // 契約の最終回を越えることがある。止めると払う約束が台帳から消える。
         const 端 = (await sql(
           `SELECT to_char(min(due_date),'YYYY-MM-DD') AS a,
                   to_char(max(due_date),'YYYY-MM-DD') AS b
              FROM schedule WHERE customer_id=$1 AND kind='通常'`, [id]))[0];
-        if (端 && (後 < 端.a || 後 > 端.b)) {
-          return bad(res, `契約の外へは移せません（${端.a} 〜 ${端.b} のあいだ）。`);
+        if (端 && 後 < 端.a) {
+          return bad(res, `契約の初回（${端.a}）より前へは移せません。`);
+        }
+        if (端 && ny > Number(端.b.slice(0, 4)) + 30) {
+          return bad(res, '30年より先へは移せません。年を確かめてください。');
         }
         // 同じ日に別の賞与があると重なる
         const 重 = await sql(

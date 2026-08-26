@@ -113,9 +113,13 @@ const 行 = async (q, p) => (await client.query(q, p || [])).rows;
   check('形が違えば400', 形.code === 400, 形.body);
   const 無 = await 移(A.id, { 回次: 99, 新しい月: '2027-03' });
   check('いない回は400', 無.code === 400, 無.body);
-  const 外 = await 移(A.id, { 回次: 1, 新しい月: '2035-01' });
-  check('契約の外は400', 外.code === 400, 外.body);
-  check('理由が分かる', String(外.body.error).includes('契約の外'), 外.body);
+  // 最終回より後へは移せる（賞与が出なかった年の繰り越し）。
+  // 前へは戻せない。まだ始まっていない月には置けない
+  const 前 = await 移(A.id, { 回次: 1, 新しい月: '2020-01' });
+  check('契約の初回より前は400', 前.code === 400, 前.body);
+  check('理由が分かる', String(前.body.error).includes('初回'), 前.body);
+  const 遠 = await 移(A.id, { 回次: 1, 新しい月: '2099-01' });
+  check('ずっと先も400', 遠.code === 400, 遠.body);
   const 重 = await 移(A.id, { 回次: 1, 新しい月: '2027-07' });
   check('同じ日に賞与があれば400', 重.code === 400, 重.body);
 
