@@ -52,6 +52,17 @@ const STATEMENTS = [
      -- ボーナスを何回ぶん作るか。空なら契約の期間に入るだけ全部。
      -- 「7月と12月だが、賞与は6回ぶんだけ」という契約があるため。
      bonus_count     integer CHECK (bonus_count > 0),
+     -- 連帯保証人。本人と連絡が取れないときに頼る相手。
+     -- 緊急連絡先と分けて持つ（保証人は債務を負う人、緊急連絡先はそうではない）
+     guarantor_name      text,
+     guarantor_address   text,
+     guarantor_tel       text,
+     guarantor_relation  text,                         -- 間柄（父・母・兄 など）
+     -- 緊急連絡先
+     emergency_name      text,
+     emergency_address   text,
+     emergency_tel       text,
+     emergency_relation  text,
      is_test         boolean NOT NULL DEFAULT false,   -- 動作を試すための顧客
      archived        boolean NOT NULL DEFAULT false,
      created_at      timestamptz NOT NULL DEFAULT now(),
@@ -69,6 +80,14 @@ const STATEMENTS = [
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS bonus_amount integer`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS bonus_start date`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS bonus_count integer`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS guarantor_name text`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS guarantor_address text`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS guarantor_tel text`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS guarantor_relation text`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS emergency_name text`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS emergency_address text`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS emergency_tel text`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS emergency_relation text`,
   // 制約はあとから足す。すでに列がある場合は CHECK が付いていないため
   `DO $$ BEGIN
      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='customer_status_ck') THEN

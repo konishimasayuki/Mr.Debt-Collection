@@ -137,8 +137,11 @@ export default async (req, res) => {
         `INSERT INTO customer
            (name, kana, gender, birthday, address, tel, contract_date, car,
             assignor_id, assignee_id, monthly_amount, term_count, pay_day,
-            start_date, total_amount, memo)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+            start_date, total_amount, memo,
+            guarantor_name, guarantor_address, guarantor_tel, guarantor_relation,
+            emergency_name, emergency_address, emergency_tel, emergency_relation)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+                 $17,$18,$19,$20,$21,$22,$23,$24) RETURNING id`,
         [name, String(b.よみ || '').trim() || null,
          String(b.性別 || '').trim() || null,
          b.生年月日 || null,
@@ -149,7 +152,11 @@ export default async (req, res) => {
          b.債権譲渡会社 ? Number(b.債権譲渡会社) : null,
          b.債権譲渡先 ? Number(b.債権譲渡先) : null,
          monthly, term, payDay, start, total,
-         String(b.メモ || '').trim() || null]);
+         String(b.メモ || '').trim() || null,
+         // 連帯保証人と緊急連絡先。どれも空でよい（あとから顧客編集で足せる）
+         ...['保証人名前', '保証人住所', '保証人電話番号', '保証人間柄',
+             '緊急連絡先名前', '緊急連絡先住所', '緊急連絡先電話番号', '緊急連絡先間柄']
+           .map((k) => String(b[k] || '').trim() || null)]);
       const id = ins[0].id;
 
       await makeSchedule(sql, id, y0, m0, payDay, term, monthly);

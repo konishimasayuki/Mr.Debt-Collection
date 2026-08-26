@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, yen, ymd, norm } from '../api';
-import { Modal, Text, Money, Select, Err, Empty, Note, Loading } from '../components/ui';
+import { Modal, Text, Money, Select, Err, Empty, Note, Loading,
+         ContactFields } from '../components/ui';
 import KanaBulk from './KanaBulk';
 
 // 電話帳と同じ並び。索引はサーバーが「あ」「か」…で返す
@@ -242,6 +243,8 @@ export default function Customers({ onOpen, onChanged }) {
 const 空 = {
   名前: '', よみ: '', 性別: '', 生年月日: '', 住所: '', 電話番号: '',
   契約日: '', 車種: '', 債権譲渡会社: '', 債権譲渡先: '',
+  保証人名前: '', 保証人住所: '', 保証人電話番号: '', 保証人間柄: '',
+  緊急連絡先名前: '', 緊急連絡先住所: '', 緊急連絡先電話番号: '', 緊急連絡先間柄: '',
   月々の金額: '', 回数: 48, 支払日: 27, 開始月: '', メモ: '',
 };
 
@@ -332,6 +335,11 @@ function NewCustomer({ onClose, onDone }) {
       <Text label="支払い開始月" type="month" value={既定開始} onChange={set('開始月')}
             hint="空のままなら契約日の翌月から始めます" />
       <Text label="メモ" value={v.メモ} onChange={set('メモ')} />
+
+      <ContactFields 見出し="連帯保証人" 印="保証人" v={v} set={set}
+                     説明="本人と連絡が取れないときに頼る相手です。あとからでも入れられます。" />
+      <ContactFields 見出し="緊急連絡先" 印="緊急連絡先" v={v} set={set}
+                     説明="保証人とは別の方でもかまいません。" />
 
       {v.月々の金額 > 0 && v.回数 > 0 && (
         <Note kind="ok">

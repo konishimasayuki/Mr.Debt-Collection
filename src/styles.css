@@ -307,6 +307,21 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cust-head .btn,.cust-head .tag{flex:0 0 auto}
 .cust-sub{font-size:12.5px;color:var(--ink-2);margin-bottom:12px;display:flex;gap:14px;flex-wrap:wrap}
+
+/* 連帯保証人・緊急連絡先。入れる欄（登録・編集）と、顧客ページの見せ方 */
+.contact{border-top:1px solid var(--rule);margin:16px 0 4px;padding-top:12px}
+.contact h4{margin:0 0 2px;font-size:13.5px}
+.contact-note{margin:0 0 10px;font-size:12px;color:var(--ink-2)}
+
+/* 顧客ページ。電話が取れないときにここを見るので、番号を押せる大きさで出す */
+.kin{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;
+  margin-bottom:16px}
+.kin-c{border:1px solid var(--rule);background:var(--paper-2);padding:10px 12px}
+.kin-c h4{margin:0 0 6px;font-size:12px;color:var(--ink-2);font-weight:600}
+.kin-n{font-size:14.5px}
+.kin-n .rel{margin-left:6px;font-size:11.5px;color:var(--ink-2)}
+.kin-c a{display:inline-block;margin-top:4px;font-size:14px;font-variant-numeric:tabular-nums}
+.kin-a{margin-top:4px;font-size:12.5px;color:var(--ink-2)}
 /* 大事な数字。折り返して全部見せる（横に流して見切れさせない） */
 .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
   border:1px solid var(--rule);border-width:1px 0 0 1px;background:var(--paper-2);margin-bottom:16px}
