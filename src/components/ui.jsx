@@ -217,9 +217,9 @@ export const 間柄一覧 = ['父', '母', '配偶者', '子', '兄', '姉', '�
 export function ContactFields({ 見出し, 印, 説明, v, set }) {
   const k = (名) => `${印}${名}`;
   return (
-    <div className="contact">
+    <div className="sect contact">
       <h4>{見出し}</h4>
-      {説明 && <p className="contact-note">{説明}</p>}
+      {説明 && <p className="sect-note">{説明}</p>}
       <div className="grid2">
         <Text label="名前" value={v[k('名前')]} onChange={set(k('名前'))}
               placeholder="山田 花子" />

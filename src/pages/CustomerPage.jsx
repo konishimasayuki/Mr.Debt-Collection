@@ -32,7 +32,6 @@ export default function CustomerPage({ id, onChanged }) {
   const [editCustomer, setEditCustomer] = useState(false);
   const [振替, set振替] = useState(false);   // 口座振替の状態を変える欄
   const [メモ欄, setメモ欄] = useState(null); // メモを足そうとしている回（'通常-3' の形）
-  const [入金月, set入金月] = useState(false); // 未払いの回から先をずらす欄
   const [割り当て, set割り当て] = useState(null);
   const [賞与移動, set賞与移動] = useState(null); // 別の月へ移す賞与の回 // 割り当てを変える入金
 
@@ -114,9 +113,9 @@ export default function CustomerPage({ id, onChanged }) {
       {editCustomer && (
         <EditCustomer
           c={c}
+          支払予定={d.支払予定}
           onClose={() => setEditCustomer(false)}
           onDone={() => { setEditCustomer(false); load(); onChanged && onChanged(); }}
-          on入金月={() => { setEditCustomer(false); set入金月(true); }}
         />
       )}
 
@@ -222,11 +221,6 @@ export default function CustomerPage({ id, onChanged }) {
           onDone={() => { set賞与移動(null); load(); onChanged && onChanged(); }} />
       )}
 
-      {入金月 && (
-        <入金月変更 c={c} 支払予定={d.支払予定}
-                    onClose={() => set入金月(false)}
-                    onDone={() => { set入金月(false); load(); onChanged && onChanged(); }} />
-      )}
 
       <div className="cols">
         {/* ── 左7割：月カレンダー ── */}
@@ -800,95 +794,6 @@ function 賞与を移す({ 顧客, 回, 支払予定, onClose, onDone }) {
   );
 }
 
-// 未払いの回から先を、まとめてずらす。
-//
-// 「今月は払えないので、11月から仕切り直したい」というときに使う。
-// 払い終えた回は動かさない。入金の行き先も動かさない。
-// なぜ動かしたのかが分からないと、電話口でお客様と話が食い違うので、
-// メモは必ず書いてもらう。
-function 入金月変更({ c, 支払予定, onClose, onDone }) {
-  const 未払い = (支払予定 || []).filter((s) => s.状態 !== '入金済み');
-  const 基準 = 未払い[0] || null;
-  const [月, set月] = useState(基準 ? 基準.期日.slice(0, 7) : '');
-  const [メモ, setメモ] = useState('');
-  const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  // 何か月ずれるか。日はそのままなので、月の差だけを見る
-  const ずれ = (() => {
-    if (!基準 || !/^\d{4}-\d{2}$/.test(月)) return null;
-    const [by, bm] = 基準.期日.split('-').map(Number);
-    const [ny, nm] = 月.split('-').map(Number);
-    return (ny * 12 + nm) - (by * 12 + bm);
-  })();
-  const 新しい期日 = (() => {
-    if (!基準 || ずれ === null) return '';
-    const [y, m, dd] = 基準.期日.split('-').map(Number);
-    const t = y * 12 + (m - 1) + ずれ;
-    const y2 = Math.floor(t / 12), m2 = (t % 12) + 1;
-    return isoOf(y2, m2, Math.min(dd, new Date(y2, m2, 0).getDate()));
-  })();
-
-  const save = async () => {
-    setBusy(true); setErr('');
-    try {
-      await api.postCustomer({ id: c.id, 種類: '入金月変更', 新しい月: 月, メモ });
-      onDone();
-    } catch (e) { setErr(e.message); setBusy(false); }
-  };
-
-  return (
-    <Modal
-      title="入金月の変更"
-      onClose={onClose}
-      foot={
-        <>
-          <button className="btn" onClick={onClose} disabled={busy}>キャンセル</button>
-          <div className="right">
-            <button className="btn btn-main" onClick={save}
-                    disabled={busy || !基準 || !メモ.trim() || !ずれ}>
-              {busy ? '変えています…' : '変更する'}
-            </button>
-          </div>
-        </>
-      }
-    >
-      {!基準 ? (
-        <Note>未払いの回がありません。</Note>
-      ) : (
-        <>
-          <Note>
-            <b>未払いの回から先を、まとめてずらします。</b>
-            {' '}いま未払いなのは <b>{未払い.length}回</b>（
-            {基準.種類 === 'ボーナス' ? `賞与${基準.回次}` : `${基準.回次}回目`}・
-            {ymd(基準.期日)}）からです。
-            <br />
-            <b>払い終えた回は動きません。入金の行き先も動きません。</b>
-            金額・回数・残債も変わりません。
-          </Note>
-
-          <Text label="新しい入金月" type="month" value={月} onChange={set月}
-                hint="日はいまのままです。その月に無い日は末日にします" />
-
-          {ずれ !== null && ずれ !== 0 && (
-            <Note kind="warn">
-              {ymd(基準.期日)} → <b>{ymd(新しい期日)}</b>（
-              {ずれ > 0 ? `${ずれ}か月あと` : `${-ずれ}か月まえ`}）。
-              <br />
-              未払いの <b>{未払い.length}回</b>が、そろって同じだけずれます。
-            </Note>
-          )}
-
-          <Text label="変更の理由（必ず書いてください）" value={メモ} onChange={setメモ}
-                placeholder="例：入院のため、11月から再開すると本人と合意"
-                hint="支払いの記録にも残り、あとから誰でも読めます" />
-          <Err>{err}</Err>
-        </>
-      )}
-    </Modal>
-  );
-}
-
 // 賞与の期日を並べる。
 //
 // 回数を渡さなければ、契約の期間（初回〜最終回）に入るぶんだけ。
@@ -926,7 +831,11 @@ function 作れる賞与(c, 月ら, 日, 開始月, 回数) {
   return out;
 }
 
-function EditCustomer({ c, onClose, onDone, on入金月 }) {
+function EditCustomer({ c, 支払予定, onClose, onDone }) {
+  // 未払いの回から先をずらす欄も、ここに置く。
+  // いちばん古い未払いの回が、ずらす起点になる
+  const 未払い = (支払予定 || []).filter((s) => s.状態 !== '入金済み');
+  const 基準 = 未払い[0] || null;
   const [v, setV] = useState({
     名前: c.氏名, よみ: c.よみ, 性別: c.性別, 生年月日: c.生年月日 || '',
     住所: c.住所, 電話番号: c.電話番号, 契約日: c.契約日 || '', 車種: c.車種,
@@ -944,6 +853,8 @@ function EditCustomer({ c, onClose, onDone, on入金月 }) {
     // 「何回あるのか」がひと目で分かるようにするため
     ボーナス回数: c.ボーナス回数の指定 || c.ボーナス回数 || '',
     開始月: (c.開始日 || '').slice(0, 7), 支払日: c.支払日 || 27,
+    // 入金月の変更。はじめはいまの先頭の月を入れておく（変えなければ何も起きない）
+    入金月: 基準 ? 基準.期日.slice(0, 7) : '', 入金月の理由: '',
   });
   const [companies, setCompanies] = useState([]);
   const [err, setErr] = useState('');
@@ -959,13 +870,43 @@ function EditCustomer({ c, onClose, onDone, on入金月 }) {
   // 契約の最終回より後になる回。作らないのではなく、いつになるかを見せる
   const はみ出す = 指定 > 入る数 ? 期日ら.slice(入る数) : [];
 
+  // 入金月を何か月ずらすか。日はそのままなので、月の差だけを見る
+  const ずれ = (() => {
+    if (!基準 || !/^\d{4}-\d{2}$/.test(v.入金月)) return null;
+    const [by, bm] = 基準.期日.split('-').map(Number);
+    const [ny, nm] = v.入金月.split('-').map(Number);
+    return (ny * 12 + nm) - (by * 12 + bm);
+  })();
+  const 新しい期日 = (() => {
+    if (!基準 || !ずれ) return '';
+    const [y, m, dd] = 基準.期日.split('-').map(Number);
+    const t = y * 12 + (m - 1) + ずれ;
+    const y2 = Math.floor(t / 12), m2 = (t % 12) + 1;
+    return isoOf(y2, m2, Math.min(dd, new Date(y2, m2, 0).getDate()));
+  })();
+
   useEffect(() => { api.companies().then((d) => setCompanies(d.会社)).catch(() => {}); }, []);
   const opts = companies.map((x) => ({ value: String(x.id), label: x.名前 }));
 
   const save = async () => {
+    // 入金月を動かすなら、理由は必ず書いてもらう。
+    // なぜ動かしたのかが分からないと、電話口でお客様と話が食い違う
+    if (ずれ && !v.入金月の理由.trim()) {
+      setErr('入金月を変えるときは、変更の理由を書いてください。');
+      return;
+    }
     setBusy(true); setErr('');
-    try { await api.patchCustomer({ id: c.id, ...v }); onDone(); }
-    catch (e) { setErr(e.message); setBusy(false); }
+    try {
+      const { 入金月, 入金月の理由, ...顧客 } = v;
+      await api.patchCustomer({ id: c.id, ...顧客 });
+      // 顧客情報を先に直してから、未払いの回をずらす。
+      // 開始月も一緒に変えたときは、直したあとの期日から数える
+      if (ずれ) {
+        await api.postCustomer({ id: c.id, 種類: '入金月変更',
+          新しい月: 入金月, メモ: 入金月の理由 });
+      }
+      onDone();
+    } catch (e) { setErr(e.message); setBusy(false); }
   };
 
   return (
@@ -1001,8 +942,7 @@ function EditCustomer({ c, onClose, onDone, on入金月 }) {
         <Text label="車種" value={v.車種} onChange={set('車種')} />
       </div>
       {/* 本人と連絡が取れないときに頼る相手。新規登録と同じ並びにそろえる */}
-      <ContactFields 見出し="連帯保証人" 印="保証人" v={v} set={set}
-                     説明="空にすると消えます。" />
+      <ContactFields 見出し="連帯保証人" 印="保証人" v={v} set={set} />
       <ContactFields 見出し="緊急連絡先" 印="緊急連絡先" v={v} set={set} />
       {/* 支払いの始まり。登録のときに間違えると、期日がまるごとずれる。
           期日を動かすだけで、入金の行き先は動かさない */}
@@ -1012,15 +952,38 @@ function EditCustomer({ c, onClose, onDone, on入金月 }) {
               value={v.支払日} onChange={(x) => set('支払日')(Number(x) || '')}
               hint="その月に無い日は末日にします" />
       </div>
-      {/* 未払いの回から先だけをずらすほうは、別の欄で受ける。
-          こちらは全部の回をずらすので、取り違えないよう並べて置く */}
-      {!c.完済 && (
-        <div className="row-btn" style={{ margin: '-4px 0 12px' }}>
-          <button className="btn btn-sm" onClick={on入金月}>入金月変更</button>
-          <span style={{ fontSize: 12.5, color: 'var(--ink-2)' }}>
+      {/* 未払いの回から先だけをずらす。上の開始月は全部の回を動かすので、
+          取り違えないよう、すぐ下に並べて置く。
+          別の画面へ飛ばすと、直したい欄が2か所に分かれて分かりにくい */}
+      {!c.完済 && 基準 && (
+        <div className="sect">
+          <h4>入金月の変更</h4>
+          <p className="sect-note">
             払えなくなって仕切り直すときは、こちら。
-            <b>未払いの回から先だけ</b>をずらします（上の開始月は<b>全部の回</b>）
-          </span>
+            <b>未払いの{未払い.length}回だけ</b>をずらします（上の開始月は<b>全{c.回数}回</b>）。
+            いまの先頭は
+            {基準.種類 === 'ボーナス' ? ` 賞与${基準.回次}` : ` ${基準.回次}回目`}・
+            {ymd(基準.期日)} です。
+          </p>
+          <div className="grid2">
+            <Text label="新しい入金月" type="month" value={v.入金月}
+                  onChange={set('入金月')}
+                  hint="日はいまのままです。その月に無い日は末日にします" />
+            <Text label="変更の理由（変えるなら必ず）" value={v.入金月の理由}
+                  onChange={set('入金月の理由')}
+                  placeholder="例：入院のため、11月から再開すると本人と合意"
+                  hint="支払いの記録にも残り、あとから誰でも読めます" />
+          </div>
+          {ずれ !== null && ずれ !== 0 && (
+            <Note kind="warn">
+              {ymd(基準.期日)} → <b>{ymd(新しい期日)}</b>（
+              {ずれ > 0 ? `${ずれ}か月あと` : `${-ずれ}か月まえ`}）。
+              未払いの <b>{未払い.length}回</b>が、そろって同じだけずれます。
+              <br />
+              <b>払い終えた回は動きません。入金の行き先も動きません。</b>
+              金額・回数・残債も変わりません。
+            </Note>
+          )}
         </div>
       )}
 
