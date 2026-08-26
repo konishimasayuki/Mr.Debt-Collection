@@ -75,31 +75,37 @@ async function makeSchedule(sql, customerId, y0, m0, payDay, term, monthly) {
 // 予定は同じ schedule に入れるので、充当も残債もそのまま動く。
 
 // 契約の期間に入るボーナスの期日を、古い順に出す。
-// 初回の期日から最終回の期日までのあいだにある月だけを拾う。
+// 回数を決めていなければ、初回の期日から最終回の期日までのあいだの月だけを拾う。
 //
 // 開始（'YYYY-MM-DD'）を渡すと、その日より前は作らない。
 // 契約の途中から賞与を入れる方がいるため。渡さなければ契約の初回から。
 //
-// 回数を渡すと、古いほうからその回数ぶんだけにする。
-// 「7月と12月だが、賞与は6回ぶんだけ」という契約があるため。
+// 回数を渡すと、ちょうどその回数ぶんを作る。契約の最終回を越えてもよい。
+// 「7月と12月だが、賞与は6回ぶんだけ」という契約もあれば、
+// 「都合で8回になった」という契約もある。後者で1回落とすと債権が消える。
 function bonusDues(y0, m0, payDay, term, months, day, 開始, 回数) {
   const 月 = [...new Set((months || []).map(Number).filter((m) => m >= 1 && m <= 12))]
     .sort((a, b) => a - b);
   if (!月.length || !day) return [];
   const 初回 = 開始 && 開始 > dueOf(y0, m0, payDay, 1) ? 開始 : dueOf(y0, m0, payDay, 1);
   const 最終 = dueOf(y0, m0, payDay, term);
+  const n = Number(回数) || 0;
   const out = [];
   const 始 = y0 * 12 + (m0 - 1);
   const 終 = 始 + (term - 1);
-  for (let t = 始; t <= 終; t++) {
+  // 回数を決めたときは、契約の最終回より後になっても作る。
+  // ボーナスは払う約束をしたお金。入る月が足りないからと落とすと、
+  // 台帳から債権が消える。期日が後ろにずれるだけで、金額は変わらない。
+  const 果て = n > 0 ? 終 + 12 * 30 : 終;
+  for (let t = 始; t <= 果て; t++) {
     const y = Math.floor(t / 12), m = (t % 12) + 1;
     if (!月.includes(m)) continue;
     const d = `${y}-${pad(m)}-${pad(Math.min(day, lastDay(y, m)))}`;
-    // 契約の外に出る日は入れない（初回より前・最終回より後）
-    if (d < 初回 || d > 最終) continue;
+    if (d < 初回) continue;                 // 初回より前は作らない
+    if (n <= 0 && d > 最終) continue;       // 回数を決めていなければ契約の期間ぶんだけ
     out.push(d);
+    if (n > 0 && out.length >= n) break;
   }
-  const n = Number(回数) || 0;
   return n > 0 ? out.slice(0, n) : out;
 }
 

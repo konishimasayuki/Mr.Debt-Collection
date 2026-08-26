@@ -77,10 +77,17 @@ check('変える前は押せない', await m2.locator('.modal-foot .btn-main').i
 
 await m2.locator('input[type=month]').fill('2035-01');
 await p.waitForTimeout(300);
-check('契約の外は断る',
-  (await m2.locator('.note.warn').innerText()).includes('契約の外へは移せません'),
+check('最終回より後でも移せると分かる',
+  (await m2.locator('.note.warn').innerText()).includes('より後になります'),
   await m2.locator('.note.warn').innerText());
-check('外なら押せない', await m2.locator('.modal-foot .btn-main').isDisabled());
+check('最終回より後でも押せる', !(await m2.locator('.modal-foot .btn-main').isDisabled()));
+
+await m2.locator('input[type=month]').fill('2020-01');
+await p.waitForTimeout(300);
+check('契約の初回より前は断る',
+  (await m2.locator('.note.warn').innerText()).includes('より前へは移せません'),
+  await m2.locator('.note.warn').innerText());
+check('前なら押せない', await m2.locator('.modal-foot .btn-main').isDisabled());
 
 await m2.locator('input[type=month]').fill('2026-09');
 await p.waitForTimeout(300);
