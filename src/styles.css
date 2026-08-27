@@ -454,6 +454,16 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
   .cards .grp-row th{display:block;border:0;border-bottom:1px solid var(--rule-strong);
     padding:0 2px 5px;background:none;scroll-margin-top:calc(var(--head-h,0px) + 56px)}
   .cards{border:0;background:none}
+  /* 総額は札にせず、1本の帯にして上に置く */
+  .cards .sum{display:block;margin-bottom:12px}
+  .cards .sum-row{display:flex;align-items:baseline;justify-content:space-between;
+    gap:12px;flex-wrap:wrap;border:1px solid var(--rule);background:var(--paper);
+    margin:0;padding:10px 14px;box-shadow:none}
+  .cards .sum-row th{display:block;border:0;background:none;padding:0}
+  .cards .sum-row th span{display:block;margin:2px 0 0}
+  .cards .sum-row td{display:block;border:0;background:none;padding:0;
+    text-align:right;font-size:18px}
+  .cards .sum-row td::before{display:none}
   /* 札。名前を見出しにして、下に項目を並べる */
   .cards tbody tr{border:1px solid var(--rule);background:var(--paper);
     margin-bottom:10px;padding:0;box-shadow:0 1px 0 rgba(22,24,26,.04)}
@@ -572,6 +582,15 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
   position:static;text-align:left}
 .grp-row th span{margin-left:10px;font-size:11.5px;color:var(--ink-3);
   letter-spacing:0;font-weight:400}
+/* 残債金額の総額。表の見出しのすぐ下に1行だけ置く。
+   経営者がいちばん見たい数字なので、名前を探しに来たときにも目に入る */
+.sum-row th{background:var(--paper-2);border-bottom:1px solid var(--rule-strong);
+  font-size:12.5px;color:var(--ink-2);font-weight:600;padding:9px 12px;text-align:left}
+.sum-row th span{margin-left:10px;font-size:11.5px;color:var(--ink-3);font-weight:400}
+.sum-row td{background:var(--paper-2);border-bottom:1px solid var(--rule-strong);
+  padding:9px 12px;font-size:16px;font-weight:700;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+
 .yomi{margin-left:8px;color:var(--ink-3);font-size:12px}
 td.nm .tag{margin-left:8px;vertical-align:2px}
 .none{color:var(--ink-3)}

@@ -44,6 +44,13 @@ export default function Customers({ onOpen, onChanged }) {
   const shown = (rows || []).filter((r) => !k
     || norm(r.氏名).includes(k) || norm(r.よみ).includes(k) || norm(r.車種).includes(k));
 
+  // 残債金額の総額。いま表に出ている人だけを足す（検索で絞れば、そのぶんだけ）。
+  // 引き上げた方は入れない。車を引き上げて終わりにしており、
+  // これから取り立てるお金ではないため。完済の方は残債が0なので足しても変わらない。
+  const 残債の人 = shown.filter((r) => r.終了理由 !== '引き上げ');
+  const 残債の総額 = 残債の人.reduce((a, r) => a + (r.残債金額 || 0), 0);
+  const 引き上げ数 = shown.length - 残債の人.length;
+
   // 行ごとにまとめる（サーバーがあいうえお順で返しているので、並べ直さない）
   const 組 = 行.map((g) => ({ 行: g, 人: shown.filter((r) => r.索引 === g) }))
     .filter((g) => g.人.length);
@@ -173,6 +180,21 @@ export default function Customers({ onOpen, onChanged }) {
                 <th className="num">残債金額</th>
               </tr>
             </thead>
+            {/* 残債の総額。経営者がいちばん見たい数字なので、
+                名前を探しに来たときにも目に入る場所に置く。
+                検索で絞れば、絞ったぶんの総額になる */}
+            <tbody className="sum">
+              <tr className="sum-row">
+                <th colSpan={6}>
+                  残債金額の総額
+                  <span>
+                    {残債の人.length}名ぶん
+                    {引き上げ数 > 0 && `（引き上げ ${引き上げ数}名は除く）`}
+                  </span>
+                </th>
+                <td className="num">{yen(残債の総額)}円</td>
+              </tr>
+            </tbody>
             {組.map(({ 行: g, 人 }) => (
               <tbody key={g}>
                 {/* 行の見出し。1つの表に差し込むので、列の幅がそろう */}

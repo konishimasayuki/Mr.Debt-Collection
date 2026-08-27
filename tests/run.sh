@@ -12,3 +12,4 @@ node tests/bm-seed.mjs >/dev/null 2>&1; 出す tests/t-bmoveui.mjs
 node tests/bc-seed.mjs >/dev/null 2>&1; 出す tests/t-bcountui.mjs
 node tests/kin-seed.mjs >/dev/null 2>&1; 出す tests/t-kinui.mjs
 node tests/pm-seed.mjs  >/dev/null 2>&1; 出す tests/t-pmui.mjs
+node tests/sum-seed.mjs >/dev/null 2>&1; 出す tests/t-sumui.mjs
