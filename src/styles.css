@@ -239,6 +239,8 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .ex-none{margin:0;padding:14px;color:var(--ink-2);font-size:13px}
 /* 賞与の回を開いたときに出る、移す入口。メモの欄と同じ並びに置く */
 .rec-move{flex:0 0 auto}
+/* まだ入金の無い回を開いたときに出る、金額を変える入口 */
+.rec-amt{flex:0 0 auto}
 
 /* 回数の増減。押して増やせるようにする（打ち直さなくて済む） */
 .cnt-pick{display:flex;align-items:center;gap:6px}
