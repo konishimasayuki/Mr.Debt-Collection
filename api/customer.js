@@ -755,6 +755,77 @@ export default async (req, res) => {
         return ok(res, { done: true, 前, 後, ずれ, 件数: 未払い.length });
       }
 
+      // ── その回から先の金額を変える ────────────────
+      //
+      // 「来月から月々の額を下げて払う」と決め直したときに使う。
+      // 月々の金額そのものは顧客編集では変えられない。変えると支払予定を
+      // まるごと作り直すことになり、すでに充てた入金の行き先が消えるため。
+      // ここは作り直さない。**まだ入金の入っていない回の金額だけ**を書き換える。
+      // 払い終えた回は1円も動かない。
+      if (b.種類 === '金額変更') {
+        const no = Number(b.回次) || 0;
+        const kind = b.回の種類 === 'ボーナス' ? 'ボーナス' : '通常';
+        const 額 = Math.round(Number(b.新しい金額)) || 0;
+        const メモ = String(b.メモ || '').trim();
+        if (!no) return bad(res, 'どの回かを指定してください。');
+        if (額 <= 0) return bad(res, '新しい金額を入れてください。');
+        if (額 > 100000000) return bad(res, '金額が大きすぎます。');
+        // なぜ金額が変わったのかが分からないと、電話口で話が食い違う
+        if (!メモ) return bad(res, '変更の理由をメモに書いてください。');
+
+        // その回から先を、期日の順に見る。入金の入っている回は触らない
+        const 先 = await sql(
+          `SELECT s.id, s.no, s.planned_amount,
+                  to_char(s.due_date,'YYYY-MM-DD') AS due,
+                  COALESCE((SELECT sum(a.amount) FROM allocation a
+                             WHERE a.schedule_id = s.id),0)::int AS paid
+             FROM schedule s
+            WHERE s.customer_id=$1 AND s.kind=$2 AND s.no >= $3
+            ORDER BY s.no`, [id, kind, no]);
+        if (!先.length) return bad(res, 'その回が見つかりません。');
+        if (先[0].no !== no) return bad(res, 'その回が見つかりません。');
+        if (先[0].paid > 0) {
+          return bad(res, '入金の入っている回の金額は変えられません。',
+            'まだ入金の無い回を選んでください');
+        }
+
+        const 変える = 先.filter((s2) => s2.paid <= 0);
+        const 飛ばす = 先.length - 変える.length;
+        const 前の額 = 先[0].planned_amount;
+        if (前の額 === 額 && !飛ばす) return bad(res, '同じ金額です。変わりません。');
+
+        await sql('UPDATE schedule SET planned_amount=$1 WHERE id = ANY($2::int[])',
+          [額, 変える.map((s2) => s2.id)]);
+
+        // 支払総額は、支払予定を足し直して出す。
+        // 手で計算すると、ボーナスの回や前の変更ぶんとずれる
+        const 総 = (await sql(
+          `SELECT COALESCE(sum(planned_amount),0)::int AS n FROM schedule
+            WHERE customer_id=$1`, [id]))[0].n;
+        // これからの月々の額（賞与なら1回あたりの賞与額）も、この額にそろえる。
+        // 画面のあちこちに出るので、古い額のままだと電話口で食い違う
+        await sql(
+          `UPDATE customer SET total_amount=$1,
+             ${kind === 'ボーナス' ? 'bonus_amount' : 'monthly_amount'}=$2
+           WHERE id=$3`, [総, 額, id]);
+
+        // 金額が変わると、どの回まで埋まるかが変わる。まるごと詰め直す
+        await 詰め直す(sql, id);
+
+        const 名 = 回の名(no, kind);
+        const 文 = `${名}から先の金額を ${yen(前の額)}円 → ${yen(額)}円 に変更`
+          + `（${変える.length}回）。${メモ}`;
+        await 回メモを足す(sql, id, no, 文, who, true, null, kind);
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'記録',$3,$4)`,
+          [id, who,
+           `${名}から先の金額を変更した：${yen(前の額)}円 → ${yen(額)}円`
+             + `（${変える.length}回${飛ばす ? `。入金のある${飛ばす}回は触らず` : ''}）`,
+           メモ]);
+        return ok(res, { done: true, 前: 前の額, 後: 額,
+          件数: 変える.length, 飛ばした: 飛ばす, 支払総額: 総 });
+      }
+
       if (b.種類 === '回メモ') {
         const no = Number(b.回次);
         const kind = b.回の種類 === 'ボーナス' ? 'ボーナス' : '通常';

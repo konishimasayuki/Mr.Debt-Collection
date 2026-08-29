@@ -33,7 +33,8 @@ export default function CustomerPage({ id, onChanged }) {
   const [振替, set振替] = useState(false);   // 口座振替の状態を変える欄
   const [メモ欄, setメモ欄] = useState(null); // メモを足そうとしている回（'通常-3' の形）
   const [割り当て, set割り当て] = useState(null);
-  const [賞与移動, set賞与移動] = useState(null); // 別の月へ移す賞与の回 // 割り当てを変える入金
+  const [賞与移動, set賞与移動] = useState(null);
+  const [金額変更, set金額変更] = useState(null); // その回から先の金額を変える // 別の月へ移す賞与の回 // 割り当てを変える入金
 
   const load = useCallback(() => {
     setErr('');
@@ -221,6 +222,12 @@ export default function CustomerPage({ id, onChanged }) {
           onDone={() => { set賞与移動(null); load(); onChanged && onChanged(); }} />
       )}
 
+      {金額変更 && (
+        <金額を変える 顧客={c} 回={金額変更} 支払予定={d.支払予定}
+          onClose={() => set金額変更(null)}
+          onDone={() => { set金額変更(null); load(); onChanged && onChanged(); }} />
+      )}
+
 
       <div className="cols">
         {/* ── 左7割：月カレンダー ── */}
@@ -387,10 +394,13 @@ export default function CustomerPage({ id, onChanged }) {
                   {/* ボーナスの回は、別の月へ移せる。
                       「今年の賞与は出なかったので来年へ」というときのため。
                       押す場所は、メモの欄と同じ並びにそろえた */}
+                  {/* まだ入金の入っていない回だけ、そこから先の金額を変えられる。
+                      入金の入った回を変えると、行き先とお金が食い違う */}
                   {開いている && (
                     <RecMemoAdd
                       顧客id={c.id} 回次={s.回次} 回の種類={s.種類}
                       移す={ボ ? () => set賞与移動(s) : null}
+                      金額={s.入金 <= 0 ? () => set金額変更(s) : null}
                       onClose={() => setメモ欄(null)}
                       onDone={() => { load(); onChanged && onChanged(); }}
                     />
@@ -413,7 +423,7 @@ export default function CustomerPage({ id, onChanged }) {
 // ── その回にメモを足す欄（回を押すと下に出る）───────────
 // 電話を切った直後に、その回のことをその場で書き足せるようにする。
 // 書いた日と時刻はサーバーが入れる（created_at）。人が入れ間違えない。
-function RecMemoAdd({ 顧客id, 回次, 回の種類, 移す, onClose, onDone }) {
+function RecMemoAdd({ 顧客id, 回次, 回の種類, 移す, 金額, onClose, onDone }) {
   const 回の名 = `${回の種類 === 'ボーナス' ? '賞与' : ''}${回次}回目`;
   const [本文, set本文] = useState('');
   const [busy, setBusy] = useState(false);
@@ -452,6 +462,11 @@ function RecMemoAdd({ 顧客id, 回次, 回の種類, 移す, onClose, onDone })
         {移す && (
           <button className="btn btn-sm rec-move" onClick={移す} disabled={busy}>
             この賞与を別の月へ移す
+          </button>
+        )}
+        {金額 && (
+          <button className="btn btn-sm rec-amt" onClick={金額} disabled={busy}>
+            この回から先の金額を変える
           </button>
         )}
         <span className="hint">書いた日と時刻も一緒に残ります。</span>
@@ -794,6 +809,98 @@ function 賞与を移す({ 顧客, 回, 支払予定, onClose, onDone }) {
   );
 }
 
+// ── その回から先の金額を変える ────────────────────
+//
+// 「来月から月々の額を下げて払う」と決め直したときに使う。
+// 顧客情報の編集では月々の金額を変えられない。変えると支払予定を
+// まるごと作り直すことになり、すでに充てた入金の行き先が消えるため。
+// ここは作り直さない。**まだ入金の入っていない回の金額だけ**を書き換える。
+// 払い終えた回は1円も動かない。
+function 金額を変える({ 顧客, 回, 支払予定, onClose, onDone }) {
+  const [額, set額] = useState(回.請求);
+  const [メモ, setメモ] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const ボ = 回.種類 === 'ボーナス';
+  const 名 = ボ ? `賞与${回.回次}` : `${回.回次}回目`;
+
+  // 変わるのは、同じ種類の・この回から先の・入金の入っていない回だけ
+  const 先 = (支払予定 || []).filter((s) => s.種類 === 回.種類 && s.回次 >= 回.回次);
+  const 変える = 先.filter((s) => s.入金 <= 0);
+  const 飛ばす = 先.length - 変える.length;
+  const 新しい額 = Number(額) || 0;
+  const 変わる = 新しい額 > 0 && 新しい額 !== 回.請求;
+  // 支払総額がいくらになるか。押す前に見せる
+  const いまの総額 = (支払予定 || []).reduce((a, s) => a + s.請求, 0);
+  const 新しい総額 = いまの総額 + 変える.reduce((a, s) => a + (新しい額 - s.請求), 0);
+  const 入金合計 = (支払予定 || []).reduce((a, s) => a + s.入金, 0);
+
+  const save = async () => {
+    setBusy(true); setErr('');
+    try {
+      await api.postCustomer({ id: 顧客.id, 種類: '金額変更',
+        回次: 回.回次, 回の種類: 回.種類, 新しい金額: 新しい額, メモ });
+      onDone();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <Modal
+      title={`${名}から先の金額を変える`}
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn" onClick={onClose} disabled={busy}>キャンセル</button>
+          <div className="right">
+            <button className="btn btn-main" onClick={save}
+                    disabled={busy || !変わる || !メモ.trim()}>
+              {busy ? '変えています…' : '変更する'}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <Note>
+        <b>{名}（{ymd(回.期日)}）から先の {変える.length}回</b>を、
+        まとめて同じ金額にします。
+        <br />
+        <b>払い終えた回は1円も動きません。</b>期日も回数も変わりません。
+        {ボ
+          ? ' 通常の回には影響しません。'
+          : 顧客.ボーナス回数 > 0 ? ' ボーナスの回には影響しません。' : ''}
+      </Note>
+
+      <Money label="新しい金額（1回あたり）" value={額} onChange={set額}
+             placeholder={String(回.請求)}
+             hint={`いまは ${yen(回.請求)}円です`} />
+
+      {変わる && (
+        <Note kind="warn">
+          <b>{yen(回.請求)}円 → {yen(新しい額)}円</b>（
+          {新しい額 > 回.請求
+            ? `1回あたり ${yen(新しい額 - 回.請求)}円 増える`
+            : `1回あたり ${yen(回.請求 - 新しい額)}円 減る`}）。
+          <br />
+          支払総額は <b>{yen(いまの総額)}円 → {yen(新しい総額)}円</b>、
+          残債は <b>{yen(Math.max(0, いまの総額 - 入金合計))}円 →{' '}
+          {yen(Math.max(0, 新しい総額 - 入金合計))}円</b> になります。
+          {飛ばす > 0 && (
+            <>
+              <br />
+              <b>入金の入っている{飛ばす}回は、そのままにします。</b>
+            </>
+          )}
+        </Note>
+      )}
+
+      <Text label="変更の理由（必ず書いてください）" value={メモ} onChange={setメモ}
+            placeholder="例：収入が減ったため、来月から2万円に下げると本人と合意"
+            hint="支払いの記録にも残り、あとから誰でも読めます" />
+      <Err>{err}</Err>
+    </Modal>
+  );
+}
+
 // 賞与の期日を並べる。
 //
 // 回数を渡さなければ、契約の期間（初回〜最終回）に入るぶんだけ。
@@ -1126,7 +1233,10 @@ function EditCustomer({ c, 支払予定, onClose, onDone }) {
         月々の金額 {yen(c.月々の金額)}円 ／ 全{c.回数}回。
         <b>この2つはここでは変えられません。</b>
         変えると支払予定を作り直すことになり、すでに充てた入金の行き先が消えるためです。
-        直す必要があるときは声をかけてください。
+        <br />
+        <b>これからの金額を下げる（上げる）ときは、支払いの記録から。</b>
+        まだ入金の無い回を押すと「この回から先の金額を変える」が出ます。
+        払い終えた回は動きません。
         <br />
         支払い開始月と毎月の支払日は、上で変えられます。
         <b>期日をずらすだけなので、入金の行き先は消えません。</b>
