@@ -11,14 +11,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, yen, ymd, md } from '../api';
 import { Err, Empty, Note, Loading } from '../components/ui';
 
-// 回収の進み具合の色。7割を切ったら赤、9割以上なら緑。
-// 出す数字は金額に変えたが、色の付け方は件数のままにする。
-// 「10件中9件入っている」ほうが、電話をかける相手の数に直結するため
-const 進み具合の色 = (回収済み, 全件) => {
-  if (!全件) return 'good';
-  const n = Math.round((回収済み / 全件) * 100);
-  return n >= 90 ? 'good' : n < 70 ? 'bad' : '';
-};
+// 回収率の色。7割を切ったら赤、9割以上なら緑
+const 率の色 = (n) => (n >= 90 ? 'good' : n < 70 ? 'bad' : '');
 
 export default function Dashboard({ onOpen }) {
   const [d, setD] = useState(null);
@@ -87,12 +81,7 @@ export default function Dashboard({ onOpen }) {
         <div className="sec dash-m" key={m.年月}>
           <div className="dash-h">
             <h3>{m.見出し}</h3>
-            {/* いちばん大きく出すのは「その月に入るはずだった額」。
-                払い終えた回も足した、その月まるごとの金額 */}
-            <span className={'dash-p ' + 進み具合の色(m.回収済み, m.全件)}>
-              {yen(m.予定回収額)}円
-            </span>
-            <span className="dash-x">予定回収額</span>
+            <span className={'dash-p ' + 率の色(m.率)}>{m.率}%</span>
             <span className="dash-x">{m.回収済み}/{m.全件} 回収</span>
             <span className="dash-x">未回収 <b>{yen(m.未回収額)}円</b></span>
             {m.後回し数 > 0 && <span className="dash-x">後回し {m.後回し数}件</span>}
