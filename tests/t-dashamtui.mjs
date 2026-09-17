@@ -49,29 +49,49 @@ check('翌月は0/2回収', 二.includes('0/2 回収'), 二);
 //
 // ここが抜けていて不具合を出した。9月17日に見ると、支払日が今日より後の回が
 // 落ちて「9月分 20,000円」と出ていた。予定回収額は**その月まるごと**。
-console.log('■ 今月は、まだ期日の来ていない回も予定回収額に入る');
+console.log('■ 今月は、期日が来たぶんと期日前を並べて出す');
 const 今 = p.locator('.dash-m').last().locator('.dash-h');
 const 今文 = await 今.innerText();
-check('月まるごとの170,000円が出る', 今文.includes('170,000円'), 今文);
-check('期日の来た回だけの20,000円ではない',
-  !/予定回収額[\s\S]*?^20,000円/m.test(今文)
-    && (await 今.locator('.dash-p').innerText()).includes('170,000'),
+check('大きい数字は期日の来たぶん',
+  (await 今.locator('.dash-p').innerText()).includes('20,000'),
   await 今.locator('.dash-p').innerText());
-check('期日前の額が出る', 今文.includes('期日前') && 今文.includes('150,000円'), 今文);
-check('期日前の件数が出る', 今文.includes('3件'), 今文);
+check('月まるごとの170,000円を大きく出してはいない',
+  !(await 今.locator('.dash-p').innerText()).includes('170,000'),
+  await 今.locator('.dash-p').innerText());
+check('隣に期日前の額が並ぶ', (await 今.locator('.dash-q').count()) === 1);
+check('足し算の形になっている',
+  (await 今.locator('.dash-q').innerText()).startsWith('＋'),
+  await 今.locator('.dash-q').innerText());
+check('期日前の額が出る', (await 今.locator('.dash-q').innerText()).includes('150,000円'),
+  await 今.locator('.dash-q').innerText());
+check('期日前の件数が出る', (await 今.locator('.dash-q').innerText()).includes('3件'),
+  await 今.locator('.dash-q').innerText());
+check('ひとまとまりで折り返さない', await p.evaluate(() => {
+  const q = [...document.querySelectorAll('.dash-m .dash-h .dash-q')].pop();
+  return q.getClientRects().length === 1;
+}));
 check('未回収は期日の来た回だけ', 今文.includes('未回収') && 今文.includes('20,000円'), 今文);
-check('予定＝期日前＋未回収', await p.evaluate(() => {
+check('足すと月の合計になると書いてある',
+  (await 今.locator('.dash-sum').innerText()).includes('170,000円'),
+  await 今.locator('.dash-sum').innerText());
+check('足されることが分かる',
+  (await 今.locator('.dash-sum').innerText()).includes('予定回収額へ足されます'),
+  await 今.locator('.dash-sum').innerText());
+check('予定＋期日前＝月の合計', await p.evaluate(() => {
   const h = [...document.querySelectorAll('.dash-m .dash-h')].pop();
-  const 金 = (s) => Number(((h.innerText.match(s) || [0, '0'])[1]).replace(/,/g, ''));
-  const 予定 = Number(h.querySelector('.dash-p').innerText.replace(/[^0-9]/g, ''));
-  return 予定 === 金(/期日前\s*([\d,]+)円/) + 金(/未回収\s*([\d,]+)円/);
+  const 数 = (s) => Number(s.replace(/[^0-9]/g, ''));
+  const 予定 = 数(h.querySelector('.dash-p').innerText);
+  const 期日前 = 数(h.querySelector('.dash-q').innerText.replace(/（.*/, ''));
+  const 合計 = 数((h.querySelector('.dash-sum').innerText.match(/合計は\s*([\d,]+)円/) || [])[1] || '0');
+  return 予定 + 期日前 === 合計;
 }));
 await p.locator('.dash-m').last().locator('.dash-h').screenshot({ path: '/tmp/da-3.png' });
 
 console.log('■ 期日の全部過ぎた月には、期日前を出さない');
-check('先々月に期日前は出ない',
-  !(await p.locator('.dash-m').first().locator('.dash-h').innerText()).includes('期日前'),
-  await p.locator('.dash-m').first().locator('.dash-h').innerText());
+const 先 = p.locator('.dash-m').first().locator('.dash-h');
+check('先々月に期日前は出ない', (await 先.locator('.dash-q').count()) === 0,
+  await 先.innerText());
+check('先々月に足し算の説明は出ない', (await 先.locator('.dash-sum').count()) === 0);
 
 console.log('■ スマホでも横にはみ出さない');
 const sp = await 入る(b, 390, 844);
