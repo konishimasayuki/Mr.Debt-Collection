@@ -698,6 +698,14 @@ button.att-i:hover{border-color:var(--indigo)}
 .dash-p.bad{color:var(--overdue)}
 .dash-x{font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .dash-x b{color:var(--ink);font-size:13.5px}
+/* まだ支払日が来ていないぶん。期日が来たぶんの隣に、薄く並べる。
+   同じ濃さにすると、どちらが「いま追いかける額」か分からなくなる */
+.dash-q{font-size:12.5px;color:var(--ink-3);white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.dash-q b{font-size:17px;color:var(--ink-2);margin:0 2px}
+/* 足し算の説明。見出しの行の下に、横いっぱいで落とす */
+.dash-sum{flex:1 1 100%;font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.dash-sum b{color:var(--ink-2);font-variant-numeric:tabular-nums}
 
 /* 未回収の顧客の行。押すと顧客ページへ */
 .dash-rows{display:flex;flex-direction:column}
@@ -736,6 +744,7 @@ button.att-i:hover{border-color:var(--indigo)}
   .dash-amt i{display:inline;margin-left:8px}
   .dash-h{gap:10px}
   .dash-p{font-size:18px}
+  .dash-q b{font-size:15px}
   /* 折りたたみの見出し。説明は次の行に落とす */
   .dash-fold{flex-wrap:wrap}
   .dash-fold i{flex:1 1 100%}

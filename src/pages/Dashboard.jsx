@@ -87,23 +87,31 @@ export default function Dashboard({ onOpen }) {
         <div className="sec dash-m" key={m.年月}>
           <div className="dash-h">
             <h3>{m.見出し}</h3>
-            {/* いちばん大きく出すのは「その月に入るはずだった額」。
-                払い終えた回も足した、その月まるごとの金額 */}
+            {/* いちばん大きく出すのは「いまの時点で期日が来たぶん」。
+                隣に、まだ支払日が来ていないぶんを並べる。
+                日が進むと、右から左へ移っていく */}
             <span className={'dash-p ' + 進み具合の色(m.回収済み, m.全件)}>
               {yen(m.予定回収額)}円
             </span>
             <span className="dash-x">予定回収額</span>
-            <span className="dash-x">{m.回収済み}/{m.全件} 回収</span>
-            {/* 今月は、まだ期日の来ていない回がある。
-                予定回収額には足してあるので、いくらぶんかを添える。
-                添えないと「予定より未回収が少ない」理由が分からない */}
             {m.期日前額 > 0 && (
-              <span className="dash-x">
-                期日前 <b>{yen(m.期日前額)}円</b>（{m.期日前件数}件）
+              /* ひとまとまりにする。バラバラに置くと、狭い画面で
+                 「＋」だけが行末に残って何の足し算か分からなくなる */
+              <span className="dash-q">
+                ＋ <b>{yen(m.期日前額)}円</b> 期日前（{m.期日前件数}件）
               </span>
             )}
+            <span className="dash-x">{m.回収済み}/{m.全件} 回収</span>
             <span className="dash-x">未回収 <b>{yen(m.未回収額)}円</b></span>
             {m.後回し数 > 0 && <span className="dash-x">後回し {m.後回し数}件</span>}
+            {/* 期日が来たぶんと、まだ来ていないぶんが、どう足されるか。
+                「予定回収額が月の総額より少ない」理由がここで分かる */}
+            {m.期日前額 > 0 && (
+              <span className="dash-sum">
+                支払日が来るたびに、期日前のぶんが予定回収額へ足されます。
+                {' '}この月の合計は <b>{yen(m.月の合計)}円</b>です。
+              </span>
+            )}
           </div>
 
           <div className="dash-rows">
