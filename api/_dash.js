@@ -43,19 +43,14 @@ export async function ダッシュボード(sql) {
   充当.forEach((a) => (入金額[a.schedule_id] = a.n));
 
   // ── 月ごとにまとめる ──────────────────────
-  const 月ごと = new Map();   // '2026-06' → {全件, 回収済み, 予定額, 未回収額, 行:[…]}
+  const 月ごと = new Map();   // '2026-06' → {全件, 回収済み, 未回収額, 行:[…]}
   for (const s of 予定) {
     const c = 顧客ごと[s.customer_id];
     if (!c) continue;                       // 引き上げ済み・テスト顧客
     const ym = String(isoOf(s.due_date)).slice(0, 7);
-    if (!月ごと.has(ym)) {
-      月ごと.set(ym, { 全件: 0, 回収済み: 0, 予定額: 0, 未回収額: 0, 行: [] });
-    }
+    if (!月ごと.has(ym)) 月ごと.set(ym, { 全件: 0, 回収済み: 0, 未回収額: 0, 行: [] });
     const m = 月ごと.get(ym);
     m.全件++;
-    // その月に入るはずだった額。**払い終えた回も足す**。
-    // 未回収額だけでは「もともといくらの月なのか」が分からない
-    m.予定額 += s.planned_amount;
     if (s.state === '入金済み') { m.回収済み++; continue; }
     const 入った = 入金額[s.id] || 0;
     const 残り = Math.max(0, s.planned_amount - 入った);
@@ -127,8 +122,7 @@ export async function ダッシュボード(sql) {
     月.push({
       年月: ym, 見出し: 月の見出し(ym),
       全件: m.全件, 回収済み: m.回収済み,
-      // その月に入るはずだった額と、まだ入っていない額
-      予定回収額: m.予定額,
+      率: m.全件 ? Math.round((m.回収済み / m.全件) * 100) : 100,
       未回収額: m.未回収額,
       後回し数: m.行.filter((r) => r.後回し).length,
       行: m.行,
