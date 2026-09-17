@@ -40,10 +40,38 @@ check('未回収より予定のほうが大きい', await p.evaluate(() => {
 
 console.log('■ 月ごとに出る');
 const 月数 = await p.locator('.dash-m').count();
-check('2か月ぶん出ている', 月数 === 2, 月数);
+check('3か月ぶん出ている', 月数 === 3, 月数);
 const 二 = await p.locator('.dash-m').nth(1).locator('.dash-h').innerText();
 check('翌月も予定回収額が出る', 二.includes('80,000円') && 二.includes('予定回収額'), 二);
 check('翌月は0/2回収', 二.includes('0/2 回収'), 二);
+
+// ── 今月ぶん ──────────────────────────────
+//
+// ここが抜けていて不具合を出した。9月17日に見ると、支払日が今日より後の回が
+// 落ちて「9月分 20,000円」と出ていた。予定回収額は**その月まるごと**。
+console.log('■ 今月は、まだ期日の来ていない回も予定回収額に入る');
+const 今 = p.locator('.dash-m').last().locator('.dash-h');
+const 今文 = await 今.innerText();
+check('月まるごとの170,000円が出る', 今文.includes('170,000円'), 今文);
+check('期日の来た回だけの20,000円ではない',
+  !/予定回収額[\s\S]*?^20,000円/m.test(今文)
+    && (await 今.locator('.dash-p').innerText()).includes('170,000'),
+  await 今.locator('.dash-p').innerText());
+check('期日前の額が出る', 今文.includes('期日前') && 今文.includes('150,000円'), 今文);
+check('期日前の件数が出る', 今文.includes('3件'), 今文);
+check('未回収は期日の来た回だけ', 今文.includes('未回収') && 今文.includes('20,000円'), 今文);
+check('予定＝期日前＋未回収', await p.evaluate(() => {
+  const h = [...document.querySelectorAll('.dash-m .dash-h')].pop();
+  const 金 = (s) => Number(((h.innerText.match(s) || [0, '0'])[1]).replace(/,/g, ''));
+  const 予定 = Number(h.querySelector('.dash-p').innerText.replace(/[^0-9]/g, ''));
+  return 予定 === 金(/期日前\s*([\d,]+)円/) + 金(/未回収\s*([\d,]+)円/);
+}));
+await p.locator('.dash-m').last().locator('.dash-h').screenshot({ path: '/tmp/da-3.png' });
+
+console.log('■ 期日の全部過ぎた月には、期日前を出さない');
+check('先々月に期日前は出ない',
+  !(await p.locator('.dash-m').first().locator('.dash-h').innerText()).includes('期日前'),
+  await p.locator('.dash-m').first().locator('.dash-h').innerText());
 
 console.log('■ スマホでも横にはみ出さない');
 const sp = await 入る(b, 390, 844);
