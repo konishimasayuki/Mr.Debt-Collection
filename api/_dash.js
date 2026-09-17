@@ -8,7 +8,7 @@
 // ・**期日が今日以前の回だけ**を数える。まだ期日の来ていない回は「未回収」ではない
 // ・**100%回収できた月は出さない。**残っている月は、どれだけ古くても出し続ける
 // ・車を引き上げた方と、動作を試すための顧客は外す。経営者が見る数字なので混ぜない
-import { isoOf, today, 督促の様子 } from './_lib.js';
+import { isoOf, today, lastDay, 督促の様子 } from './_lib.js';
 
 // 「2026-06」→「2026年6月分」
 const 月の見出し = (ym) => {
@@ -19,9 +19,14 @@ const 月の見出し = (ym) => {
 export async function ダッシュボード(sql) {
   const t = today();
 
-  // 4つは互いに関係がないので同時に投げる。
-  // 順に待つと、遠くのデータベースへの往復が4つぶん足し算になる。
-  const [顧客, 予定, 充当, 約束] = await Promise.all([
+  // 今月の末日。予定回収額は「その月まるごと」で出すので、
+  // まだ期日の来ていない今月ぶんまで数える必要がある
+  const [ty, tm] = t.split('-').map(Number);
+  const 今月末 = `${ty}-${String(tm).padStart(2, '0')}-${lastDay(ty, tm)}`;
+
+  // 5つは互いに関係がないので同時に投げる。
+  // 順に待つと、遠くのデータベースへの往復が5つぶん足し算になる。
+  const [顧客, 予定, 充当, 約束, 月まるごと] = await Promise.all([
     // 車を引き上げた方は督促しない。試すための顧客は数字に混ぜない
     sql(`SELECT id, name, kana, monthly_amount, is_test, status
            FROM customer
@@ -35,7 +40,22 @@ export async function ダッシュボード(sql) {
     // まだ果たされていない約束だけ。果たした約束は後回しではない
     sql(`SELECT id, customer_id, schedule_no, promised_on, until_time, amount
            FROM promise WHERE done = false ORDER BY promised_on, id`),
+    // 予定回収額は「その月に入るはずだった額」。**期日がまだ来ていない回も足す。**
+    // 上の 予定 は期日が今日以前の回しか取っていないので、今月だけ足りなくなる
+    //（9月17日に見ると、9月27日ぶんが落ちて「9月分 30,000円」と出てしまう）。
+    // 今月の末日までを別に数えて、月まるごとの額にする。
+    // 先の月まで数えないのは、出すのが今月までの月だけだから。
+    sql(`SELECT to_char(s.due_date,'YYYY-MM') AS ym,
+                COALESCE(sum(s.planned_amount),0)::int AS 額,
+                count(*)::int AS 件数
+           FROM schedule s
+           JOIN customer c ON c.id = s.customer_id
+          WHERE s.due_date <= $1
+            AND c.archived = false AND c.status <> '回収' AND c.is_test = false
+          GROUP BY 1`, [今月末]),
   ]);
+  const 月の全体 = {};
+  月まるごと.forEach((r) => (月の全体[r.ym] = { 額: r.額, 件数: r.件数 }));
 
   const 顧客ごと = {};
   顧客.forEach((c) => (顧客ごと[c.id] = c));
@@ -127,8 +147,11 @@ export async function ダッシュボード(sql) {
     月.push({
       年月: ym, 見出し: 月の見出し(ym),
       全件: m.全件, 回収済み: m.回収済み,
-      // その月に入るはずだった額と、まだ入っていない額
-      予定回収額: m.予定額,
+      // その月に入るはずだった額（期日がまだ来ていない回も足した、月まるごと）
+      予定回収額: (月の全体[ym] || {}).額 ?? m.予定額,
+      // そのうち、まだ期日の来ていない額と件数。今月だけ出る
+      期日前額: Math.max(0, ((月の全体[ym] || {}).額 ?? m.予定額) - m.予定額),
+      期日前件数: Math.max(0, ((月の全体[ym] || {}).件数 ?? m.全件) - m.全件),
       未回収額: m.未回収額,
       後回し数: m.行.filter((r) => r.後回し).length,
       行: m.行,

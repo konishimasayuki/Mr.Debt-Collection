@@ -94,6 +94,14 @@ export default function Dashboard({ onOpen }) {
             </span>
             <span className="dash-x">予定回収額</span>
             <span className="dash-x">{m.回収済み}/{m.全件} 回収</span>
+            {/* 今月は、まだ期日の来ていない回がある。
+                予定回収額には足してあるので、いくらぶんかを添える。
+                添えないと「予定より未回収が少ない」理由が分からない */}
+            {m.期日前額 > 0 && (
+              <span className="dash-x">
+                期日前 <b>{yen(m.期日前額)}円</b>（{m.期日前件数}件）
+              </span>
+            )}
             <span className="dash-x">未回収 <b>{yen(m.未回収額)}円</b></span>
             {m.後回し数 > 0 && <span className="dash-x">後回し {m.後回し数}件</span>}
           </div>
