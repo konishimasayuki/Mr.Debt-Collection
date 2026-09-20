@@ -1,4 +1,4 @@
-// 連帯保証人・緊急連絡先（名前・住所・電話番号・間柄）
+// 連帯保証人・緊急連絡先（名前・住所・電話番号・間柄）と、勤務先（間柄なし）
 import { client, call, check, done, reset } from './h.js';
 
 (async () => {
@@ -14,7 +14,9 @@ import { client, call, check, done, reset } from './h.js';
     保証人名前: '保証 花子', 保証人住所: '福岡県久留米市1-2-3',
     保証人電話番号: '090-1111-2222', 保証人間柄: '母',
     緊急連絡先名前: '連絡 次郎', 緊急連絡先住所: '福岡県福岡市4-5-6',
-    緊急連絡先電話番号: '080-3333-4444', 緊急連絡先間柄: '兄' } });
+    緊急連絡先電話番号: '080-3333-4444', 緊急連絡先間柄: '兄',
+    勤務先名前: '株式会社ホショウ工業', 勤務先住所: '福岡県大川市7-8-9',
+    勤務先電話番号: '0944-00-1111' } });
   check('登録できる', r.code === 200, r.body);
   const id = r.body.id;
   let c = await 見る(id);
@@ -26,6 +28,10 @@ import { client, call, check, done, reset } from './h.js';
   check('緊急連絡先の住所', c.緊急連絡先住所 === '福岡県福岡市4-5-6', c.緊急連絡先住所);
   check('緊急連絡先の電話番号', c.緊急連絡先電話番号 === '080-3333-4444', c.緊急連絡先電話番号);
   check('緊急連絡先の間柄', c.緊急連絡先間柄 === '兄', c.緊急連絡先間柄);
+  check('勤務先名', c.勤務先名前 === '株式会社ホショウ工業', c.勤務先名前);
+  check('勤務先の住所', c.勤務先住所 === '福岡県大川市7-8-9', c.勤務先住所);
+  check('勤務先の電話番号', c.勤務先電話番号 === '0944-00-1111', c.勤務先電話番号);
+  check('勤務先に間柄は持たない', c.勤務先間柄 === undefined, c.勤務先間柄);
 
   console.log('■ 顧客編集から直せる');
   const u = await call('customer', { method: 'PATCH', body: {
@@ -40,6 +46,16 @@ import { client, call, check, done, reset } from './h.js';
   check('渡していない欄は残る', c.保証人住所 === '福岡県久留米市1-2-3', c.保証人住所);
   check('緊急連絡先の名前も残る', c.緊急連絡先名前 === '連絡 次郎', c.緊急連絡先名前);
 
+  console.log('■ 勤務先も直せる');
+  const w = await call('customer', { method: 'PATCH', body: {
+    id, 勤務先名前: '有限会社カワッタ', 勤務先電話番号: '0942-11-2222' } });
+  check('直せる', w.code === 200, w.body);
+  c = await 見る(id);
+  check('勤務先名が変わる', c.勤務先名前 === '有限会社カワッタ', c.勤務先名前);
+  check('勤務先の電話番号が変わる', c.勤務先電話番号 === '0942-11-2222', c.勤務先電話番号);
+  check('渡していない住所は残る', c.勤務先住所 === '福岡県大川市7-8-9', c.勤務先住所);
+  check('緊急連絡先は動かない', c.緊急連絡先名前 === '連絡 次郎', c.緊急連絡先名前);
+
   console.log('■ 空にすると消せる（引っ越し・関係が切れたとき）');
   await call('customer', { method: 'PATCH', body: {
     id, 保証人名前: '', 保証人住所: '', 保証人電話番号: '', 保証人間柄: '' } });
@@ -48,6 +64,16 @@ import { client, call, check, done, reset } from './h.js';
     !c.保証人名前 && !c.保証人住所 && !c.保証人電話番号 && !c.保証人間柄,
     [c.保証人名前, c.保証人住所, c.保証人電話番号, c.保証人間柄]);
   check('緊急連絡先は消えない', c.緊急連絡先名前 === '連絡 次郎', c.緊急連絡先名前);
+  check('勤務先も消えない', c.勤務先名前 === '有限会社カワッタ', c.勤務先名前);
+
+  console.log('■ 勤務先だけを空にできる');
+  await call('customer', { method: 'PATCH', body: {
+    id, 勤務先名前: '', 勤務先住所: '', 勤務先電話番号: '' } });
+  c = await 見る(id);
+  check('勤務先が空になる',
+    !c.勤務先名前 && !c.勤務先住所 && !c.勤務先電話番号,
+    [c.勤務先名前, c.勤務先住所, c.勤務先電話番号]);
+  check('緊急連絡先は残る', c.緊急連絡先名前 === '連絡 次郎', c.緊急連絡先名前);
 
   console.log('■ 入れなくても登録できる（あとから足せる）');
   const r2 = await call('customers', { method: 'POST', body: {
@@ -57,10 +83,16 @@ import { client, call, check, done, reset } from './h.js';
   const c2 = await 見る(r2.body.id);
   check('保証人は空', c2.保証人名前 === '' && c2.保証人間柄 === '',
     [c2.保証人名前, c2.保証人間柄]);
+  check('勤務先も空', c2.勤務先名前 === '' && c2.勤務先電話番号 === '',
+    [c2.勤務先名前, c2.勤務先電話番号]);
   const u2 = await call('customer', { method: 'PATCH', body: {
     id: r2.body.id, 緊急連絡先名前: '後入 三郎', 緊急連絡先間柄: '友人' } });
   check('あとから足せる', u2.code === 200, u2.body);
   check('入った', (await 見る(r2.body.id)).緊急連絡先名前 === '後入 三郎');
+  const u3 = await call('customer', { method: 'PATCH', body: {
+    id: r2.body.id, 勤務先名前: '後入 商店', 勤務先電話番号: '093-4444-5555' } });
+  check('勤務先もあとから足せる', u3.code === 200, u3.body);
+  check('勤務先が入った', (await 見る(r2.body.id)).勤務先名前 === '後入 商店');
 
   console.log('■ 前後の空白は落とす');
   await call('customer', { method: 'PATCH', body: {

@@ -63,6 +63,11 @@ const STATEMENTS = [
      emergency_address   text,
      emergency_tel       text,
      emergency_relation  text,
+     -- 本人の勤務先。自宅の電話に出ないときに頼る先。
+     -- 間柄は持たない（本人の勤め先なので、間柄という考え方が無い）
+     work_name           text,
+     work_address        text,
+     work_tel            text,
      is_test         boolean NOT NULL DEFAULT false,   -- 動作を試すための顧客
      archived        boolean NOT NULL DEFAULT false,
      created_at      timestamptz NOT NULL DEFAULT now(),
@@ -88,6 +93,9 @@ const STATEMENTS = [
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS emergency_address text`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS emergency_tel text`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS emergency_relation text`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_name text`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_address text`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_tel text`,
   // 制約はあとから足す。すでに列がある場合は CHECK が付いていないため
   `DO $$ BEGIN
      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='customer_status_ck') THEN
