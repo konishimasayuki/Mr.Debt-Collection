@@ -234,6 +234,9 @@ export default async (req, res) => {
           緊急連絡先名前: c.emergency_name || '', 緊急連絡先住所: c.emergency_address || '',
           緊急連絡先電話番号: c.emergency_tel || '',
           緊急連絡先間柄: c.emergency_relation || '',
+          // 本人の勤務先。自宅の電話に出ないときに頼る先
+          勤務先名前: c.work_name || '', 勤務先住所: c.work_address || '',
+          勤務先電話番号: c.work_tel || '',
           債権譲渡会社: c.assignor_name || '', 債権譲渡先: c.assignee_name || '',
           債権譲渡会社id: c.assignor_id, 債権譲渡先id: c.assignee_id,
           月々の金額: c.monthly_amount, 回数: c.term_count, 支払日: c.pay_day,
@@ -312,6 +315,8 @@ export default async (req, res) => {
         ['保証人電話番号', 'guarantor_tel'], ['保証人間柄', 'guarantor_relation'],
         ['緊急連絡先名前', 'emergency_name'], ['緊急連絡先住所', 'emergency_address'],
         ['緊急連絡先電話番号', 'emergency_tel'], ['緊急連絡先間柄', 'emergency_relation'],
+        ['勤務先名前', 'work_name'], ['勤務先住所', 'work_address'],
+        ['勤務先電話番号', 'work_tel'],
       ]) {
         if (b[key] !== undefined) put(col, String(b[key]).trim() || null);
       }

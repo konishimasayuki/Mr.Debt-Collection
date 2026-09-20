@@ -214,21 +214,29 @@ export function Loading({ 件数 = 5, 行 = 4 }) {
 export const 間柄一覧 = ['父', '母', '配偶者', '子', '兄', '姉', '弟', '妹',
   '祖父', '祖母', '叔父', '叔母', '友人', '勤務先', 'その他'];
 
-export function ContactFields({ 見出し, 印, 説明, v, set }) {
+// 間柄を出さない欄もある（勤務先は本人の勤め先なので、間柄という考え方が無い）。
+// 名前の例と電話番号の例も、相手によって変える
+export function ContactFields({ 見出し, 印, 説明, v, set,
+                                間柄なし, 名前の例, 電話の例, 名前のラベル }) {
   const k = (名) => `${印}${名}`;
+  const 名前欄 = (
+    <Text label={名前のラベル || '名前'} value={v[k('名前')]} onChange={set(k('名前'))}
+          placeholder={名前の例 || '山田 花子'} />
+  );
   return (
     <div className="sect contact">
       <h4>{見出し}</h4>
       {説明 && <p className="sect-note">{説明}</p>}
-      <div className="grid2">
-        <Text label="名前" value={v[k('名前')]} onChange={set(k('名前'))}
-              placeholder="山田 花子" />
-        <Select label="間柄" value={v[k('間柄')]} onChange={set(k('間柄'))}
-                placeholder="選択しない"
-                options={間柄一覧.map((x) => ({ value: x, label: x }))} />
-      </div>
+      {間柄なし ? 名前欄 : (
+        <div className="grid2">
+          {名前欄}
+          <Select label="間柄" value={v[k('間柄')]} onChange={set(k('間柄'))}
+                  placeholder="選択しない"
+                  options={間柄一覧.map((x) => ({ value: x, label: x }))} />
+        </div>
+      )}
       <Text label="電話番号" value={v[k('電話番号')]} onChange={set(k('電話番号'))}
-            placeholder="090-0000-0000" />
+            placeholder={電話の例 || '090-0000-0000'} />
       <Text label="住所" value={v[k('住所')]} onChange={set(k('住所'))} />
     </div>
   );

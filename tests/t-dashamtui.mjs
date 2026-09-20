@@ -44,6 +44,7 @@ check('3か月ぶん出ている', 月数 === 3, 月数);
 const 二 = await p.locator('.dash-m').nth(1).locator('.dash-h').innerText();
 check('翌月も予定回収額が出る', 二.includes('80,000円') && 二.includes('予定回収額'), 二);
 check('翌月は0/2回収', 二.includes('0/2 回収'), 二);
+check('翌月に期日前は出ない', !二.includes('期日前'), 二);
 
 // ── 今月ぶん ──────────────────────────────
 //
@@ -53,26 +54,26 @@ console.log('■ 今月は、期日が来たぶんと期日前を並べて出す
 const 今 = p.locator('.dash-m').last().locator('.dash-h');
 const 今文 = await 今.innerText();
 check('大きい数字は期日の来たぶん',
-  (await 今.locator('.dash-p').innerText()).includes('20,000'),
+  (await 今.locator('.dash-p').innerText()).includes('80,000'),
   await 今.locator('.dash-p').innerText());
-check('月まるごとの170,000円を大きく出してはいない',
-  !(await 今.locator('.dash-p').innerText()).includes('170,000'),
+check('月まるごとの150,000円を大きく出してはいない',
+  !(await 今.locator('.dash-p').innerText()).includes('150,000'),
   await 今.locator('.dash-p').innerText());
 check('隣に期日前の額が並ぶ', (await 今.locator('.dash-q').count()) === 1);
 check('足し算の形になっている',
   (await 今.locator('.dash-q').innerText()).startsWith('＋'),
   await 今.locator('.dash-q').innerText());
-check('期日前の額が出る', (await 今.locator('.dash-q').innerText()).includes('150,000円'),
+check('期日前の額が出る', (await 今.locator('.dash-q').innerText()).includes('70,000円'),
   await 今.locator('.dash-q').innerText());
-check('期日前の件数が出る', (await 今.locator('.dash-q').innerText()).includes('3件'),
+check('期日前の件数が出る', (await 今.locator('.dash-q').innerText()).includes('1件'),
   await 今.locator('.dash-q').innerText());
 check('ひとまとまりで折り返さない', await p.evaluate(() => {
   const q = [...document.querySelectorAll('.dash-m .dash-h .dash-q')].pop();
   return q.getClientRects().length === 1;
 }));
-check('未回収は期日の来た回だけ', 今文.includes('未回収') && 今文.includes('20,000円'), 今文);
+check('未回収は期日の来た回だけ', 今文.includes('未回収 80,000円'), 今文);
 check('足すと月の合計になると書いてある',
-  (await 今.locator('.dash-sum').innerText()).includes('170,000円'),
+  (await 今.locator('.dash-sum').innerText()).includes('150,000円'),
   await 今.locator('.dash-sum').innerText());
 check('足されることが分かる',
   (await 今.locator('.dash-sum').innerText()).includes('予定回収額へ足されます'),
