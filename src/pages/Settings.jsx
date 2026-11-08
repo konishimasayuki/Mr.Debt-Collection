@@ -67,6 +67,8 @@ export default function Settings({ onOpen, onChanged }) {
         </div>
       </div>
 
+      <ImportFiles />
+
       <BankAccounts />
 
       <DeleteCustomer onChanged={onChanged} />
@@ -275,6 +277,85 @@ function TestCustomer({ onOpen, onChanged }) {
 // ── 銀行口座 ───────────────────────────
 // 明細を取りに行く先。合鍵（接続の鍵）はここには入れない。
 // 鍵はVercelの環境変数に置く（画面から見えるところに置かない）。
+// ── 取り込んだCSVの原本 ──────────────────────
+//
+// 「この入金は本当にCSVにあったのか」を、あとから確かめられるようにする。
+// 残していなければ、銀行から落とし直すしかない。
+//
+// 中身は**銀行が作ったバイトのまま**置いてある。落とすと、銀行の出力と
+// 1バイトも違わないものが出てくる（画面で文字を直す前のもの）。
+function ImportFiles() {
+  const [rows, setRows] = useState(null);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    api.取り込んだCSV()
+      .then((d) => setRows(d.ファイル))
+      .catch((e) => { setRows([]); setErr(e.message); });
+  }, []);
+
+  const 大きさ = (n) => (n >= 1024 * 1024
+    ? `${(n / 1024 / 1024).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+  return (
+    <div className="sec">
+      <h3>取り込んだCSVの原本</h3>
+      <p className="rec-hint">
+        入金登録から取り込んだCSVを、そのまま残しています。
+        <b>銀行が作ったままの中身</b>です（画面で文字を直す前のもの）。
+        あとから「この入金は本当にCSVにあったのか」を確かめるときに使います。
+      </p>
+      <Err>{err}</Err>
+      {rows === null && <Loading 件数={2} 行={2} />}
+      {rows && rows.length === 0 && (
+        <Empty>まだありません。入金登録からCSVを取り込むと、ここに残ります。</Empty>
+      )}
+      {rows && rows.length > 0 && (
+        <div className="tw cards">
+          <table>
+            <thead>
+              <tr>
+                <th>取り込んだ日時</th>
+                <th>ファイル名</th>
+                <th className="num">大きさ</th>
+                <th className="num">取り込んだ件数</th>
+                <th className="num">いま残っている入金</th>
+                <th>取り込んだ人</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((f) => (
+                <tr key={f.id}>
+                  <td data-label="取り込んだ日時">{f.取り込んだ日時}</td>
+                  <td className="nm" data-label="ファイル名">
+                    <b>{f.名前}</b>
+                    {/* 中身から作った指紋。すり替わっていないかを確かめられる */}
+                    <span className="yomi">{f.指紋}</span>
+                  </td>
+                  <td className="num" data-label="大きさ">{大きさ(f.大きさ)}</td>
+                  <td className="num" data-label="取り込んだ件数">
+                    {f.取り込んだ件数 == null ? '—' : `${f.取り込んだ件数}件`}
+                  </td>
+                  {/* 取り込んだあとで消された入金があると、ここが減る */}
+                  <td className="num" data-label="いま残っている入金">
+                    {f.いま残っている入金}件
+                  </td>
+                  <td data-label="取り込んだ人">{f.取り込んだ人}</td>
+                  <td className="act">
+                    <a className="btn btn-sm" href={`/api/import?id=${f.id}`}>落とす</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BankAccounts() {
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');

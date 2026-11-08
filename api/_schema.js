@@ -316,6 +316,35 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS bank_txn_state_idx
      ON bank_txn (state, paid_on DESC, id DESC)`,
 
+  // ── 取り込んだCSVの原本 ────────────────────
+  // 「この入金は本当にCSVにあったのか」を、あとから確かめられるようにする。
+  // 残さないと、銀行から落とし直すしかない。
+  //
+  // 外の置き場は使わず、ここに入れる（debug_image と同じ考え方）。
+  // 置き場を増やすと設定と料金がもう1つ増え、動かなくなったときに原因が分かりにくい。
+  //
+  // **文字を直さず、銀行が作ったバイトのまま**入れる。
+  // 画面では Shift_JIS を UTF-8 に直して読んでいるが、直したものを残すと
+  // それは原本ではない。落とし直したときに銀行の出力と1バイトも違わないようにする。
+  `CREATE TABLE IF NOT EXISTS import_file (
+     id          serial PRIMARY KEY,
+     name        text,                       -- 落としたときのファイル名
+     bytes       bytea NOT NULL,             -- 銀行が作ったそのまま
+     size        integer NOT NULL CHECK (size > 0),
+     -- 中身から作る指紋。同じファイルを二度置かないためと、
+     -- 「すり替わっていないか」を確かめるため
+     sha256      text NOT NULL UNIQUE,
+     rows_in     integer,                    -- このファイルから取り込んだ件数
+     uploaded_by text NOT NULL,
+     created_at  timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS import_file_idx ON import_file (id DESC)`,
+  // どの入金が、どのファイルから来たか。
+  // 列を足す文は、その列を使う索引よりも必ず先に置く
+  `ALTER TABLE payment ADD COLUMN IF NOT EXISTS import_file_id integer
+     REFERENCES import_file(id) ON DELETE SET NULL`,
+  `CREATE INDEX IF NOT EXISTS payment_import_file_idx ON payment (import_file_id)`,
+
   // ── 名寄せ辞書(CSVの振込人名 → 顧客)──────────────
   // 取り込まない振込人。ここに入れた名前は、CSVでも銀行でも毎回外す。
   // 会社の口座間の振替や、手数料の戻しなど、お客様の入金ではないもの。

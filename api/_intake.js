@@ -132,7 +132,9 @@ const 充てる先 = (r) => 入金種類(r && r.入金種類) || '通常';
 
 // 人が確かめて残した行を、入金として保存する。
 // 区分は 'CSV' か '銀行'。画面で行の色を変えるためと、あとから出所をたどるため。
-async function 取り込む(sql, who, rows, 区分 = 'CSV') {
+// ファイルid を渡すと、入れた入金に「どのCSVから来たか」を残す。
+// あとから原本に戻れるようにするため
+async function 取り込む(sql, who, rows, 区分 = 'CSV', ファイルid = null) {
   const { match, 除外 } = await 照合の道具(sql);
   let 取込 = 0, 見送り = 0, 未割当 = 0, 除いた = 0;
   const 残り = [];
@@ -179,13 +181,15 @@ async function 取り込む(sql, who, rows, 区分 = 'CSV') {
       x.cid = cid || null;
       x.種類 = 充てる先(x.r);
       引数.push(x.cid, x.r.日付, x.amount, 区分, String(x.r.付番 || '') || null,
-               String(x.r.振込人 || '') || null, x.key, x.種類, who);
+               String(x.r.振込人 || '') || null, x.key, x.種類, who, ファイルid);
       const i = 引数.length;
-      値.push(`($${i - 8},$${i - 7},$${i - 6},'振込',$${i - 5},$${i - 4},$${i - 3},$${i - 2},$${i - 1},$${i})`);
+      値.push(`($${i - 9},$${i - 8},$${i - 7},'振込',$${i - 6},$${i - 5},`
+        + `$${i - 4},$${i - 3},$${i - 2},$${i - 1},$${i})`);
     });
     入金 = await sql(
       `INSERT INTO payment (customer_id, paid_on, amount, method, source, ref_no,
-                            payer_name, import_key, alloc_kind, recorded_by)
+                            payer_name, import_key, alloc_kind, recorded_by,
+                            import_file_id)
        VALUES ${値.join(',')} RETURNING id, import_key`, 引数);
   }
   const idOf = {};
