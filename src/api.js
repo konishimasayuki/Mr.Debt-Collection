@@ -132,7 +132,10 @@ export const api = {
 
   // 取り込み
   preview: (text) => call('/api/import', { method: 'POST', body: { text } }),
-  commit: (明細) => call('/api/import', { method: 'POST', body: { 実行: true, 明細 } }),
+  // 原本（銀行が作ったバイトそのまま）も一緒に送る。あとから落とし直せるように
+  commit: (明細, 原本) =>
+    call('/api/import', { method: 'POST', body: { 実行: true, 明細, 原本 } }),
+  取り込んだCSV: () => call('/api/import'),
   assign: (割当) => call('/api/import', { method: 'POST', body: { 割当 } }),
 
   // 設定

@@ -11,6 +11,17 @@ import BankIntake from './BankIntake';
 // 「化けの少ないほう」で選ぶと、UTF-8 のファイルを Shift-JIS と取り違える。
 // 取り違えると見出しの日本語が壊れ、列を見つけられずに位置で読むことになり、
 // 列の並びが違うファイルでは中身がまるごとずれる。
+// 原本を送るための形。文字に直さず、バイトのまま base64 にする。
+// btoa に長い文字列を一度に渡すと、ブラウザによっては落ちるので小分けにする
+async function base64(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let s = '';
+  for (let i = 0; i < buf.length; i += 0x8000) {
+    s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  }
+  return btoa(s);
+}
+
 async function readText(file) {
   const buf = new Uint8Array(await file.arrayBuffer());
   const 読む = (enc) => {
@@ -269,6 +280,9 @@ export default function PaymentEntry({ onChanged, goHistory }) {
   const file = useRef(null);
   // 読み取ったファイルの中身。除外リストを直したあと、読み直すために持っておく
   const 中身 = useRef('');
+  // 原本（銀行が作ったバイトそのまま）。取り込むときに一緒に送って残す。
+  // 上の 中身 は Shift_JIS を UTF-8 に直したあとの文字なので、原本ではない
+  const 原本 = useRef(null);
   const 深さ = useRef(0);          // 中の字の上を通るたびに離れた事にならないよう数える
 
   const 見せる = (d) => {
@@ -286,6 +300,7 @@ export default function PaymentEntry({ onChanged, goHistory }) {
     try {
       const text = await readText(f);
       中身.current = text;
+      原本.current = { 名前: f.name || '', 中身: await base64(f) };
       見せる(await api.preview(text));
       set除外を開く(false);
     } catch (e2) { setErr(e2.message); setPreview(null); }
@@ -357,7 +372,7 @@ export default function PaymentEntry({ onChanged, goHistory }) {
     if (!rows.length) { setErr('取り込む行がありません。'); return; }
     setBusy(true); setErr('');
     try {
-      const d = await api.commit(rows);
+      const d = await api.commit(rows, 原本.current);
       setResult(d); setPreview(null);
       onChanged && onChanged();
     } catch (e) { setErr(e.message); }

@@ -23,11 +23,14 @@ export function call(name, { method = 'GET', body, q, noauth } = {}) {
   let 済; const p = new Promise((r) => (済 = r));
   const res = {
     statusCode: 200, _h: {},
-    setHeader(k, v) { this._h[k] = v; },
+    // 本物の Node は見出しの名前を小文字でそろえる。ここも合わせる。
+    // 合わせないと、検査だけが大文字で書けてしまい、本番と食い違う
+    setHeader(k, v) { this._h[String(k).toLowerCase()] = v; },
     end(s) {
       let b = {};
       try { b = JSON.parse(s || '{}'); } catch { /* 本文が無いこともある */ }
-      済({ code: res.statusCode, body: b, headers: res._h });
+      // raw は送ったそのもの（CSVの原本のように、JSONでない返事を見るため）
+      済({ code: res.statusCode, body: b, raw: s, headers: res._h });
     },
   };
   H[name](req, res);
@@ -62,5 +65,10 @@ export async function reset() {
   }
   if (await ある('debug_ticket')) {
     await client.query('TRUNCATE debug_image, debug_message, debug_ticket RESTART IDENTITY CASCADE');
+  }
+  // 取り込んだCSVの原本。表を足したら、ここにも足すこと。
+  // 足し忘れると、前の回のデータが残って検査が当てにならない
+  if (await ある('import_file')) {
+    await client.query('TRUNCATE import_file RESTART IDENTITY CASCADE');
   }
 }

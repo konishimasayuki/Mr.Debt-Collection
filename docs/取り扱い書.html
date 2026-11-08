@@ -730,6 +730,30 @@
       <li>支払い開始月（契約そのもの）をずらしても、ここで決めた月はそのままです</li>
     </ul>
 
+    <h3>取り込んだCSVの原本</h3>
+    <div class="where"><b>設定</b> <i>▸</i> 取り込んだCSVの原本</div>
+    <p>入金登録から取り込んだCSVを、<strong>そのまま残しています。</strong>あとから「この入金は本当にCSVにあったのか」を確かめるときに使います。残していなければ、銀行から落とし直すしかありません。</p>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>出るもの</th><th>意味</th></tr></thead>
+        <tbody>
+          <tr><td>取り込んだ日時</td><td>いつ取り込んだか</td></tr>
+          <tr><td>ファイル名</td><td>落としたときの名前。下の小さい字は<strong>中身から作った指紋</strong></td></tr>
+          <tr><td class="n">大きさ</td><td>ファイルの大きさ</td></tr>
+          <tr><td class="n">取り込んだ件数</td><td>そのファイルから入った入金の数</td></tr>
+          <tr><td class="n">いま残っている入金</td><td>そのうち、いま台帳に残っている数（消すと減ります）</td></tr>
+          <tr><td>取り込んだ人</td><td>誰が取り込んだか</td></tr>
+          <tr><td><kbd>落とす</kbd></td><td><strong>原本をそのまま落とします</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul>
+      <li><strong>銀行が作ったままの中身</strong>です。画面で文字を直す前のものなので、落とすと銀行の出力と<strong>1バイトも違いません</strong></li>
+      <li><strong>確認（取り込む前の画面）だけでは残りません。</strong>「取り込む」を押したときだけ残ります</li>
+      <li><strong>同じファイルを二度取り込んでも、置き場は増えません</strong>（指紋で見分けています）</li>
+      <li>指紋は、中身が<strong>すり替わっていないか</strong>を確かめるためのものです</li>
+    </ul>
+
     <h3>顧客を消す（登録し間違えたとき）</h3>
     <div class="where"><b>設定</b> <i>▸</i> 顧客を消す</div>
     <ul>

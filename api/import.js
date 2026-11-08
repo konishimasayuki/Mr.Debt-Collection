@@ -2,12 +2,15 @@
 // POST /api/import {text}                  … 読み取ってプレビューを返す（保存しない）
 // POST /api/import {実行:true, 明細:[...]}  … 画面で残した行だけを保存する
 // POST /api/import {割当:{...}}             … 照合できなかった1件を顧客に割り当てる
+// GET  /api/import                         … 取り込んだCSVの原本の一覧
+// GET  /api/import?id=N                    … その原本そのもの（落とす）
 //
 // 照合・二重取込の判定・充当は api/_intake.js に置いてある。
 // 銀行APIから来た明細も同じところを通る（2か所に書くと、いつか食い違うため）。
+import { createHash } from 'node:crypto';
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
-import { readBody, yen, normPayer, allocate, 詰め直す, 入金種類 } from './_lib.js';
+import { readBody, query, yen, normPayer, allocate, 詰め直す, 入金種類 } from './_lib.js';
 import { parseCsv } from './_csv.js';
 import { importKey, 照合の道具, 取込済みの鍵, プレビュー, 取り込む } from './_intake.js';
 
@@ -18,15 +21,84 @@ const bad = (res, code, body) => {
   res.end(JSON.stringify(body));
 };
 
+// 原本の大きさの上限。銀行のCSVは大きくても数百KB。
+// 桁が違うものが来たら、CSVではないので断る
+const 上限 = 10 * 1024 * 1024;
+
+// 取り込んだCSVの原本を置く。
+//
+// **文字を直さず、銀行が作ったバイトのまま入れる。**
+// 画面では Shift_JIS を UTF-8 に直して読んでいるが、直したものは原本ではない。
+// 落とし直したときに、銀行の出力と1バイトも違わないようにする。
+//
+// 同じ中身のファイルは二度置かない（指紋で見分ける）。
+// 同じCSVをもう一度取り込んでも、置き場が増えていかない。
+async function 原本を置く(sql, who, 原本) {
+  if (!原本 || !原本.中身) return null;
+  let bytes;
+  try { bytes = Buffer.from(String(原本.中身), 'base64'); }
+  catch { return null; }
+  if (!bytes.length) return null;
+  if (bytes.length > 上限) {
+    const e = new Error('ファイルが大きすぎます。');
+    e.断る = true;
+    throw e;
+  }
+  const 指紋 = createHash('sha256').update(bytes).digest('hex');
+  const 名 = String(原本.名前 || '').trim().slice(0, 200) || null;
+
+  const 既 = await sql('SELECT id FROM import_file WHERE sha256=$1', [指紋]);
+  if (既.length) return 既[0].id;
+  const r = await sql(
+    `INSERT INTO import_file (name, bytes, size, sha256, uploaded_by)
+     VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+    [名, bytes, bytes.length, 指紋, who]);
+  return r[0].id;
+}
+
 export default async (req, res) => {
   if (!requireSession(req, res)) return;
-  if ((req.method || '').toUpperCase() !== 'POST') {
-    return bad(res, 405, { error: 'POSTで送ってください。' });
-  }
+  const method = (req.method || '').toUpperCase();
   const who = recordedBy(req);
 
   try {
     const sql = db();
+
+    // ── 取り込んだCSVの原本を見る・落とす ──────────────
+    if (method === 'GET') {
+      const id = Number(query(req).id) || 0;
+      if (id) {
+        const f = (await sql(
+          'SELECT name, bytes, size FROM import_file WHERE id=$1', [id]))[0];
+        if (!f) return bad(res, 404, { error: 'そのファイルが見つかりません。' });
+        // 中身は銀行が作ったまま。文字の種類は決め打ちしない
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Length', String(f.size));
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Content-Disposition',
+          `attachment; filename*=UTF-8''${encodeURIComponent(f.name || `csv-${id}.csv`)}`);
+        return res.end(Buffer.from(f.bytes));
+      }
+      const 一覧 = await sql(
+        `SELECT f.id, f.name, f.size, f.sha256, f.rows_in, f.uploaded_by,
+                to_char(f.created_at AT TIME ZONE 'Asia/Tokyo', 'YYYY/MM/DD HH24:MI') AS at,
+                COALESCE((SELECT count(*) FROM payment p
+                           WHERE p.import_file_id = f.id),0)::int AS 残っている入金
+           FROM import_file f ORDER BY f.id DESC LIMIT 200`);
+      return ok(res, {
+        ファイル: 一覧.map((f) => ({
+          id: f.id, 名前: f.name || '（名前なし）', 大きさ: f.size,
+          指紋: f.sha256.slice(0, 12), 取り込んだ件数: f.rows_in,
+          いま残っている入金: f.残っている入金,
+          取り込んだ人: f.uploaded_by, 取り込んだ日時: f.at,
+        })),
+      });
+    }
+
+    if (method !== 'POST') {
+      return bad(res, 405, { error: '対応していない操作です。' });
+    }
     const b = await readBody(req);
 
     // ── 照合できなかった1件を、人が選んだ顧客に割り当てる ──────
@@ -81,10 +153,22 @@ export default async (req, res) => {
     if (b.実行) {
       const rows = Array.isArray(b.明細) ? b.明細 : [];
       if (!rows.length) return bad(res, 400, { error: '取り込む行がありません。' });
-      const r = await 取り込む(sql, who, rows, 'CSV');
+      // 原本は、取り込むときにだけ置く。
+      // 確認のたびに置くと、見ただけで取り込まなかったファイルまで溜まる
+      let ファイルid = null;
+      try { ファイルid = await 原本を置く(sql, who, b.原本); }
+      catch (e) { if (e.断る) return bad(res, 400, { error: e.message }); throw e; }
+      const r = await 取り込む(sql, who, rows, 'CSV', ファイルid);
+      if (ファイルid) {
+        // このファイルから入った入金の数。顧客に当てられなかった行も入金として
+        // 入るので、両方を足す（「何件このファイルから来たか」が知りたい）
+        await sql('UPDATE import_file SET rows_in=$1 WHERE id=$2',
+          [r.取込 + r.未割当, ファイルid]);
+      }
       return ok(res, { done: true, 取り込んだ件数: r.取込, 見送った件数: r.見送り,
                        照合できなかった件数: r.未割当, 照合できなかった明細: r.残り,
-                       除いた件数: r.除いた, 余った: r.余った });
+                       除いた件数: r.除いた, 余った: r.余った,
+                       原本を残した: !!ファイルid });
     }
 
     // ── プレビュー（読み取るだけ。保存しない）──────────────
