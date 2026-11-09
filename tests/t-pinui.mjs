@@ -6,8 +6,27 @@ const p = await 入る(b);
 const errs = [];
 p.on('pageerror', (e) => errs.push(String(e)));
 
+// ── ログイン直後にダッシュボードから移る ────────────────
+//
+// 開いた直後は、ログインの返事に顧客一覧とダッシュボードを同梱して
+// 往復を1回で済ませている。その控えに「月ごとの回収」が入っていないと、
+// ログインしてすぐ顧客一覧へ移った1回だけ、月ごとの回収が出ない。
+// **待たずに**移って、控えが使われる道をわざと通す。
+console.log('■ ダッシュボードから移った初回でも、月ごとの回収が出る');
+// **読み込み直してから**試す。すでにログインしている画面を開くと、
+// ログインの返事に顧客一覧とダッシュボードが同梱されて控えに入る。
+// その道を通さないと、この不具合は出ない（ログインした直後は控えが空）
+await p.reload({ waitUntil: 'networkidle' });
+await p.waitForSelector('.dash-m', { timeout: 20000 });
 await p.click('.tab:has-text("顧客一覧")');
 await p.waitForSelector('tbody tr.clickable');
+await p.waitForTimeout(400);
+check('初回から月ごとの回収が出ている', (await p.locator('.mo').count()) === 1,
+  await p.locator('.mo').count());
+check('初回から中身も入っている',
+  (await p.locator('.mo').innerText()).includes('入金済み'),
+  await p.locator('.mo').innerText());
+
 await p.waitForTimeout(900);
 
 // ── 月ごとの回収 ───────────────────────────
@@ -87,6 +106,30 @@ check('★が点く',
 check('★を押しても顧客ページは開かない',
   (await p.locator('.rec-top').count()) === 0);
 
+// 星の形だけを当たり判定にしていたため、押し外して行が開いてしまっていた。
+// 指で押せる大きさを確保する
+console.log('■ ★は、指で押せる大きさがある');
+check('一覧の★は34px角ある', await p.evaluate(() => {
+  const e = document.querySelector('tbody tr.clickable .pin-b');
+  const r = e.getBoundingClientRect();
+  return r.width >= 32 && r.height >= 32;
+}), await p.evaluate(() => {
+  const r = document.querySelector('tbody tr.clickable .pin-b').getBoundingClientRect();
+  return [Math.round(r.width), Math.round(r.height)];
+}));
+check('端を押しても行は開かない', await (async () => {
+  const 枠 = await 二郎.locator('.pin-b').boundingBox();
+  // 左上の角（星の形からは外れているが、押し場所の中）
+  await p.mouse.click(枠.x + 3, 枠.y + 3);
+  await p.waitForTimeout(700);
+  const 開いた = (await p.locator('.rec-top').count()) > 0;
+  if (開いた) return false;
+  // 押せているので、目印は外れているはず。戻しておく
+  await 二郎.locator('.pin-b').click();
+  await p.waitForTimeout(700);
+  return true;
+})());
+
 console.log('■ 顧客ページからも付け外しできる');
 // 電話を切ったあと「この人は明日もかける」と思ったその場で押せるように
 await p.click('.tab:has-text("顧客一覧")');
@@ -97,6 +140,13 @@ await p.waitForSelector('.rec-top');
 await p.waitForTimeout(800);
 const 名の横 = p.locator('.cust-head .pin-big');
 check('名前の左に★がある', (await 名の横.count()) === 1);
+check('顧客ページの★は40px角ある', await p.evaluate(() => {
+  const r = document.querySelector('.cust-head .pin-big').getBoundingClientRect();
+  return r.width >= 38 && r.height >= 38;
+}), await p.evaluate(() => {
+  const r = document.querySelector('.cust-head .pin-big').getBoundingClientRect();
+  return [Math.round(r.width), Math.round(r.height)];
+}));
 check('いまの状態を映している',
   (await 名の横.getAttribute('class')).includes('on'),
   await 名の横.getAttribute('class'));
