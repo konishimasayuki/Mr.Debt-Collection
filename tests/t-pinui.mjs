@@ -29,9 +29,14 @@ check('入金済みが出る', 先頭.includes('入金済み'), 先頭);
 check('残りが出る', 先頭.includes('残り'), 先頭);
 // 土台で作った形：8月は払い終え、10月は 79,500 入って 20,500 残り
 const 全 = await 月.innerText();
-check('払い終えた月は残り0円', /0円/.test(全), 全);
 check('入金済みの額が出る', 全.includes('79,500円'), 全);
 check('残りの額が出る', 全.includes('20,500円'), 全);
+check('全部回収できた月は出さないと書いてある',
+  全.includes('全部回収できた月は出しません'), 全);
+check('払い終えた8月は出ていない', !全.includes('8月分'), 全);
+check('残りが0円の枠は無い', await p.evaluate(() =>
+  [...document.querySelectorAll('.mo-left i')].every((e) => e.innerText !== '0円')),
+  await p.evaluate(() => [...document.querySelectorAll('.mo-left i')].map((e) => e.innerText)));
 check('索引より上にある', await p.evaluate(() => {
   const y = (s) => { const e = document.querySelector(s); return e ? e.getBoundingClientRect().top : 1e9; };
   return y('.mo') < y('.idx');

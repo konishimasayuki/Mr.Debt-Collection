@@ -425,6 +425,12 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
   align-items:center}
 .rec-p-tap:hover{background:var(--paper-2)}
 .rec-p-kind{margin-left:6px;color:var(--ink-3);font-size:11px}
+/* 小分けの入金をまとめた1行。入金の行と見分けが付くよう、少しだけ薄くする。
+   狭い画面でも1行に収める（「ひらく」だけが次の行に落ちると押す場所が分からない）*/
+.rec-sum .rec-p-w{color:var(--ink-2);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;min-width:0;font-size:12.5px}
+.rec-sum .rec-p-w b{color:var(--paid)}
+.rec-sum .rec-p-kind{text-decoration:underline;margin-left:5px}
 
 .rec-ms{border-bottom:1px solid var(--rule);background:#FCFBF8;padding:2px 10px 6px 10px}
 .rec-m{display:flex;align-items:flex-start;gap:6px;padding:4px 0 4px 8px;

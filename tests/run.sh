@@ -17,3 +17,4 @@ node tests/amt-seed.mjs >/dev/null 2>&1; 出す tests/t-amtui.mjs
 node tests/da-seed.mjs  >/dev/null 2>&1; 出す tests/t-dashamtui.mjs
 出す tests/t-csvfileui.mjs
 node tests/pin-seed.mjs >/dev/null 2>&1; 出す tests/t-pinui.mjs
+node tests/sp-seed.mjs  >/dev/null 2>&1; 出す tests/t-splitui.mjs

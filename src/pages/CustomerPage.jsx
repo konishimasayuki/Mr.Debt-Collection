@@ -34,7 +34,10 @@ export default function CustomerPage({ id, onChanged }) {
   const [メモ欄, setメモ欄] = useState(null); // メモを足そうとしている回（'通常-3' の形）
   const [割り当て, set割り当て] = useState(null);
   const [賞与移動, set賞与移動] = useState(null);
-  const [金額変更, set金額変更] = useState(null); // その回から先の金額を変える // 別の月へ移す賞与の回 // 割り当てを変える入金
+  const [金額変更, set金額変更] = useState(null); // その回から先の金額を変える
+  // 小分けの入金をまとめて出している回のうち、人が開いたもの。
+  // 見た目だけの話で、台帳の中身は何も変わらない
+  const [明細を開く, set明細を開く] = useState({}); // 別の月へ移す賞与の回 // 割り当てを変える入金
 
   const load = useCallback(() => {
     setErr('');
@@ -375,6 +378,11 @@ export default function CustomerPage({ id, onChanged }) {
               const いま = s.回次 === c.回次 && s.種類 === (c.回の種類 || '通常');
               const 鍵 = s.種類 + s.回次;
               const 開いている = メモ欄 === 鍵;
+              // 小分けの入金をまとめるのは、**その回を払い終えているとき**だけ。
+              // 払い終えていなければ、いくら入っていくら足りないかを
+              // 1件ずつ見せる（電話の前に必要）
+              const まとめる = s.状態 === '入金済み' && s.入金明細.length >= 2;
+              const まとめを開いた = !!明細を開く[鍵];
               const cls = ['rec-r', s.状態 === '入金済み' ? 'paid' : s.状態 === '一部入金' ? 'part' : '',
                 late ? 'late' : '', いま ? 'now' : '', ボ ? 'bonus' : '',
                 'rec-tap', 開いている ? 'open' : ''].filter(Boolean).join(' ');
@@ -400,9 +408,38 @@ export default function CustomerPage({ id, onChanged }) {
                           onClick={() => setメモ欄((k) => (k === 鍵 ? null : 鍵))}>
                     {中身}
                   </button>
+                  {/* 小分けで払われた回を、見た目だけまとめる。
+                      **払い終えた回だけ**まとめる。払い終えていない回は
+                      1件ずつ出す。いくら入っていくら足りないかは、
+                      電話をかける前に1件ずつ見ないと話ができない。
+                      台帳の中身は何も変わらない（出し方だけの話）*/}
+                  {まとめる && !まとめを開いた && (
+                    <button type="button" className="rec-p rec-p-tap rec-sum"
+                            onClick={() => set明細を開く((o) => ({ ...o, [鍵]: true }))}>
+                      <span className="rec-p-d">{md(s.入金明細[0].日付)}</span>
+                      <span className="rec-p-w">
+                        〜{md(s.入金明細[s.入金明細.length - 1].日付)}
+                        {' '}<b>{s.入金明細.length}回</b>に分けて入金
+                        <span className="rec-p-kind">ひらく</span>
+                      </span>
+                      <span className="rec-p-a">{yen(s.入金)}</span>
+                    </button>
+                  )}
+                  {まとめる && まとめを開いた && (
+                    <button type="button" className="rec-p rec-p-tap rec-sum"
+                            onClick={() => set明細を開く((o) => ({ ...o, [鍵]: false }))}>
+                      <span className="rec-p-d" />
+                      <span className="rec-p-w">
+                        {s.入金明細.length}回に分けて入金
+                        <span className="rec-p-kind">とじる</span>
+                      </span>
+                      <span className="rec-p-a" />
+                    </button>
+                  )}
+
                   {/* その回に、いつ・いくら入ったか。
                       期日だけでは、遅れて払われたのかが分からない */}
-                  {s.入金明細.map((p, i) => (
+                  {(まとめる && !まとめを開いた ? [] : s.入金明細).map((p, i) => (
                     /* ボーナス払いの方は、この入金を押すと割り当てを変えられる。
                        月額とボーナスをまとめて振り込まれたとき、月額の回に
                        あふれたぶんをボーナスへ回すため */
