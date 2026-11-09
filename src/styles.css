@@ -307,7 +307,9 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .cust-head{display:flex;align-items:center;gap:12px;margin-bottom:2px}
 /* 顧客ページの目印。名前の左に置き、一覧と同じ★で付け外しする。
    名前の高さに合わせて大きくする（電話中に押すので、小さいと外す） */
-.pin-big{font-size:22px;padding:0;flex:0 0 auto;line-height:1}
+/* 顧客ページの★。下の .pin-b より後ろに書くと読みにくいので、
+   名指しで強さを上げておく（.pin-b と同じ強さだと、あとに書いたほうが勝つ）*/
+.cust-head .pin-big{font-size:22px;width:40px;height:40px;margin:0;flex:0 0 auto}
 .cust-name{font-size:22px;font-weight:700;margin:0;flex:1;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cust-head .btn,.cust-head .tag{flex:0 0 auto}
@@ -543,7 +545,7 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
   .strip .s{padding:8px 10px}
   .strip .s b{font-size:14px}
   .cust-head{gap:8px}
-  .pin-big{font-size:20px}
+  .cust-head .pin-big{font-size:20px;width:38px;height:38px}
   .cust-head .btn{padding:6px 10px;font-size:12.5px;min-height:34px}
 
   .sec{padding:12px 12px}
@@ -627,10 +629,16 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .pin-x:hover{background:var(--paper-2)}
 
 /* 一覧の行に出す目印。押しても行は開かない（onClick で止めている）*/
-.pin-b{border:0;background:none;cursor:pointer;padding:0 6px 0 0;font-size:14px;
-  line-height:1;color:var(--rule-strong)}
+/* 押せる場所を、星そのものより広く取る。
+   星の形だけを当たり判定にしていたため、押し外して行が開いてしまっていた。
+   指で押す大きさ（34px角）を、枠線のない押し場所として確保する */
+.pin-b{border:1px solid transparent;background:none;cursor:pointer;
+  width:34px;height:34px;margin:-6px 2px -6px -8px;padding:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  vertical-align:middle;font-size:16px;line-height:1;color:var(--rule-strong)}
 .pin-b.on{color:var(--today)}
-.pin-b:hover{color:var(--today)}
+.pin-b:hover{color:var(--today);background:var(--paper-2);border-color:var(--rule)}
+.pin-b:active{background:var(--rule)}
 
 /* 行の見出し（表の中に差し込む）*/
 .grp-row th{background:var(--paper-2);border-top:1px solid var(--rule-strong);
