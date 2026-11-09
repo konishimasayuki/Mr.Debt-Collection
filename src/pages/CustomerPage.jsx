@@ -89,6 +89,21 @@ export default function CustomerPage({ id, onChanged }) {
 
   // 期日そのものが壊れているときの直し。
   // 入金月変更で、未払いの回を払い終えた回より前へ戻せてしまったころの記録
+  // 目印。顧客一覧と同じ★で付け外しする。
+  // 電話を切ったあと「この人は明日もかける」と思ったその場で押せるように、
+  // 一覧へ戻らなくても付けられるようにしてある
+  const 目印 = async () => {
+    const 次 = !c.目印;
+    setD((o) => (o ? { ...o, 顧客: { ...o.顧客, 目印: 次 } } : o));
+    try {
+      await api.patchCustomer({ id: c.id, 目印: 次 });
+      onChanged && onChanged();
+    } catch (e) {
+      setD((o) => (o ? { ...o, 顧客: { ...o.顧客, 目印: !次 } } : o));
+      setErr(e.message);
+    }
+  };
+
   const 期日を並べ直す = async () => {
     const 理由 = prompt('期日を、1回目から1か月ずつの並べ直します。\n\n'
       + '金額・回数・残債は変わりません。どの回に入金が入るかは、\n'
@@ -138,6 +153,10 @@ export default function CustomerPage({ id, onChanged }) {
       )}
 
       <div className="cust-head">
+        <button type="button"
+                className={'pin-b pin-big' + (c.目印 ? ' on' : '')}
+                title={c.目印 ? '目印を外す' : '目印を付ける'}
+                onClick={目印}>★</button>
         <h2 className="cust-name">{c.氏名}</h2>
         {c.テスト && <span className="tag t-test">テスト</span>}
         <button className="btn btn-sm" onClick={() => setEditCustomer(true)}>顧客情報を編集</button>

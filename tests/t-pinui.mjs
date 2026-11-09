@@ -87,6 +87,47 @@ check('★が点く',
 check('★を押しても顧客ページは開かない',
   (await p.locator('.rec-top').count()) === 0);
 
+console.log('■ 顧客ページからも付け外しできる');
+// 電話を切ったあと「この人は明日もかける」と思ったその場で押せるように
+await p.click('.tab:has-text("顧客一覧")');
+await p.waitForSelector('tbody tr.clickable');
+await p.waitForTimeout(800);
+await p.locator('tbody tr.clickable', { hasText: 'カワダ 二郎' }).locator('td.nm b').click();
+await p.waitForSelector('.rec-top');
+await p.waitForTimeout(800);
+const 名の横 = p.locator('.cust-head .pin-big');
+check('名前の左に★がある', (await 名の横.count()) === 1);
+check('いまの状態を映している',
+  (await 名の横.getAttribute('class')).includes('on'),
+  await 名の横.getAttribute('class'));
+await 名の横.click();
+await p.waitForTimeout(900);
+check('押すと消える', !(await 名の横.getAttribute('class')).includes('on'),
+  await 名の横.getAttribute('class'));
+await p.click('.tab:has-text("顧客一覧")');
+await p.waitForSelector('tbody tr.clickable');
+await p.waitForTimeout(900);
+check('一覧にも伝わる（2名に戻る）', (await p.locator('.pin .pin-c').count()) === 2,
+  await p.locator('.pin .pin-c').count());
+check('一覧の★も消えている',
+  !(await p.locator('tbody tr.clickable', { hasText: 'カワダ 二郎' })
+    .locator('.pin-b').getAttribute('class')).includes('on'));
+
+// もう一度、顧客ページから付け直す
+await p.locator('tbody tr.clickable', { hasText: 'カワダ 二郎' }).locator('td.nm b').click();
+await p.waitForSelector('.rec-top');
+await p.waitForTimeout(800);
+await p.locator('.cust-head .pin-big').click();
+await p.waitForTimeout(900);
+check('付け直せる',
+  (await p.locator('.cust-head .pin-big').getAttribute('class')).includes('on'));
+await p.locator('.cust-head').screenshot({ path: '/tmp/pin-4.png' });
+await p.click('.tab:has-text("顧客一覧")');
+await p.waitForSelector('tbody tr.clickable');
+await p.waitForTimeout(900);
+check('一覧でも3名に戻る', (await p.locator('.pin .pin-c').count()) === 3,
+  await p.locator('.pin .pin-c').count());
+
 console.log('■ 目印は覚えている（開き直しても残る）');
 await p.click('.tab:has-text("ダッシュボード")');
 await p.waitForTimeout(500);

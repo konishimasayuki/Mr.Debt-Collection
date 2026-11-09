@@ -305,6 +305,9 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 
 /* ── 顧客ページ ─────────────────────── */
 .cust-head{display:flex;align-items:center;gap:12px;margin-bottom:2px}
+/* 顧客ページの目印。名前の左に置き、一覧と同じ★で付け外しする。
+   名前の高さに合わせて大きくする（電話中に押すので、小さいと外す） */
+.pin-big{font-size:22px;padding:0;flex:0 0 auto;line-height:1}
 .cust-name{font-size:22px;font-weight:700;margin:0;flex:1;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cust-head .btn,.cust-head .tag{flex:0 0 auto}
@@ -540,6 +543,7 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
   .strip .s{padding:8px 10px}
   .strip .s b{font-size:14px}
   .cust-head{gap:8px}
+  .pin-big{font-size:20px}
   .cust-head .btn{padding:6px 10px;font-size:12.5px;min-height:34px}
 
   .sec{padding:12px 12px}
