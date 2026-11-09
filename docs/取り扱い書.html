@@ -138,6 +138,7 @@
   .t-test{background:var(--bonus); border-color:var(--bonus); color:var(--paper); font-weight:700}
   .t-csv{background:var(--panel); border-color:var(--rule-2); color:var(--ink-2)}
   .t-manual{background:var(--today-bg); border-color:var(--today-line); color:var(--today)}
+  .t-eng{background:var(--today-bg); border-color:var(--today-line); color:var(--today); font-weight:700}
 
   /* ── 帯。注意と、こつ ── */
   .box{
@@ -628,6 +629,17 @@
       <li><strong>氏名で検索しているあいだは出しません。</strong>探している人のじゃまになるためです</li>
     </ul>
 
+    <h3>エンジンストップの欄</h3>
+    <div class="where"><b>顧客一覧</b> <i>▸</i> 目印のすぐ下</div>
+    <p><strong>車を止めた方</strong>が、目印のすぐ下に並びます。付け外しは「顧客情報を編集」からです（→ 取引の状態を変える）。</p>
+    <ul>
+      <li><strong>終わった取引ではありません。</strong>未入金にもダッシュボードにも出続けます</li>
+      <li>「◯名。取引は続いています（督促も請求もそのまま）」と添えてあります</li>
+      <li>引き上げた方は<strong>混ざりません</strong>。あちらは「完済/引き上げ」タブです</li>
+      <li>押すとその方のページが開きます</li>
+      <li><strong>氏名で検索しているあいだは出しません</strong>（目印の欄と同じ）</li>
+    </ul>
+
     <h3>残債金額の総額</h3>
     <div class="where"><b>顧客一覧</b> <i>▸</i> 表の見出しのすぐ下</div>
     <ul>
@@ -851,13 +863,39 @@
       <li>移す理由を書いておくと記録に残ります</li>
     </ul>
 
-    <h3>車を引き上げた</h3>
-    <div class="where"><b>顧客ページ</b> <i>▸</i> 顧客情報を編集 <i>▸</i> 取引の状態 <i>▸</i> 車両を引き上げ</div>
-    <p>引き上げた日を入れて保存します。</p>
+    <h3>取引の状態を変える</h3>
+    <div class="where"><b>顧客ページ</b> <i>▸</i> 顧客情報を編集 <i>▸</i> <b>いちばん上</b>の「取引の状態」</div>
+    <p>「顧客情報を編集」を押すと、<strong>いちばん上に「取引の状態」</strong>が出ます。電話を受けてまず確かめるのがここだからです。取り違えると、引き上げ済みの方へ督促の電話をかけてしまいます。</p>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>状態</th><th>何が起きるか</th></tr></thead>
+        <tbody>
+          <tr><td><strong>通常</strong></td><td>ふだんどおり請求します</td></tr>
+          <tr><td><strong>エンジンストップ</strong></td><td>車は止めますが、<strong>取引は続きます</strong></td></tr>
+          <tr><td><strong>車両引き上げ</strong></td><td>ここで終わり。督促も請求もしません</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>状態を変えると、<strong>いつ変えたか</strong>を入れる欄が出ます。空のままだと今日になります。変えたことは記録に残ります。</p>
+
+    <h4>エンジンストップ</h4>
+    <p><strong>車のエンジンを止めただけで、取引は終わっていません。</strong>ですから台帳からは外れません。</p>
+    <ul>
+      <li><strong>未入金タブにも、ダッシュボードにも、これまでどおり出ます</strong></li>
+      <li>督促も請求もそのままです</li>
+      <li>顧客一覧では、<strong>目印のすぐ下に「エンジンストップ」の欄</strong>が出て、その方が並びます</li>
+      <li>一覧の行には <span class="tag t-eng">エンジンストップ</span> の印が付きます。行の背景は<strong>灰色にしません</strong>（終わった取引ではないため）</li>
+      <li>顧客ページの上にも「エンジンストップ」と、止めた日が出ます</li>
+    </ul>
+    <p>お金が入って車を動かせるようになったら、<strong>「通常」を選び直してください。</strong>欄も印も消えます。</p>
+
+    <h4>車両引き上げ</h4>
+    <p><strong>ここで取引は終わりです。</strong></p>
     <ul>
       <li>未入金タブから消えます（引き上げた方に督促の電話はしません）</li>
       <li>「完済/引き上げ」タブに移ります</li>
       <li>顧客一覧では行の背景が薄い灰色になります</li>
+      <li>ダッシュボードにも、月ごとの回収にも、残債の総額にも入りません</li>
     </ul>
     <p>払い終えた方は、何もしなくても自動で「完済」になります。</p>
 
@@ -883,7 +921,8 @@
 
     <h3>顧客一覧</h3>
     <p>全員が<strong>あいうえお順</strong>で並びます。あ行・か行…の札で飛べます。上の欄で、<strong>氏名・よみ・車種</strong>から探せます。かな・カナ・漢字・英字のどれでも当たります。</p>
-    <p>遅れている方は名前の横に <span class="tag t-late">13日 遅れ</span> と出ます。遅れていなければ出ません。終わった取引（完済・引き上げ）は、行の背景が薄い灰色です。</p>
+    <p>遅れている方は名前の横に <span class="tag t-late">13日 遅れ</span> と出ます。遅れていなければ出ません。終わった取引（完済・引き上げ）は、行の背景が薄い灰色です。<strong>エンジンストップの方は灰色にしません。</strong>取引が続いているためです（<span class="tag t-eng">エンジンストップ</span> の印だけが付きます）。</p>
+    <p>上のほうは、見たい順に並んでいます。<b>月ごとの回収</b> ▸ <b>目印を付けた方</b> ▸ <b>エンジンストップの方</b> ▸ <b>索引と顧客の表</b>。</p>
 
     <h3>未入金</h3>
     <p><strong>電話はこの画面から始めます。</strong> 上に「◯名 ／ 今の回の未入金 合計 ◯円 ／ 未督促 ◯件」と出ます。ボーナス払いの方が2行に分かれているときは、人数のうしろに「（◯件）」が付きます。<strong>人数と行数は一致しません。</strong></p>
@@ -914,6 +953,7 @@
           <tr><td><span class="tag t-manual">取込済み</span></td><td>CSVの確認</td><td>すでに取り込んだ入金</td></tr>
           <tr><td><span class="tag t-dup">重複</span></td><td>CSVの確認</td><td>同じファイルの中に同じ入金がある</td></tr>
           <tr><td><span class="tag t-warn">未割当</span></td><td>入金履歴</td><td>どのお客様か決まっていない入金</td></tr>
+          <tr><td><span class="tag t-eng">エンジンストップ</span></td><td>顧客一覧</td><td>車は止めましたが、<strong>取引は続いています</strong></td></tr>
           <tr><td><span class="tag t-done">完済</span> <span class="tag t-late">引き上げ</span></td><td>完済/引き上げ</td><td>終わり方</td></tr>
         </tbody>
       </table>
