@@ -68,6 +68,11 @@ const STATEMENTS = [
      work_name           text,
      work_address        text,
      work_tel            text,
+     -- 目印。気にかけている顧客を、一覧のいちばん上に出す。
+     -- 誰の目印かは分けない。全員で同じ台帳を見ているので、
+     -- 人ごとに分けると「あの人に目印を付けたはずなのに出ない」が起きる
+     pinned          boolean NOT NULL DEFAULT false,
+     pinned_at       timestamptz,                      -- 付けた順に並べるため
      is_test         boolean NOT NULL DEFAULT false,   -- 動作を試すための顧客
      archived        boolean NOT NULL DEFAULT false,
      created_at      timestamptz NOT NULL DEFAULT now(),
@@ -96,6 +101,9 @@ const STATEMENTS = [
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_name text`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_address text`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_tel text`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS pinned boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS pinned_at timestamptz`,
+  `CREATE INDEX IF NOT EXISTS customer_pinned_idx ON customer (pinned, pinned_at)`,
   // 制約はあとから足す。すでに列がある場合は CHECK が付いていないため
   `DO $$ BEGIN
      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='customer_status_ck') THEN

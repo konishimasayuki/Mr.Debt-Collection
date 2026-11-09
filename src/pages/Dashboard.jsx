@@ -20,9 +20,17 @@ const 進み具合の色 = (回収済み, 全件) => {
   return n >= 90 ? 'good' : n < 70 ? 'bad' : '';
 };
 
+// 少額とみなす線。これ未満の残りは、隠す設定のときに出さない。
+// 端数だけが残っている行で一覧が埋まり、電話をかける相手が見つけにくくなるため
+const 少額 = 1000;
+
+// 隠す設定は**覚えない**。開くたびに「出す」から始める。
+// 覚えてしまうと、隠したことを忘れたまま「もう誰も残っていない」と読み違える。
+// ログインし直したときも、もちろん「出す」に戻る
 export default function Dashboard({ onOpen }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
+  const [隠す, set隠す] = useState(false);
 
   const load = useCallback(() => {
     setErr('');
@@ -41,6 +49,17 @@ export default function Dashboard({ onOpen }) {
   }
 
   const 切れ = d.約束切れ || { 合計: 0, 月別: [] };
+
+  // 隠す設定のときは、少額だけの行を落とす。
+  // 行が1つも残らない月は、月ごと出さない（見出しだけが並ぶのを避ける）。
+  // **数字（予定回収額・未回収額・回収の件数）は隠しても変えない。**
+  // 変えると、隠しただけで回収できたように見える
+  const 隠した件数 = 隠す
+    ? d.月.reduce((a, m) => a + m.行.filter((r) => r.残り < 少額).length, 0) : 0;
+  const 月 = 隠す
+    ? d.月.map((m) => ({ ...m, 行: m.行.filter((r) => r.残り >= 少額) }))
+      .filter((m) => m.行.length)
+    : d.月;
 
   return (
     <>
@@ -83,7 +102,30 @@ export default function Dashboard({ onOpen }) {
         </Empty></div>
       )}
 
-      {d.月.map((m) => (
+      {/* 端数だけが残っている行を隠す。
+          覚えないので、開き直すと必ず「出す」に戻る */}
+      {d.月.length > 0 && (
+        <div className="hide-sm">
+          <label>
+            <input type="checkbox" checked={隠す}
+                   onChange={(e) => set隠す(e.target.checked)} />
+            <span>残りが <b>{yen(少額)}円</b> 未満の行を隠す</span>
+          </label>
+          <i>
+            {隠す
+              ? `${隠した件数}件を隠しています。上の金額は隠しても変わりません`
+              : '端数だけが残っている行を、いったん伏せます'}
+          </i>
+        </div>
+      )}
+
+      {隠す && 月.length === 0 && (
+        <div className="card"><Empty>
+          残っているのは、{yen(少額)}円 未満の端数だけです。
+        </Empty></div>
+      )}
+
+      {月.map((m) => (
         <div className="sec dash-m" key={m.年月}>
           <div className="dash-h">
             <h3>{m.見出し}</h3>

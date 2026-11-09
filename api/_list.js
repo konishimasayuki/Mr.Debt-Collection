@@ -57,6 +57,8 @@ export async function 顧客一覧(sql, 絞り込み) {
     return {
       id: c.id, 氏名: c.name, よみ: c.kana || '',
       索引: 索引(c.name, c.kana), テスト: !!c.is_test,
+      // 目印。付いている人は一覧のいちばん上にも出す
+      目印: !!c.pinned,
       状態: c.status || '通常', 状態日: isoOf(c.status_date),
       引き落とし: c.debit_state || '未申込', 引き落とし日: isoOf(c.debit_date),
       // 終わった取引（引き上げ・完済）。督促の対象から外し、完済/引き上げタブに出す。
@@ -134,5 +136,50 @@ export async function 顧客一覧(sql, 絞り込み) {
     { kana: a.よみ, name: a.氏名, id: a.id },
     { kana: b.よみ, name: b.氏名, id: b.id }));
 
-  return { 顧客: list, 本日: today() };
+  return { 顧客: list, 本日: today(), 月ごと: 月ごとの回収(customers, schedules, paidBy) };
+}
+
+// ── 月ごとの入金済みと、残りの回収額 ─────────────────
+//
+// 顧客一覧のいちばん上に並べる。
+// 「6月はいくら入って、いくら残っているか」を月の単位で見るため。
+//
+// 数えるのは支払予定の期日の月。入金した日ではない。
+// 入金した日で数えると、遅れて入った6月ぶんが7月に乗り、
+// 「6月はまだ残っている」が分からなくなる。
+//
+// 車を引き上げた方と、動作を試すための顧客は入れない（ダッシュボードと同じ）。
+// 出すのは**今月までの直近12か月**。先の月は、まだ払う時期が来ていない。
+function 月ごとの回収(customers, schedules, paidBy) {
+  const 外す = new Set(customers
+    .filter((c) => c.is_test || c.status === '回収' || c.archived)
+    .map((c) => c.id));
+  const t = today();
+  const [ty, tm] = t.slice(0, 7).split('-').map(Number);
+  const 端 = ty * 12 + (tm - 1);
+  const 月 = new Map();                 // 'YYYY-MM' → {予定, 入金済み, 残り, 件数}
+  for (const s of schedules) {
+    if (外す.has(s.customer_id)) continue;
+    const ym = String(isoOf(s.due_date)).slice(0, 7);
+    const [y, m] = ym.split('-').map(Number);
+    const n = y * 12 + (m - 1);
+    if (n > 端 || n < 端 - 11) continue;   // 今月までの12か月ぶんだけ
+    if (!月.has(ym)) 月.set(ym, { 予定: 0, 入金済み: 0, 残り: 0, 件数: 0 });
+    const x = 月.get(ym);
+    const 入 = Math.min(paidBy[s.id] || 0, s.planned_amount);
+    x.予定 += s.planned_amount;
+    x.入金済み += 入;
+    x.残り += Math.max(0, s.planned_amount - 入);
+    x.件数++;
+  }
+  // 新しい月が上。いま気にするのは、いちばん近い月
+  return [...月.keys()].sort().reverse().map((ym) => {
+    const x = 月.get(ym);
+    const [y, m] = ym.split('-').map(Number);
+    return {
+      年月: ym, 見出し: `${y}年${m}月分`,
+      予定: x.予定, 入金済み: x.入金済み, 残り: x.残り, 件数: x.件数,
+      今月: ym === t.slice(0, 7),
+    };
+  });
 }
