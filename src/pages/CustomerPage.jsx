@@ -84,6 +84,20 @@ export default function CustomerPage({ id, onChanged }) {
     } catch (e) { setErr(e.message); }
   };
 
+  // 期日そのものが壊れているときの直し。
+  // 入金月変更で、未払いの回を払い終えた回より前へ戻せてしまったころの記録
+  const 期日を並べ直す = async () => {
+    const 理由 = prompt('期日を、1回目から1か月ずつの並べ直します。\n\n'
+      + '金額・回数・残債は変わりません。どの回に入金が入るかは、\n'
+      + 'そのあと古い順に詰め直します。\n\n直す理由を書いてください。');
+    if (理由 === null) return;
+    if (!理由.trim()) { setErr('直す理由を書いてください。'); return; }
+    try {
+      await api.postCustomer({ id: c.id, 種類: '期日を並べ直す', メモ: 理由 });
+      load(); onChanged && onChanged();
+    } catch (e) { setErr(e.message); }
+  };
+
   const move = (n) => {
     if (!n) { setMonth(null); setDay(null); return; }
     const t = ym.y * 12 + (ym.m - 1) + n;
@@ -320,6 +334,25 @@ export default function CustomerPage({ id, onChanged }) {
           {/* 前に入金を消したり付け替えたりしたときの、並びの崩れ。
               いまはどの操作のあとも詰め直しているので、これから崩れることはない。
               それより前に崩れた記録だけ、ここから直せるようにしてある */}
+          {/* 期日そのものが壊れている。並びの崩れより先に、こちらを直す */}
+          {c.期日が壊れている && (
+            <Note kind="warn">
+              <b>期日の並びが壊れています。</b>
+              {' '}同じ月に2回ぶんが並んでいたり、回次の順と期日の順が
+              食い違っています。入金済みの回が未入金に見えることがあります。
+              <br />
+              前に<b>入金月変更で、未払いの回を払い終えた回より前へ戻した</b>ときの
+              ものです（いまは戻せないようにしてあります）。
+              <br />
+              <b>金額・回数・残債は変わりません。</b>
+              1回目の期日はそのままで、2回目から1か月ずつに並べ直します。
+              <div className="row-btn" style={{ marginTop: 8 }}>
+                <button className="btn btn-sm btn-main" onClick={期日を並べ直す}>
+                  期日を並べ直す
+                </button>
+              </div>
+            </Note>
+          )}
           {c.並びが崩れている && (
             <Note kind="warn">
               <b>支払いの記録の並びがずれています。</b>

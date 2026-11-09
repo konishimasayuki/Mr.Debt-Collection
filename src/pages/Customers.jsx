@@ -31,9 +31,24 @@ export default function Customers({ onOpen, onChanged }) {
   const [余りの高さ, set余りの高さ] = useState(0); // 最後の行も上まで送れるようにする余白
   const 表 = useRef(null);
 
+  const [月ごと, set月ごと] = useState([]);
   const load = () => {
     setErr('');
-    api.customers().then((d) => setRows(d.顧客)).catch((e) => { setRows([]); setErr(e.message); });
+    api.customers()
+      .then((d) => { setRows(d.顧客); set月ごと(d.月ごと || []); })
+      .catch((e) => { setRows([]); setErr(e.message); });
+  };
+
+  // 目印を付け外しする。一覧はその場で直して、押した手ごたえを先に返す
+  const 目印 = async (r, e) => {
+    e.stopPropagation();
+    const 次 = !r.目印;
+    setRows((o) => o.map((x) => (x.id === r.id ? { ...x, 目印: 次 } : x)));
+    try { await api.patchCustomer({ id: r.id, 目印: 次 }); }
+    catch (e2) {
+      setRows((o) => o.map((x) => (x.id === r.id ? { ...x, 目印: !次 } : x)));
+      setErr(e2.message);
+    }
   };
   useEffect(load, []);
 
@@ -50,6 +65,10 @@ export default function Customers({ onOpen, onChanged }) {
   const 残債の人 = shown.filter((r) => r.終了理由 !== '引き上げ');
   const 残債の総額 = 残債の人.reduce((a, r) => a + (r.残債金額 || 0), 0);
   const 引き上げ数 = shown.length - 残債の人.length;
+
+  // 目印の付いた人。索引の上に出す。
+  // 検索で絞っているあいだは出さない（探している人のじゃまになる）
+  const 目印の人 = key ? [] : (rows || []).filter((r) => r.目印);
 
   // 行ごとにまとめる（サーバーがあいうえお順で返しているので、並べ直さない）
   const 組 = 行.map((g) => ({ 行: g, 人: shown.filter((r) => r.索引 === g) }))
@@ -140,6 +159,60 @@ export default function Customers({ onOpen, onChanged }) {
 
       <Err>{err}</Err>
 
+      {/* 月ごとの入金済みと、残りの回収額。
+          「6月はいくら入って、いくら残っているか」を月の単位で見るため。
+          数えるのは支払予定の期日の月（入金した日ではない）*/}
+      {rows !== null && 月ごと.length > 0 && (
+        <div className="mo">
+          <div className="mo-h">
+            <h3>月ごとの回収</h3>
+            <span>期日の月で数えています。引き上げた方は入れていません</span>
+          </div>
+          <div className="mo-r">
+            {月ごと.map((m) => (
+              <div className={'mo-c' + (m.今月 ? ' now' : '')} key={m.年月}>
+                <b>{m.見出し}</b>
+                <span className="mo-in">入金済み <i>{yen(m.入金済み)}円</i></span>
+                <span className={'mo-left' + (m.残り > 0 ? ' bad' : '')}>
+                  残り <i>{yen(m.残り)}円</i>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 目印を付けた人。索引より上に置く。
+          毎日かける相手を、あいうえお順の中から探し直さずに済む */}
+      {目印の人.length > 0 && (
+        <div className="pin">
+          <div className="pin-h">
+            <h3>目印</h3>
+            <span>{目印の人.length}名。★を押すと外せます</span>
+          </div>
+          <div className="pin-r">
+            {目印の人.map((r) => (
+              <div className="pin-c" key={r.id}>
+                <button type="button" className="pin-n" onClick={() => onOpen(r.id)}>
+                  <b>{r.氏名}</b>
+                  {!r.終了 && r.遅れ日数 > 0 && (
+                    <span className="tag t-late">{r.遅れ日数}日 遅れ</span>
+                  )}
+                  {r.終了 && (
+                    <span className={'tag ' + (r.終了理由 === '引き上げ' ? 't-taken' : 't-done')}>
+                      {r.終了理由}
+                    </span>
+                  )}
+                  <i>残債 {yen(r.残債金額)}円</i>
+                </button>
+                <button type="button" className="pin-x" title="目印を外す"
+                        onClick={(e) => 目印(r, e)}>★</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {rows !== null && (
         <div className="idx">
           {行.map((g) => {
@@ -211,6 +284,11 @@ export default function Customers({ onOpen, onChanged }) {
                         + (r.終了 ? ' fin-row' : '')}
                       onClick={() => onOpen(r.id)}>
                     <td className="nm">
+                      {/* 目印。行を開かずに付け外しできるよう、名前の前に置く */}
+                      <button type="button"
+                              className={'pin-b' + (r.目印 ? ' on' : '')}
+                              title={r.目印 ? '目印を外す' : '目印を付ける'}
+                              onClick={(e) => 目印(r, e)}>★</button>
                       <b>{r.氏名}</b>
                       {r.テスト && <span className="tag t-test">テスト</span>}
                       {r.終了 && (

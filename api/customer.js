@@ -48,6 +48,26 @@ function 並びが崩れているか(予定, 入金, 充当) {
   return 今.join('|') !== 正.sort().join('|');
 }
 
+// 期日の並びが壊れていないか。
+//
+// 通常の回は「1回目がいちばん古く、1か月ずつ後ろへ」でなければならない。
+// 入金月変更で未払いの回を払い終えた回より前へ戻せてしまったとき、
+//   1回 09/27 ／ 3回 09/27 ／ 2回 10/27 ／ 4回 10/27 未入金
+// という並びになっていた。回次の順と期日の順が食い違い、
+// 同じ月に2回ぶんが並び、入金済みのはずの回が未入金に見える。
+//
+// いまは戻せないようにしてあるが、それより前に壊れた記録はそのまま残る。
+// 画面から直せるように、ここで見つける。
+function 期日が壊れているか(予定) {
+  const 通常 = 予定.filter((s) => (s.kind || '通常') === '通常')
+    .sort((a, b) => a.no - b.no);
+  if (通常.length < 2) return false;
+  const 日 = 通常.map((s) => isoOf(s.due_date));
+  // 回次の順に、必ず後ろへ進んでいること
+  for (let i = 1; i < 日.length; i++) if (日[i] <= 日[i - 1]) return true;
+  return false;
+}
+
 // ボーナスの回の番号を、期日の古い順に振り直す。
 //
 // 期日を動かすと「賞与2が賞与1より前」という並びになってしまう。
@@ -228,6 +248,7 @@ export default async (req, res) => {
           性別: c.gender || '',
           生年月日: isoOf(c.birthday), 住所: c.address || '', 電話番号: c.tel || '',
           契約日: isoOf(c.contract_date), 車種: c.car || '',
+          目印: !!c.pinned,
           // 連帯保証人と緊急連絡先。本人と連絡が取れないときに頼る相手
           保証人名前: c.guarantor_name || '', 保証人住所: c.guarantor_address || '',
           保証人電話番号: c.guarantor_tel || '', 保証人間柄: c.guarantor_relation || '',
@@ -255,6 +276,8 @@ export default async (req, res) => {
           完済: !cur,
           // 支払いの記録の並びが崩れているか。崩れているときだけ画面に入口を出す
           並びが崩れている: 並びが崩れているか(rows, payments, 充当明細),
+          // 期日そのものが壊れているか（同じ月に2回ぶん、回次と期日の順が食い違い）
+          期日が壊れている: 期日が壊れているか(rows),
         },
         支払予定: rows.map((s) => ({
           回次: s.no, 種類: s.kind || '通常',
@@ -308,6 +331,11 @@ export default async (req, res) => {
       if (b.性別 !== undefined) put('gender', String(b.性別).trim() || null);
       if (b.生年月日 !== undefined) put('birthday', b.生年月日 || null);
       if (b.契約日 !== undefined) put('contract_date', b.契約日 || null);
+      // 目印。付けた時刻も入れて、付けた順に並べられるようにする
+      if (b.目印 !== undefined) {
+        put('pinned', !!b.目印);
+        put('pinned_at', b.目印 ? new Date().toISOString() : null);
+      }
 
       // 連帯保証人と緊急連絡先。空にすると消える（引っ越し・関係が切れたとき）
       for (const [key, col] of [
@@ -727,6 +755,30 @@ export default async (req, res) => {
         const ずれ = (ny * 12 + (nm - 1)) - (by * 12 + (bm - 1));
         if (!ずれ) return bad(res, '同じ月です。変わりません。');
 
+        // ── 払い終えた回より前へは戻せない ──────────────
+        //
+        // 戻せてしまうと、同じ月に2回ぶんが並び、支払いの記録が
+        //   1回 09/27 ／ 3回 09/27 ／ 2回 10/27 ／ 4回 10/27 未入金
+        // のような並びになる。回次の順と期日の順が食い違い、
+        // 入金済みのはずの回が未入金に見える。
+        const 済 = (await sql(
+          `SELECT to_char(max(due_date),'YYYY-MM-DD') AS d FROM schedule
+            WHERE customer_id=$1 AND state='入金済み'`, [id]))[0];
+        if (済 && 済.d) {
+          const 先頭 = (() => {
+            const [y, m, dd] = 基準.due.split('-').map(Number);
+            const t = y * 12 + (m - 1) + ずれ;
+            const y2 = Math.floor(t / 12), m2 = (t % 12) + 1;
+            return `${y2}-${String(m2).padStart(2, '0')}-`
+              + String(Math.min(dd, new Date(y2, m2, 0).getDate())).padStart(2, '0');
+          })();
+          if (先頭 <= 済.d) {
+            return bad(res,
+              `払い終えた回より前へは戻せません。${済.d} より後の月を選んでください。`,
+              '前へ戻すと、同じ月に2回ぶんが並び、どの回に入金が入っているか分からなくなります');
+          }
+        }
+
         // 未払いの回を、まとめて同じ月数だけずらす。日はそのまま
         // （その月に無い日は末日にする）
         const ids = [], dues = [];
@@ -829,6 +881,58 @@ export default async (req, res) => {
            メモ]);
         return ok(res, { done: true, 前: 前の額, 後: 額,
           件数: 変える.length, 飛ばした: 飛ばす, 支払総額: 総 });
+      }
+
+      // ── 壊れた期日を並べ直す ──────────────────────
+      //
+      // 入金月変更で未払いの回を払い終えた回より前へ戻せてしまったころの記録を直す。
+      //   1回 09/27 ／ 3回 09/27 ／ 2回 10/27 ／ 4回 10/27 未入金
+      // という並びを、1回目の期日を基準に 1か月ずつの並びへ戻す。
+      //
+      // **お金は動かない。**金額も回数も残債も変わらない。
+      // どの回に入金が入るかは、このあとの詰め直しで古い順に決まる。
+      if (b.種類 === '期日を並べ直す') {
+        const メモ = String(b.メモ || '').trim();
+        if (!メモ) return bad(res, '直す理由をメモに書いてください。');
+
+        const 回 = await sql(
+          `SELECT id, no, to_char(due_date,'YYYY-MM-DD') AS due
+             FROM schedule WHERE customer_id=$1 AND kind='通常' ORDER BY no`, [id]);
+        if (回.length < 2) return bad(res, '並べ直す回がありません。');
+        if (!期日が壊れているか(回.map((s) => ({ no: s.no, kind: '通常', due_date: s.due })))) {
+          return bad(res, '期日は壊れていません。並べ直す必要はありません。');
+        }
+
+        // 1回目の期日はそのまま。そこから1か月ずつ後ろへ並べる
+        const [y0, m0, d0] = 回[0].due.split('-').map(Number);
+        const ids = [], dues = [];
+        let 変えた = 0;
+        回.forEach((s, i) => {
+          const t = y0 * 12 + (m0 - 1) + i;
+          const y = Math.floor(t / 12), m = (t % 12) + 1;
+          const d = `${y}-${String(m).padStart(2, '0')}-`
+            + String(Math.min(d0, new Date(y, m, 0).getDate())).padStart(2, '0');
+          if (d !== s.due) 変えた++;
+          ids.push(s.id); dues.push(d);
+        });
+        await sql(
+          `UPDATE schedule s SET due_date = u.d::date
+             FROM unnest($1::int[], $2::text[]) AS u(i, d)
+            WHERE s.id = u.i`, [ids, dues]);
+
+        // ボーナスの回も、通常の回に合わせて番号を振り直す
+        await 賞与の番号を振り直す(sql, id);
+        // 期日が動いたので、古い回から順に詰め直す
+        await 詰め直す(sql, id);
+
+        const 文 = `期日を並べ直した（${変えた}回ぶん）。${メモ}`;
+        await 回メモを足す(sql, id, 1, 文, who, true, null, '通常');
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'記録',$3,$4)`,
+          [id, who,
+           `期日を並べ直した：1回目 ${回[0].due} から1か月ずつ（${変えた}回ぶんが動いた）`,
+           メモ]);
+        return ok(res, { done: true, 変えた, 初回: 回[0].due, 最終: dues[dues.length - 1] });
       }
 
       if (b.種類 === '回メモ') {

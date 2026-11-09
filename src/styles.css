@@ -496,6 +496,12 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
   .cards td.act .btn{width:100%;min-height:40px}
   .cards td:empty{display:none}
   .cards .empty{border:1px solid var(--rule);background:var(--paper)}
+  /* 月ごとの回収と目印は、札の上で横に流す */
+  .mo-c{min-width:138px}
+  .pin-r{flex-direction:column}
+  .pin-c{width:100%}
+  .pin-n{flex:1 1 auto}
+
   /* 索引は上に貼り付けて、いつでも押せるように */
   .idx{padding:8px 0;gap:2px;box-shadow:0 6px 8px -6px rgba(22,24,26,.18)}
   .idx-b{padding:9px 0;font-size:13px}
@@ -575,6 +581,46 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 @media (hover:hover){.idx-b:hover:not(.off){background:var(--paper-2)}}
 .idx-b.on{background:var(--indigo);border-color:var(--indigo);color:#fff;font-weight:700}
 .idx-b.off{color:var(--ink-3);border-color:var(--rule);background:transparent;cursor:default}
+
+/* 月ごとの回収。顧客一覧の上に、新しい月から横に並べる */
+.mo{margin-bottom:12px}
+.mo-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.mo-h h3{margin:0;padding:0;border:0;font-size:13.5px}
+.mo-h span{font-size:11.5px;color:var(--ink-3)}
+/* 横に流す。月は多いので、縦に積むと一覧が下へ追いやられる */
+.mo-r{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.mo-c{flex:0 0 auto;min-width:148px;border:1px solid var(--rule);background:var(--paper);
+  padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.mo-c.now{border-color:var(--ink-3);background:var(--paper-2)}
+.mo-c b{font-size:12.5px}
+.mo-c span{font-size:11.5px;color:var(--ink-2);display:flex;justify-content:space-between;
+  gap:8px}
+.mo-c i{font-style:normal;font-size:13px;font-weight:700;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.mo-left.bad i{color:var(--overdue)}
+
+/* 目印。毎日かける相手を、あいうえお順の中から探し直さずに済むようにする */
+.pin{margin-bottom:12px}
+.pin-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.pin-h h3{margin:0;padding:0;border:0;font-size:13.5px}
+.pin-h span{font-size:11.5px;color:var(--ink-3)}
+.pin-r{display:flex;gap:8px;flex-wrap:wrap}
+.pin-c{display:flex;align-items:stretch;border:1px solid var(--rule);background:var(--paper)}
+.pin-n{display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+  padding:8px 10px;background:none;border:0;cursor:pointer;text-align:left;font:inherit}
+.pin-n:hover{background:var(--paper-2)}
+.pin-n b{font-size:14px}
+.pin-n i{font-style:normal;font-size:11.5px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums}
+.pin-x{border:0;border-left:1px solid var(--rule);background:none;cursor:pointer;
+  padding:0 10px;font-size:15px;color:var(--today);line-height:1}
+.pin-x:hover{background:var(--paper-2)}
+
+/* 一覧の行に出す目印。押しても行は開かない（onClick で止めている）*/
+.pin-b{border:0;background:none;cursor:pointer;padding:0 6px 0 0;font-size:14px;
+  line-height:1;color:var(--rule-strong)}
+.pin-b.on{color:var(--today)}
+.pin-b:hover{color:var(--today)}
 
 /* 行の見出し（表の中に差し込む）*/
 .grp-row th{background:var(--paper-2);border-top:1px solid var(--rule-strong);
@@ -706,6 +752,12 @@ button.att-i:hover{border-color:var(--indigo)}
 /* 足し算の説明。見出しの行の下に、横いっぱいで落とす */
 .dash-sum{flex:1 1 100%;font-size:11.5px;color:var(--ink-3);margin-top:2px}
 .dash-sum b{color:var(--ink-2);font-variant-numeric:tabular-nums}
+
+/* 少額を隠す切り替え。月ごとの一覧の手前に置く */
+.hide-sm{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+.hide-sm label{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px}
+.hide-sm input{width:16px;height:16px;cursor:pointer}
+.hide-sm i{font-style:normal;font-size:11.5px;color:var(--ink-3)}
 
 /* 未回収の顧客の行。押すと顧客ページへ */
 .dash-rows{display:flex;flex-direction:column}
