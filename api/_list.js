@@ -172,14 +172,18 @@ function 月ごとの回収(customers, schedules, paidBy) {
     x.残り += Math.max(0, s.planned_amount - 入);
     x.件数++;
   }
-  // 新しい月が上。いま気にするのは、いちばん近い月
-  return [...月.keys()].sort().reverse().map((ym) => {
-    const x = 月.get(ym);
-    const [y, m] = ym.split('-').map(Number);
-    return {
-      年月: ym, 見出し: `${y}年${m}月分`,
-      予定: x.予定, 入金済み: x.入金済み, 残り: x.残り, 件数: x.件数,
-      今月: ym === t.slice(0, 7),
-    };
-  });
+  // 新しい月が上。いま気にするのは、いちばん近い月。
+  // **残りが0円の月は出さない。**全部回収できた月は、もう見るものがない
+  //（ダッシュボードで「100%回収できた月は出さない」としているのと同じ考え方）
+  return [...月.keys()].sort().reverse()
+    .filter((ym) => 月.get(ym).残り > 0)
+    .map((ym) => {
+      const x = 月.get(ym);
+      const [y, m] = ym.split('-').map(Number);
+      return {
+        年月: ym, 見出し: `${y}年${m}月分`,
+        予定: x.予定, 入金済み: x.入金済み, 残り: x.残り, 件数: x.件数,
+        今月: ym === t.slice(0, 7),
+      };
+    });
 }

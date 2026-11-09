@@ -166,16 +166,17 @@ export default function Customers({ onOpen, onChanged }) {
         <div className="mo">
           <div className="mo-h">
             <h3>月ごとの回収</h3>
-            <span>期日の月で数えています。引き上げた方は入れていません</span>
+            <span>
+              期日の月で数えています。
+              <b>全部回収できた月は出しません。</b>引き上げた方は入れていません
+            </span>
           </div>
           <div className="mo-r">
             {月ごと.map((m) => (
               <div className={'mo-c' + (m.今月 ? ' now' : '')} key={m.年月}>
                 <b>{m.見出し}</b>
                 <span className="mo-in">入金済み <i>{yen(m.入金済み)}円</i></span>
-                <span className={'mo-left' + (m.残り > 0 ? ' bad' : '')}>
-                  残り <i>{yen(m.残り)}円</i>
-                </span>
+                <span className="mo-left bad">残り <i>{yen(m.残り)}円</i></span>
               </div>
             ))}
           </div>
