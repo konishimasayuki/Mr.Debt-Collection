@@ -70,6 +70,12 @@ export default function Customers({ onOpen, onChanged }) {
   // 検索で絞っているあいだは出さない（探している人のじゃまになる）
   const 目印の人 = key ? [] : (rows || []).filter((r) => r.目印);
 
+  // エンジンストップの方。目印のすぐ下に出す。
+  // **終わった取引ではない。**車は止めたが取引は続くので、
+  // 未入金にもダッシュボードにも、これまでどおり出ている。
+  // 電話をかける前に「この人は車が止まっている」と分かるようにする
+  const 停止の人 = key ? [] : (rows || []).filter((r) => r.エンジンストップ);
+
   // 行ごとにまとめる（サーバーがあいうえお順で返しているので、並べ直さない）
   const 組 = 行.map((g) => ({ 行: g, 人: shown.filter((r) => r.索引 === g) }))
     .filter((g) => g.人.length);
@@ -214,6 +220,31 @@ export default function Customers({ onOpen, onChanged }) {
         </div>
       )}
 
+      {/* エンジンストップ。目印のすぐ下。終わった取引ではない */}
+      {停止の人.length > 0 && (
+        <div className="pin eng-list">
+          <div className="pin-h">
+            <h3>エンジンストップ</h3>
+            <span>
+              {停止の人.length}名。<b>取引は続いています</b>（督促も請求もそのまま）
+            </span>
+          </div>
+          <div className="pin-r">
+            {停止の人.map((r) => (
+              <div className="pin-c" key={r.id}>
+                <button type="button" className="pin-n" onClick={() => onOpen(r.id)}>
+                  <b>{r.氏名}</b>
+                  {r.遅れ日数 > 0 && (
+                    <span className="tag t-late">{r.遅れ日数}日 遅れ</span>
+                  )}
+                  <i>残債 {yen(r.残債金額)}円</i>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {rows !== null && (
         <div className="idx">
           {行.map((g) => {
@@ -296,6 +327,9 @@ export default function Customers({ onOpen, onChanged }) {
                         <span className={'tag ' + (r.終了理由 === '引き上げ' ? 't-taken' : 't-done')}>
                           {r.終了理由}
                         </span>
+                      )}
+                      {r.エンジンストップ && (
+                        <span className="tag t-eng">エンジンストップ</span>
                       )}
                       {/* 遅れている人だけ出す。遅れていなければ何も出さない */}
                       {!r.終了 && r.遅れ日数 > 0 && (

@@ -36,7 +36,14 @@ const STATEMENTS = [
      -- 取引の状態。値は今も「回収」のまま(車両を引き上げて終わり。督促も請求もしない)。
      -- 画面での呼び名は「引き上げ」にしている。値そのものは変えていない(移行が要らないように)。
      -- 完済はここに入れない。入金から決まるものなので、二重に持つとずれる。
-     status          text NOT NULL DEFAULT '通常' CHECK (status IN ('通常','回収')),
+     -- 取引の状態。
+     --   通常          … ふだんどおり請求する
+     --   エンジンストップ … 車は止めたが、取引は続く。督促も請求もそのまま
+     --   回収          … 車を引き上げて終わり。督促も請求もしない
+     -- 画面では '回収' を「車両引き上げ」と呼ぶ（値は移行を避けてそのまま）。
+     -- 完済はここに入れない。入金から決まるものなので、二重に持つとずれる。
+     status          text NOT NULL DEFAULT '通常'
+                     CHECK (status IN ('通常','エンジンストップ','回収')),
      status_date     date,                             -- 引き上げた日
      -- 口座振替（自動引き落とし）の手続きの状態。全員まず「未申込」。
      debit_state     text NOT NULL DEFAULT '未申込'
@@ -105,10 +112,26 @@ const STATEMENTS = [
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS pinned_at timestamptz`,
   `CREATE INDEX IF NOT EXISTS customer_pinned_idx ON customer (pinned, pinned_at)`,
   // 制約はあとから足す。すでに列がある場合は CHECK が付いていないため
-  `DO $$ BEGIN
+  `DO $$
+   DECLARE c text;
+   BEGIN
+     -- すでに作ってあるデータベースの決まりを、エンジンストップぶんまで広げる。
+     -- 古い決まりのままだと、エンジンストップにできない。
+     --
+     -- **名前で探さない。**表を作ったときに付いた自動の名前
+     -- （customer_status_check）と、あとから足した名前（customer_status_ck）が
+     -- あり、データベースによってどちらかになっている。
+     -- 中身で探して、エンジンストップの入っていないものを外す
+     -- （payment の source と同じ直し方）。
+     FOR c IN SELECT conname FROM pg_constraint
+               WHERE conrelid='customer'::regclass AND contype='c'
+                 AND pg_get_constraintdef(oid) LIKE '%status%'
+                 AND pg_get_constraintdef(oid) NOT LIKE '%エンジンストップ%' LOOP
+       EXECUTE format('ALTER TABLE customer DROP CONSTRAINT %I', c);
+     END LOOP;
      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='customer_status_ck') THEN
        ALTER TABLE customer ADD CONSTRAINT customer_status_ck
-         CHECK (status IN ('通常','回収'));
+         CHECK (status IN ('通常','エンジンストップ','回収'));
      END IF;
      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='customer_debit_ck') THEN
        ALTER TABLE customer ADD CONSTRAINT customer_debit_ck

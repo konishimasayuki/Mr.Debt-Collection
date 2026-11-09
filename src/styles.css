@@ -103,6 +103,8 @@ tbody tr.off td{text-decoration:line-through}
 tbody tr.test-row>td{background:#F5F2FB}
 /* 車両を引き上げた顧客 */
 .t-taken{background:#F6E3DF;border-color:#D4A99F;color:#8C2F26}
+/* エンジンストップ。引き上げ（赤）とは別の色。取引は続いている */
+.t-eng{background:var(--today-bg);border-color:#DCC98C;color:var(--today)}
 /* ボーナス払い。金額が大きいので、通常の回と見分けが付くようにする */
 .t-bonus{background:#EAE6F4;border-color:#B3A9D1;color:#4A3B7A;font-weight:600}
 /* 未入金で、月額の行かボーナスの行かを分けて出す印。
@@ -145,6 +147,10 @@ td.act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .dbt-o.on{border-color:var(--indigo);background:#EEF2F8;box-shadow:inset 0 0 0 1px var(--indigo)}
 .dbt-o.taken.on{border-color:var(--overdue);background:#FBEDEA;
   box-shadow:inset 0 0 0 1px var(--overdue)}
+/* エンジンストップ。引き上げ（赤）とは別の色にする。
+   取引は続くので、終わりの赤と同じにすると取り違える */
+.dbt-o.stop.on{border-color:var(--today);background:var(--today-bg);
+  box-shadow:inset 0 0 0 1px var(--today)}
 
 /* ── 入力 ───────────────────────── */
 .f{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
@@ -343,6 +349,9 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .strip .s.bad b{color:var(--overdue)}
 .strip .s.good b{color:var(--paid)}
 .strip .s.taken b{color:var(--overdue)}
+/* エンジンストップ。引き上げ（赤）とは別の色。取引は続いている */
+.strip .s.eng b{color:var(--today)}
+.strip .s.eng{background:var(--today-bg)}
 .strip .s.bns b{color:#4A3B7A}
 /* 押して変えられる枠（口座振替）。押せることが分かるようにする */
 .strip button.s{font-family:inherit;text-align:left;background:var(--paper-2);cursor:pointer;
@@ -630,6 +639,13 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .pin-x{border:0;border-left:1px solid var(--rule);background:none;cursor:pointer;
   padding:0 10px;font-size:15px;color:var(--pin);line-height:1}
 .pin-x:hover{background:var(--paper-2)}
+
+/* エンジンストップの一覧。目印と同じ形だが、外す★は出さない
+   （状態は顧客情報の編集で変えるもので、ここで切り替えるものではない）*/
+.eng-list .pin-c{border-color:#DCC98C;background:var(--today-bg)}
+.eng-list .pin-n:hover{background:#F6EDD6}
+.eng-list .pin-h h3{color:var(--today)}
+.eng-list .pin-h span b{color:var(--ink-2)}
 
 /* 一覧の行に出す目印。押しても行は開かない（onClick で止めている）*/
 /* 押せる場所を、星そのものより広く取る。

@@ -236,6 +236,10 @@ export default function CustomerPage({ id, onChanged }) {
           <div className="s bad"><b>{yen(c.この回の残り)}円</b>
             <i>この回の残り（請求 {yen(c.この回の請求)}円 / 入金 {yen(c.この回の入金)}円）</i></div>
         )}
+        {c.状態 === 'エンジンストップ' && (
+          <div className="s eng"><b>エンジンストップ</b>
+            <i>{c.状態日 ? `${jpDate(c.状態日)} に停止。` : ''}取引は続いています（督促も請求もそのまま）</i></div>
+        )}
         {c.状態 === '回収' && (
           <div className="s taken"><b>車両を引き上げ</b>
             <i>{c.状態日 ? `${jpDate(c.状態日)} に引き上げ。` : ''}督促の対象から外れています</i></div>
@@ -1124,6 +1128,49 @@ function EditCustomer({ c, 支払予定, onClose, onDone }) {
         </>
       }
     >
+      {/* 取引の状態をいちばん上に置く。電話を受けてまず確かめるのがここで、
+          取り違えると引き上げ済みの方へ督促の電話をかけてしまう。
+          何が起きるかを、それぞれの札に書いておく */}
+      <div className="f">
+        <label>取引の状態</label>
+        <div className="dbt-pick">
+          <button className={'dbt-o' + (v.状態 === '通常' ? ' on' : '')}
+                  onClick={() => set('状態')('通常')}>
+            <b>通常</b><i>ふだんどおり請求します</i>
+          </button>
+          <button className={'dbt-o stop' + (v.状態 === 'エンジンストップ' ? ' on' : '')}
+                  onClick={() => set('状態')('エンジンストップ')}>
+            <b>エンジンストップ</b><i>車は止めますが、取引は続きます</i>
+          </button>
+          <button className={'dbt-o taken' + (v.状態 === '回収' ? ' on' : '')}
+                  onClick={() => set('状態')('回収')}>
+            <b>車両引き上げ</b><i>ここで終わり。督促も請求もしません</i>
+          </button>
+        </div>
+      </div>
+      {v.状態 === 'エンジンストップ' && (
+        <>
+          <Text label="止めた日" type="date" value={v.状態日} onChange={set('状態日')} />
+          <Note kind="warn">
+            <b>取引は続きます。</b>未入金タブにもダッシュボードにも、これまでどおり出ます。
+            督促も請求もそのままです。
+            <br />
+            顧客一覧では<b>目印の下に「エンジンストップ」の欄</b>が出て、
+            この方が並びます。もとに戻すときは「通常」を選び直してください。
+          </Note>
+        </>
+      )}
+      {v.状態 === '回収' && (
+        <>
+          <Text label="引き上げた日" type="date" value={v.状態日} onChange={set('状態日')} />
+          <Note kind="warn">
+            引き上げにすると、この方は<b>未入金タブに出なくなり</b>、督促の対象から外れます。
+            顧客一覧では背景が薄いグレーになり、<b>完済/引き上げタブ</b>に並びます。
+            もとに戻すときは「通常」を選び直してください。
+          </Note>
+        </>
+      )}
+
       <div className="grid2">
         <Text label="名前" value={v.名前} onChange={set('名前')} />
         <Text label="よみ（カナ）" value={v.よみ} onChange={set('よみ')}
@@ -1299,32 +1346,6 @@ function EditCustomer({ c, 支払予定, onClose, onDone }) {
           月をすべて外すと、<b>ボーナス払いをやめます</b>。
           入金が入っているボーナスの回は残ります。
         </Note>
-      )}
-
-      {/* 車両を引き上げたら、督促も請求も止める。取り違えると引き上げ済みの方へ
-          督促の電話をかけてしまうので、何が起きるかをその場に書いておく */}
-      <div className="f">
-        <label>取引の状態</label>
-        <div className="dbt-pick">
-          <button className={'dbt-o' + (v.状態 === '通常' ? ' on' : '')}
-                  onClick={() => set('状態')('通常')}>
-            <b>通常</b><i>ふだんどおり請求します</i>
-          </button>
-          <button className={'dbt-o taken' + (v.状態 === '回収' ? ' on' : '')}
-                  onClick={() => set('状態')('回収')}>
-            <b>車両を引き上げ</b><i>ここで終わり。督促も請求もしません</i>
-          </button>
-        </div>
-      </div>
-      {v.状態 === '回収' && (
-        <>
-          <Text label="引き上げた日" type="date" value={v.状態日} onChange={set('状態日')} />
-          <Note kind="warn">
-            引き上げにすると、この方は<b>未入金タブに出なくなり</b>、督促の対象から外れます。
-            顧客一覧では背景が薄いグレーになり、<b>完済/引き上げタブ</b>に並びます。
-            もとに戻すときは「通常」を選び直してください。
-          </Note>
-        </>
       )}
 
       <Note>
