@@ -82,6 +82,20 @@ check('月ごとの回収より下にある', await p.evaluate(() => {
 }));
 await p.screenshot({ path: '/tmp/pin-1.png' });
 
+console.log('■ 目印の★はどピンク');
+// 台帳のほかの色（落ち着いた色でそろえてある）に、わざと混ぜていない。
+// 名前の列にひとつだけ出る印なので、ぱっと見つかる色にしてある
+const ピンク = 'rgb(227, 0, 127)';
+check('目印の欄の★', await p.evaluate(
+  () => getComputedStyle(document.querySelector('.pin-x')).color) === ピンク,
+  await p.evaluate(() => getComputedStyle(document.querySelector('.pin-x')).color));
+check('一覧の付いた★', await p.evaluate(
+  () => getComputedStyle(document.querySelector('.pin-b.on')).color) === ピンク,
+  await p.evaluate(() => getComputedStyle(document.querySelector('.pin-b.on')).color));
+check('付いていない★は灰色のまま', await p.evaluate(
+  () => getComputedStyle([...document.querySelectorAll('.pin-b')]
+    .find((e) => !e.classList.contains('on'))).color) !== ピンク);
+
 console.log('■ 目印から顧客ページへ行ける');
 await 印.locator('.pin-n', { hasText: 'アオキ 一郎' }).click();
 await p.waitForSelector('.rec-top');
@@ -140,6 +154,11 @@ await p.waitForSelector('.rec-top');
 await p.waitForTimeout(800);
 const 名の横 = p.locator('.cust-head .pin-big');
 check('名前の左に★がある', (await 名の横.count()) === 1);
+check('顧客ページの★もどピンク', await p.evaluate(
+  () => getComputedStyle(document.querySelector('.cust-head .pin-big')).color)
+    === 'rgb(227, 0, 127)',
+  await p.evaluate(
+    () => getComputedStyle(document.querySelector('.cust-head .pin-big')).color));
 check('顧客ページの★は40px角ある', await p.evaluate(() => {
   const r = document.querySelector('.cust-head .pin-big').getBoundingClientRect();
   return r.width >= 38 && r.height >= 38;
