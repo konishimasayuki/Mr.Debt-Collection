@@ -139,6 +139,7 @@
   .t-csv{background:var(--panel); border-color:var(--rule-2); color:var(--ink-2)}
   .t-manual{background:var(--today-bg); border-color:var(--today-line); color:var(--today)}
   .t-eng{background:var(--today-bg); border-color:var(--today-line); color:var(--today); font-weight:700}
+  .t-est{background:var(--sunk); border-color:var(--rule); color:var(--ink-3)}
 
   /* ── 帯。注意と、こつ ── */
   .box{
@@ -656,7 +657,8 @@
         <tbody>
           <tr><td>名前</td><td>必須</td></tr>
           <tr><td>よみ（カナ）</td><td><strong>必ず入れてください。</strong> あいうえお順と、CSVの振込人名の照合に使います</td></tr>
-          <tr><td>性別・生年月日・電話番号・住所</td><td>分かる範囲で</td></tr>
+          <tr><td>性別・生年月日・電話番号</td><td>分かる範囲で</td></tr>
+          <tr><td>郵便番号・住所</td><td>分かる範囲で。<strong>郵便番号は空のままでかまいません</strong>（下記）</td></tr>
           <tr><td>契約日・車種</td><td>分かる範囲で</td></tr>
           <tr><td>債権譲渡会社・債権譲渡先</td><td>「設定」タブで会社を登録してから選べます</td></tr>
           <tr><td>月々の金額・支払回数・毎月の支払日</td><td><strong>あとから変えられません</strong>（下記）</td></tr>
@@ -667,6 +669,35 @@
       </table>
     </div>
     <p>登録すると、支払予定が回数ぶん自動で作られます。毎月の支払日がその月に無いとき（31日など）は、その月の末日になります。</p>
+
+    <h3>郵便番号</h3>
+    <div class="where"><b>新規顧客登録</b> / <b>顧客ページ</b> <i>▸</i> 顧客情報を編集 <i>▸</i> 住所の<b>左</b></div>
+    <p>住所の左にあります（封書の宛名を書く順と同じです）。打ち方はそろえます。<code>1234567</code> でも <code>〒123-4567</code> でも、全角で打っても <code>123-4567</code> になります。<strong>7桁にならないと断ります。</strong>顧客ページでは、住所と一緒に 〒123-4567 福岡県久留米市東町1-1 と出ます。</p>
+
+    <h4>空のままにすると、住所から推定します</h4>
+    <p>郵便番号を入れていない方は、<strong>住所から郵便番号を引いて</strong>顧客ページに出します。推定したものには <span class="tag t-est">推定</span> の印が付き、文字が薄くなります。<strong>印が付いているあいだは、確かめてから使ってください。</strong>督促の封書に刷る前に、ひと目で見分けられるようにしてあります。</p>
+    <p>編集を開くと、欄の下に「住所から 〒100-0001 と推定して顧客情報に出しています」と出ます。その横の<strong>「この番号を入れる」</strong>を押すと、その番号が欄に入ります。保存すれば、以後は推定ではなく<strong>入れた番号</strong>になり、印も消えます。</p>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>その顧客の状態</th><th>顧客ページに出るもの</th></tr></thead>
+        <tbody>
+          <tr><td>郵便番号を入れてある</td><td>入れた番号（印なし）</td></tr>
+          <tr><td>空で、住所から町まで分かった</td><td>推定した番号 <span class="tag t-est">推定</span></td></tr>
+          <tr><td>空で、町まで分からなかった</td><td>その市区町村の番号 <span class="tag t-est">推定</span></td></tr>
+          <tr><td>空で、住所も空</td><td>何も出ません</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>推定で気をつけること</h4>
+    <ul>
+      <li><strong>入れた番号のほうが強いです。</strong>入れてあるときは住所を見にきません</li>
+      <li><strong>丁目や番地で番号が分かれる町</strong>（札幌の「大通西」など、全国で1,271か所）は、その町の代表の番号を出します。<strong>丁目によっては実際と違うことがあります</strong></li>
+      <li>町まで決められない町（386か所）は、その市区町村の番号（「以下に掲載がない場合」）になります</li>
+      <li>京都の通り名の住所のように、町名で書かれていない住所も市区町村までになります</li>
+      <li><strong>住所は台帳の外に出ません。</strong>郵便局のデータを台帳の中に持っていて、その中だけで引いています</li>
+    </ul>
+    <p>郵便番号は、町ができたり分かれたりすると変わります。元にしているのは<strong>郵便局が配っている公式のデータ</strong>です。新しくする手順は <code>tools/郵便番号表を作る.mjs</code> の冒頭に書いてあります。</p>
 
     <h3>連帯保証人・緊急連絡先・勤務先</h3>
     <div class="where"><b>顧客一覧</b> <i>▸</i> ＋ 新規顧客登録　／　<b>顧客ページ</b> <i>▸</i> 顧客情報を編集</div>
@@ -953,6 +984,7 @@
           <tr><td><span class="tag t-manual">取込済み</span></td><td>CSVの確認</td><td>すでに取り込んだ入金</td></tr>
           <tr><td><span class="tag t-dup">重複</span></td><td>CSVの確認</td><td>同じファイルの中に同じ入金がある</td></tr>
           <tr><td><span class="tag t-warn">未割当</span></td><td>入金履歴</td><td>どのお客様か決まっていない入金</td></tr>
+          <tr><td><span class="tag t-est">推定</span></td><td>顧客ページの郵便番号</td><td>入力ではなく、<strong>住所から引いた番号</strong>です</td></tr>
           <tr><td><span class="tag t-eng">エンジンストップ</span></td><td>顧客一覧</td><td>車は止めましたが、<strong>取引は続いています</strong></td></tr>
           <tr><td><span class="tag t-done">完済</span> <span class="tag t-late">引き上げ</span></td><td>完済/引き上げ</td><td>終わり方</td></tr>
         </tbody>

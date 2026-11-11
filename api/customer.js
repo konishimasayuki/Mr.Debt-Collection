@@ -6,6 +6,7 @@ import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
 import { readBody, query, isoOf, today, yen, norm, remakeBonus, dueOf,
          詰め直す, 入金種類, 充てる順 } from './_lib.js';
+import { 郵便番号を整える, 住所から郵便番号 } from './_zip.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -234,6 +235,16 @@ export default async (req, res) => {
       const 通常 = rows.filter((s) => (s.kind || '通常') === '通常');
       const ボ = rows.filter((s) => s.kind === 'ボーナス');
 
+      // 郵便番号。入っていなければ住所から逆に引く。
+      // 逆引きの表は1MBあるので、**空のときだけ**開く（入っていれば触らない）。
+      // 引けたものは「推定」として別の鍵で返す。入力そのものとは混ぜない
+      const 推定 = c.zip ? null
+        : await 住所から郵便番号(c.address).catch((e) => {
+          // 表が読めなくても顧客ページは開けないといけない。郵便番号だけ諦める
+          console.warn('[zip] 住所から引けませんでした:', e && e.message);
+          return null;
+        });
+
       return ok(res, {
         顧客: {
           id: c.id, 氏名: c.name, よみ: c.kana || '', テスト: !!c.is_test,
@@ -247,6 +258,13 @@ export default async (req, res) => {
           ボーナス回数の指定: c.bonus_count || '',
           性別: c.gender || '',
           生年月日: isoOf(c.birthday), 住所: c.address || '', 電話番号: c.tel || '',
+          // 郵便番号。入れてもらったもの。空のこともある
+          郵便番号: c.zip || '',
+          // 入っていないときに、住所から引いた番号。**入力ではない**ので画面で断る。
+          // どこまでは '町域'（1つに決まる）か '市区町村'（以下に掲載がない場合）か
+          //「住所に書いてある」（住所の文に〒が混ざっていた）
+          郵便番号推定: 推定 ? 推定.番号 : '',
+          郵便番号推定のもと: 推定 ? 推定.どこまで : '',
           契約日: isoOf(c.contract_date), 車種: c.car || '',
           目印: !!c.pinned,
           // 連帯保証人と緊急連絡先。本人と連絡が取れないときに頼る相手
@@ -327,6 +345,17 @@ export default async (req, res) => {
       if (b.顧客メモ !== undefined) put('memo', String(b.顧客メモ));
       if (b.電話番号 !== undefined) put('tel', String(b.電話番号).trim() || null);
       if (b.住所 !== undefined) put('address', String(b.住所).trim() || null);
+      // 郵便番号。全角でも〒付きでもハイフン無しでも受けて 123-4567 にそろえる。
+      // 空にすると消える（消したあとは住所から逆に引いた番号が出る）
+      if (b.郵便番号 !== undefined) {
+        const z = String(b.郵便番号).trim();
+        if (!z) put('zip', null);
+        else {
+          const 整 = 郵便番号を整える(z);
+          if (!整) return bad(res, '郵便番号は7桁で入れてください。', `受け取った文字: ${z}`);
+          put('zip', 整);
+        }
+      }
       if (b.車種 !== undefined) put('car', String(b.車種).trim() || null);
       if (b.性別 !== undefined) put('gender', String(b.性別).trim() || null);
       if (b.生年月日 !== undefined) put('birthday', b.生年月日 || null);

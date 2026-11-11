@@ -20,6 +20,7 @@ const STATEMENTS = [
      kana            text,
      gender          text,
      birthday        date,
+     zip             text,                             -- 郵便番号 123-4567
      address         text,
      tel             text,
      email           text,
@@ -108,6 +109,8 @@ const STATEMENTS = [
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_name text`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_address text`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_tel text`,
+  // 郵便番号。空のままでもよい（空なら住所から逆に引いて画面に出す）
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS zip text`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS pinned boolean NOT NULL DEFAULT false`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS pinned_at timestamptz`,
   `CREATE INDEX IF NOT EXISTS customer_pinned_idx ON customer (pinned, pinned_at)`,
