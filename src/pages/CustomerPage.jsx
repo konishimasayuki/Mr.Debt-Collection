@@ -173,7 +173,22 @@ export default function CustomerPage({ id, onChanged }) {
         {c.性別 && <span>{c.性別}</span>}
         {c.生年月日 && <span>{jpDate(c.生年月日)}（{年齢(c.生年月日)}歳）</span>}
         {c.電話番号 && <a href={`tel:${c.電話番号.replace(/-/g, '')}`}>{c.電話番号}</a>}
-        {c.住所 && <span>{c.住所}</span>}
+        {/* 郵便番号と住所。封書を出すとき、住所だけでは足りない。
+            入れてもらった番号が無ければ、住所から逆に引いた番号を**推定として**出す */}
+        {(c.住所 || c.郵便番号 || c.郵便番号推定) && (
+          <span className="addr">
+            {c.郵便番号 ? <b className="zip">〒{c.郵便番号}</b>
+              : c.郵便番号推定 ? (
+                <span className="zip zip-g"
+                      title={'郵便番号が入っていないので、住所から推定しています'
+                        + `（${c.郵便番号推定のもと}まで一致）。`
+                        + '正しい番号は顧客情報の編集で入れてください。'}>
+                  〒{c.郵便番号推定}<i>推定</i>
+                </span>
+              ) : null}
+            {c.住所}
+          </span>
+        )}
         {c.車種 && <span>{c.車種}</span>}
         {c.契約日 && <span>契約 {jpDate(c.契約日)}</span>}
         {c.債権譲渡会社 && <span>譲渡会社：{c.債権譲渡会社}</span>}
@@ -1040,6 +1055,7 @@ function EditCustomer({ c, 支払予定, onClose, onDone }) {
   const 基準 = 未払い[0] || null;
   const [v, setV] = useState({
     名前: c.氏名, よみ: c.よみ, 性別: c.性別, 生年月日: c.生年月日 || '',
+    郵便番号: c.郵便番号 || '',
     住所: c.住所, 電話番号: c.電話番号, 契約日: c.契約日 || '', 車種: c.車種,
     保証人名前: c.保証人名前 || '', 保証人住所: c.保証人住所 || '',
     保証人電話番号: c.保証人電話番号 || '', 保証人間柄: c.保証人間柄 || '',
@@ -1183,7 +1199,24 @@ function EditCustomer({ c, 支払予定, onClose, onDone }) {
         <Text label="生年月日" type="date" value={v.生年月日} onChange={set('生年月日')} />
         <Text label="電話番号" value={v.電話番号} onChange={set('電話番号')} />
       </div>
-      <Text label="住所" value={v.住所} onChange={set('住所')} />
+      {/* 郵便番号は住所の左。封書の宛名を書く順と同じにしておく。
+          空のままでもよい。空なら住所から逆に引いた番号が顧客情報に出る */}
+      <div className="grid-zip">
+        <Text label="郵便番号" value={v.郵便番号} onChange={set('郵便番号')}
+              placeholder="123-4567" inputMode="numeric" />
+        <Text label="住所" value={v.住所} onChange={set('住所')} />
+      </div>
+      {/* 説明は欄の中ではなく、下に1行で置く。
+          郵便番号の欄は狭いので、中に入れると3行に折り返して読めない */}
+      <div className="zip-hint">
+        {!v.郵便番号 && c.郵便番号推定 ? (
+          <>
+            郵便番号が空なので、住所から <b>〒{c.郵便番号推定}</b> と推定して顧客情報に出しています。
+            <button type="button" className="zip-take"
+                    onClick={() => set('郵便番号')(c.郵便番号推定)}>この番号を入れる</button>
+          </>
+        ) : '郵便番号は空のままでもかまいません。空なら住所から推定して顧客情報に出します。'}
+      </div>
       <div className="grid2">
         <Text label="契約日" type="date" value={v.契約日} onChange={set('契約日')} />
         <Text label="車種" value={v.車種} onChange={set('車種')} />

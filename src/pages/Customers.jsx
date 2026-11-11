@@ -376,7 +376,7 @@ export default function Customers({ onOpen, onChanged }) {
 
 // ── 新規顧客登録 ───────────────────────────
 const 空 = {
-  名前: '', よみ: '', 性別: '', 生年月日: '', 住所: '', 電話番号: '',
+  名前: '', よみ: '', 性別: '', 生年月日: '', 郵便番号: '', 住所: '', 電話番号: '',
   契約日: '', 車種: '', 債権譲渡会社: '', 債権譲渡先: '',
   保証人名前: '', 保証人住所: '', 保証人電話番号: '', 保証人間柄: '',
   緊急連絡先名前: '', 緊急連絡先住所: '', 緊急連絡先電話番号: '', 緊急連絡先間柄: '',
@@ -447,7 +447,16 @@ function NewCustomer({ onClose, onDone }) {
         <Text label="生年月日" type="date" value={v.生年月日} onChange={set('生年月日')} />
         <Text label="電話番号" value={v.電話番号} onChange={set('電話番号')} placeholder="090-0000-0000" />
       </div>
-      <Text label="住所" value={v.住所} onChange={set('住所')} />
+      {/* 郵便番号は住所の左。封書の宛名を書く順と同じ。
+          空でよい（空なら顧客ページで住所から推定して出す） */}
+      <div className="grid-zip">
+        <Text label="郵便番号" value={v.郵便番号} onChange={set('郵便番号')}
+              placeholder="123-4567" inputMode="numeric" />
+        <Text label="住所" value={v.住所} onChange={set('住所')} />
+      </div>
+      <div className="zip-hint">
+        郵便番号は空のままでもかまいません。空なら住所から推定して顧客情報に出します。
+      </div>
       <div className="grid2">
         <Text label="契約日" type="date" value={v.契約日} onChange={set('契約日')} />
         <Text label="車種" value={v.車種} onChange={set('車種')} placeholder="タントカスタム" />

@@ -168,6 +168,15 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
 .f .hint{font-size:12px;color:var(--ink-3)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
+/* 郵便番号と住所。封書の宛名を書く順と同じに、郵便番号を左へ置く。
+   スマホでは上下に積む（横に並べると住所がほとんど見えない） */
+.grid-zip{display:grid;grid-template-columns:168px 1fr;gap:0 14px}
+@media (max-width:640px){.grid-zip{grid-template-columns:1fr}}
+/* 推定した番号をそのまま入れるボタン。欄の下の説明の中に置く */
+.zip-take{appearance:none;background:none;border:0;padding:0;margin-left:6px;
+  font:inherit;color:var(--indigo);text-decoration:underline;cursor:pointer}
+/* 郵便番号の説明。欄の下に1行で置く（狭い欄の中に入れると折り返して読めない） */
+.zip-hint{font-size:12px;color:var(--ink-3);margin:-6px 0 12px}
 @media (max-width:640px){.grid2,.grid3{grid-template-columns:1fr}}
 .search{padding:8px 12px;border:1px solid var(--rule-strong);background:#fff;min-width:240px}
 /* 名前を打って選ぶ欄 */
@@ -323,6 +332,14 @@ input:disabled,select:disabled{background:var(--paper-2);color:var(--ink-3);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cust-head .btn,.cust-head .tag{flex:0 0 auto}
 .cust-sub{font-size:12.5px;color:var(--ink-2);margin-bottom:12px;display:flex;gap:14px;flex-wrap:wrap}
+/* 郵便番号と住所。ひとかたまりで出す（間で折り返させない） */
+.cust-sub .addr{display:inline-flex;align-items:baseline;gap:6px}
+.cust-sub .zip{font-family:var(--mono);font-size:12px;white-space:nowrap}
+/* 住所から推定した番号。入れてもらった番号と**見分けが付くように**薄くし、印を付ける。
+   督促の封書に刷る前に、担当者が「これは推定だ」と気づけること */
+.cust-sub .zip-g{color:var(--ink-3)}
+.cust-sub .zip-g i{font-style:normal;font-family:var(--sans);font-size:10.5px;
+  border:1px solid var(--rule);padding:0 3px;margin-left:3px;background:var(--paper-2)}
 
 /* 欄のかたまり（連帯保証人・緊急連絡先・入金月の変更）。
    長い編集の欄を、見出しで区切って読めるようにする */

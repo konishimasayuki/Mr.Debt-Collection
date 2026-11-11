@@ -8,6 +8,7 @@ import { readBody, query, dueOf, yen, norm, makeSchedule, remakeBonus,
          カナにそろえる, よみか } from './_lib.js';
 import { 顧客一覧 } from './_list.js';
 import { guess, あいうえお順 } from './_yomi_dict.js';
+import { 郵便番号を整える } from './_zip.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -96,6 +97,13 @@ export default async (req, res) => {
       const monthly = Math.round(Number(b.月々の金額) || 0);
       if (!name) return bad(res, 'お名前を入れてください。');
       if (!monthly || monthly <= 0) return bad(res, '月々の金額を入れてください。');
+      // 郵便番号。入れなくてよい。入れたなら7桁にそろえる
+      //（空のままなら、顧客ページで住所から逆に引いて出す）
+      const zipに入れる = String(b.郵便番号 || '').trim();
+      const zip = zipに入れる ? 郵便番号を整える(zipに入れる) : null;
+      if (zipに入れる && !zip) {
+        return bad(res, '郵便番号は7桁で入れてください。', `受け取った文字: ${zipに入れる}`);
+      }
 
       const term = Math.max(1, Math.round(Number(b.回数) || 48));
       const payDay = Math.min(Math.max(Math.round(Number(b.支払日) || 27), 1), 31);
@@ -135,17 +143,18 @@ export default async (req, res) => {
       const total = monthly * term;
       const ins = await sql(
         `INSERT INTO customer
-           (name, kana, gender, birthday, address, tel, contract_date, car,
+           (name, kana, gender, birthday, zip, address, tel, contract_date, car,
             assignor_id, assignee_id, monthly_amount, term_count, pay_day,
             start_date, total_amount, memo,
             guarantor_name, guarantor_address, guarantor_tel, guarantor_relation,
             emergency_name, emergency_address, emergency_tel, emergency_relation,
             work_name, work_address, work_tel)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-                 $17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27) RETURNING id`,
+                 $17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28) RETURNING id`,
         [name, String(b.よみ || '').trim() || null,
          String(b.性別 || '').trim() || null,
          b.生年月日 || null,
+         zip,
          String(b.住所 || '').trim() || null,
          String(b.電話番号 || '').trim() || null,
          b.契約日 || null,
