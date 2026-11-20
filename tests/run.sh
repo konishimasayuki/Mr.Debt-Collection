@@ -20,3 +20,4 @@ node tests/pin-seed.mjs >/dev/null 2>&1; 出す tests/t-pinui.mjs
 node tests/sp-seed.mjs  >/dev/null 2>&1; 出す tests/t-splitui.mjs
 node tests/eng-seed.mjs >/dev/null 2>&1; 出す tests/t-engui.mjs
 node tests/zip-seed.mjs >/dev/null 2>&1; 出す tests/t-zipui.mjs
+node tests/calc-seed.mjs >/dev/null 2>&1; 出す tests/t-calcui.mjs

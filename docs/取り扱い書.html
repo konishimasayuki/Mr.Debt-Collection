@@ -319,6 +319,7 @@
           <tr><td><strong>入金履歴</strong></td><td>入れた入金を見る・直す・取り消す</td><td>両方</td></tr>
           <tr><td><strong>未入金</strong></td><td>期日を過ぎて払えていない方の一覧。<strong>電話はここから</strong></td><td>担当者</td></tr>
           <tr><td><strong>完済/引き上げ</strong></td><td>終わった取引。払い終えた方と、車を引き上げた方</td><td>両方</td></tr>
+          <tr><td><strong>計算</strong></td><td>顧客を選んで、将来利益と買い戻し金額を出す</td><td>経営者</td></tr>
           <tr><td><strong>設定</strong></td><td>債権会社の登録。テスト用の顧客を作る</td><td>経営者</td></tr>
           <tr><td><strong>デバッグ依頼</strong></td><td>おかしいところを報告する</td><td>両方</td></tr>
         </tbody>
@@ -963,6 +964,26 @@
 
     <h3>完済/引き上げ</h3>
     <p>終わった取引です。<span class="tag t-done">完済</span> と <span class="tag t-late">引き上げ</span> の区分が付きます。</p>
+
+    <h3>計算</h3>
+    <div class="where"><b>計算</b> タブ（設定の左）</div>
+    <p>左の一覧（氏名・よみ・車種で探せます）から<strong>顧客を1人選ぶ</strong>と、右に2つの金額が出ます。</p>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>出るもの</th><th>計算</th></tr></thead>
+        <tbody>
+          <tr><td><strong>将来利益</strong></td><td>総支払金額 − 総支払金額の75%</td></tr>
+          <tr><td><strong>買い戻し金額</strong></td><td>総支払金額の75% − その顧客が支払った総額</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul>
+      <li>75%は決まった割合です。画面にも書いてあり、式もそのまま出ます</li>
+      <li>75%をかけて出た<strong>円未満は切り捨て</strong>ます（例：30,003円の75%は22,502円）</li>
+      <li><strong>支払った総額</strong>は、支払いの記録に充てた入金の合計です（顧客ページの入金合計と同じ）</li>
+      <li>支払った総額が75%を超えているときは、買い戻し金額は<strong>マイナスのまま</strong>赤字で出し、その旨を添えます</li>
+      <li>見るだけの画面です。台帳には何も書き込みません</li>
+    </ul>
 
 
     <h2 id="tags">印の早見表</h2>

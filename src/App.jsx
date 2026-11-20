@@ -9,6 +9,7 @@ import History from './pages/History';
 import Unpaid from './pages/Unpaid';
 import Finished from './pages/Finished';
 import Settings from './pages/Settings';
+import Calc from './pages/Calc';
 import Debug from './pages/Debug';
 
 const TABS = [
@@ -18,6 +19,7 @@ const TABS = [
   { key: 'history', label: '入金履歴' },
   { key: 'unpaid', label: '未入金' },
   { key: 'finished', label: '完済/引き上げ' },
+  { key: 'calc', label: '計算' },
   { key: 'settings', label: '設定' },
   { key: 'debug', label: 'デバッグ依頼' },
 ];
@@ -158,6 +160,8 @@ export default function App() {
           <Unpaid key={reloadKey} onOpen={setCustomerId} onChanged={refresh} />
         ) : tab === 'finished' ? (
           <Finished key={reloadKey} onOpen={setCustomerId} />
+        ) : tab === 'calc' ? (
+          <Calc />
         ) : tab === 'debug' ? (
           <Debug />
         ) : (
