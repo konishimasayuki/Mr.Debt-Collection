@@ -319,6 +319,7 @@
           <tr><td><strong>入金履歴</strong></td><td>入れた入金を見る・直す・取り消す</td><td>両方</td></tr>
           <tr><td><strong>未入金</strong></td><td>期日を過ぎて払えていない方の一覧。<strong>電話はここから</strong></td><td>担当者</td></tr>
           <tr><td><strong>完済/引き上げ</strong></td><td>終わった取引。払い終えた方と、車を引き上げた方</td><td>両方</td></tr>
+          <tr><td><strong>計算</strong></td><td>顧客を選んで、買戻し金額と将来利益を出す</td><td>経営者</td></tr>
           <tr><td><strong>設定</strong></td><td>債権会社の登録。テスト用の顧客を作る</td><td>経営者</td></tr>
           <tr><td><strong>デバッグ依頼</strong></td><td>おかしいところを報告する</td><td>両方</td></tr>
         </tbody>
@@ -963,6 +964,27 @@
 
     <h3>完済/引き上げ</h3>
     <p>終わった取引です。<span class="tag t-done">完済</span> と <span class="tag t-late">引き上げ</span> の区分が付きます。</p>
+
+    <h3>計算</h3>
+    <div class="where"><b>計算</b> タブ（設定の左）</div>
+    <p>左の一覧（氏名・よみ・車種で探せます）から<strong>顧客を1人選ぶ</strong>と、右に2つの金額が出ます。</p>
+    <div class="tw tw--tight">
+      <table>
+        <thead><tr><th>出るもの</th><th>計算</th></tr></thead>
+        <tbody>
+          <tr><td><strong>買戻し金額</strong></td><td>（契約金額 − お客様の支払済金額）× 買戻し率75%</td></tr>
+          <tr><td><strong>将来利益</strong></td><td>契約金額 − 契約金額の75%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>計算例：契約金額 1,700,000円、支払済金額 300,000円 → 未払い残債 1,400,000円 × 75% ＝ <strong>1,050,000円</strong></p>
+    <ul>
+      <li><strong>未払い残債に75%をかけます</strong>（契約金額にかけてから引くのではありません）</li>
+      <li>債権譲渡先が登録されている方は「MIAMIへの買戻し金額」のように、<strong>譲渡先の名前</strong>が付きます</li>
+      <li>契約金額は総支払金額（ボーナス払いを含む）、支払済金額は支払いの記録に充てた入金の合計です</li>
+      <li>75%をかけて出た<strong>円未満は切り捨て</strong>ます</li>
+      <li>見るだけの画面です。台帳には何も書き込みません</li>
+    </ul>
 
 
     <h2 id="tags">印の早見表</h2>
