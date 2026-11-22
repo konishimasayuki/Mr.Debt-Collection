@@ -1,4 +1,5 @@
 // 未払い顧客タブと、計算タブの請求書（arr-seed.mjs の土台で走らせる）
+// 請求書は計算タブからだけ出す。未払い顧客タブには請求書の道を置かない
 import { 開く, 入る, check, 終わる } from './ui.js';
 
 const b = await 開く();
@@ -33,8 +34,8 @@ check('車両 タントカスタム', (await 二郎.innerText()).includes('タ�
 check('残債額 1,150,000円', (await 二郎.innerText()).includes('1,150,000円'));
 check('合計が出る（本物の4名）', (await p.locator('.bar .sub').innerText()).includes('4名'),
   await p.locator('.bar .sub').innerText());
-check('1か月分には請求書ボタンが無い',
-  (await p.locator('tbody tr', { hasText: 'アオキ 一郎' }).locator('button').count()) === 0);
+check('請求書のボタンは置かない（請求書は計算タブからだけ）',
+  (await p.locator('.arr-sec button').count()) === 0, await p.locator('.arr-sec button').count());
 await p.screenshot({ path: '/tmp/arr-1.png', fullPage: true });
 
 console.log('■ 行を押すと顧客ページ');
@@ -42,15 +43,14 @@ await p.locator('tbody tr', { hasText: 'アオキ 一郎' }).locator('td.nm b').
 await p.waitForSelector('.rec-top');
 check('顧客ページが開く', (await p.locator('.cust-name').innerText()).includes('アオキ 一郎'));
 
-console.log('■ 2か月分の方から、そのまま請求書を作れる');
-await p.click('.tab:has-text("未払い顧客")');
-await p.waitForSelector('.arr-sec');
-await p.waitForTimeout(400);
-await p.locator('tbody tr', { hasText: 'カワダ 二郎' }).locator('button:has-text("請求書")').click();
+console.log('■ 計算タブで顧客を選んで、請求書を作る');
+await p.click('.tab:has-text("計算")');
+await p.waitForSelector('.calc-c');
+await p.locator('.calc-c', { hasText: 'カワダ 二郎' }).click();
+await p.waitForSelector('.calc-inv button');
+await p.click('.calc-inv button');
 await p.waitForSelector('.inv-page');
 await p.waitForTimeout(500);
-check('計算タブが選ばれている',
-  (await p.locator('.tab.on').innerText()) === '計算', await p.locator('.tab.on').innerText());
 const 紙 = p.locator('.inv-page');
 const 文 = async () => 紙.innerText();
 check('宛名はお客様', (await p.locator('[data-k="宛名"]').innerText()) === 'カワダ 二郎 様');
@@ -122,7 +122,11 @@ await sp.click('.tab:has-text("未払い顧客")');
 await sp.waitForSelector('.arr-sec');
 await sp.waitForTimeout(500);
 check('未払い顧客', await sp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
-await sp.locator('tbody tr', { hasText: 'カワダ 二郎' }).locator('button:has-text("請求書")').click();
+await sp.click('.tab:has-text("計算")');
+await sp.waitForSelector('.calc-c');
+await sp.locator('.calc-c', { hasText: 'カワダ 二郎' }).click();
+await sp.waitForSelector('.calc-inv button');
+await sp.click('.calc-inv button');
 await sp.waitForSelector('.inv-page');
 await sp.waitForTimeout(400);
 check('請求書', await sp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));

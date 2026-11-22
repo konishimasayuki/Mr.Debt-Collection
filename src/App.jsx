@@ -93,12 +93,7 @@ export default function App() {
   }, []);
   const onJumped = useCallback(() => setJump(null), []);
 
-  // 計算タブを、決まった顧客を選んだ状態で開く（未払い顧客タブの「請求書」から）
-  const [計算の顧客, set計算の顧客] = useState(null);
-  const goTab = (key) => { setCustomerId(null); set計算の顧客(null); setTab(key); };
-  const 請求書へ = (id) => {
-    setCustomerId(null); set計算の顧客({ id, 請求書: true }); setTab('calc');
-  };
+  const goTab = (key) => { setCustomerId(null); setTab(key); };
 
   const 確認中 = me === null;
   // はじめて開いた端末だけは、ログイン画面と台帳のどちらを出すか分からない。
@@ -168,11 +163,9 @@ export default function App() {
         ) : tab === 'finished' ? (
           <Finished key={reloadKey} onOpen={setCustomerId} />
         ) : tab === 'arrears' ? (
-          <Arrears key={reloadKey} onOpen={setCustomerId} 請求書へ={請求書へ} />
+          <Arrears key={reloadKey} onOpen={setCustomerId} />
         ) : tab === 'calc' ? (
-          <Calc key={計算の顧客 ? 'c' + 計算の顧客.id : 'calc'}
-                初めの顧客id={計算の顧客 && 計算の顧客.id}
-                請求書で開く={!!(計算の顧客 && 計算の顧客.請求書)} />
+          <Calc />
         ) : tab === 'debug' ? (
           <Debug />
         ) : (

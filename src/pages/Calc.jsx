@@ -11,9 +11,8 @@ import Invoice from './Invoice';
 //
 // 75% は決まった割合（kaimodoshi.js）。画面にも書いて、何をかけたかが見えるようにする。
 //
-// 選んだ顧客の請求書もここから作る（Invoice.jsx）。
-// 未払い顧客タブの「請求書」から来たときは、その顧客を選んだ状態で請求書を開く。
-export default function Calc({ 初めの顧客id, 請求書で開く }) {
+// 選んだ顧客の請求書もここから作る（Invoice.jsx）。**請求書を出す場所はここだけ。**
+export default function Calc() {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [key, setKey] = useState('');
@@ -26,19 +25,12 @@ export default function Calc({ 初めの顧客id, 請求書で開く }) {
 
   useEffect(() => {
     api.customers()
-      .then((d) => {
-        setRows(d.顧客);
-        // 未払い顧客タブから来たときは、その顧客を選んでおく
-        if (初めの顧客id) {
-          const r = d.顧客.find((x) => x.id === 初めの顧客id);
-          if (r) { set選んだ(r); set請求書(!!請求書で開く); }
-        }
-      })
+      .then((d) => setRows(d.顧客))
       .catch((e) => { setRows([]); setErr(e.message); });
     api.companies()
       .then((d) => set発行者(d.請求書の発行者 || null))
       .catch(() => set発行者(null));
-  }, [初めの顧客id, 請求書で開く]);
+  }, []);
 
   // 選んだ顧客の、総支払金額と支払った総額を取りにいく。
   // 一覧の返事には総支払金額が無いので、顧客ページと同じ中身を使う

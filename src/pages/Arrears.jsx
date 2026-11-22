@@ -11,16 +11,18 @@ import { Err, Empty, Loading } from '../components/ui';
 //
 // 「か月分」は、期日を過ぎてまだ払われていない**月額の回の数**。
 // 未払い額は、期日を過ぎた回の残りの合計（ボーナスの回も入る）。
-// 2か月分からは、その場で請求書を作れる（計算タブへ移って開く）。
+//
+// ここは請求書を出す場所ではない（請求書は計算タブから）。
+// のちに、各行からLINEで定型文を送るボタンを置く予定（送り方は相談中）。
 const 欄の順 = ['エンジンストップ', '1か月分', '2か月分', '3か月分以上'];
 const 欄の説明 = {
   エンジンストップ: '車を止めている方。取引は続いています',
   '1か月分': '1回ぶん払われていない方',
-  '2か月分': '2回ぶん払われていない方。請求書を出せます',
-  '3か月分以上': '3回ぶん以上たまっている方。請求書を出せます',
+  '2か月分': '2回ぶん払われていない方',
+  '3か月分以上': '3回ぶん以上たまっている方',
 };
 
-export default function Arrears({ onOpen, 請求書へ }) {
+export default function Arrears({ onOpen }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [key, setKey] = useState('');
@@ -78,7 +80,6 @@ export default function Arrears({ onOpen, 請求書へ }) {
                     <th>車両</th>
                     <th className="num">残債額</th>
                     <th>遅れ</th>
-                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -101,14 +102,6 @@ export default function Arrears({ onOpen, 請求書へ }) {
                             <span className="arr-d">{jpDate(r.いちばん古い期日)}から</span>
                           </>
                         ) : <span className="none">遅れなし</span>}
-                      </td>
-                      <td className="act">
-                        {r.滞納月数 >= 2 && (
-                          <button className="btn btn-sm"
-                                  onClick={(e) => { e.stopPropagation(); 請求書へ(r.id); }}>
-                            請求書
-                          </button>
-                        )}
                       </td>
                     </tr>
                   ))}
