@@ -86,7 +86,8 @@ export default async (req, res) => {
 
       // 組み立ては _list.js に置いてある。開いた直後の往復を減らすため、
       // 同じ一覧を /api/session からも返せるようにしている。
-      return ok(res, await 顧客一覧(sql, q['未入金'] ? '未入金' : (q['終了'] ? '終了' : '')));
+      return ok(res, await 顧客一覧(sql, q['未入金'] ? '未入金'
+        : q['未払い顧客'] ? '未払い顧客' : (q['終了'] ? '終了' : '')));
     }
 
     if (method === 'POST') {

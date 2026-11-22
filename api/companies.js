@@ -3,9 +3,19 @@
 // POST   /api/companies … {名前, メモ} を追加
 // PATCH  /api/companies … {id, 名前 / メモ} を変更する
 // DELETE /api/companies?id=1 … 使っていなければ削除。使っていれば断る
+// GET    の返事には「請求書の発行者」も入れる（計算タブの請求書に刷る名前・住所・振込先）
+// PATCH  /api/companies … {請求書の発行者: {名称, 郵便番号, 住所, 電話番号, 振込先, 登録番号}}
+//        で発行者を変える。テナント（この台帳を使う会社）ごとに変えられるようにするため
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
 import { readBody, query } from './_lib.js';
+
+// 請求書の発行者。まだ誰も変えていなければこれを出す
+export const 発行者の既定 = {
+  名称: 'MIAMIホールディングス', 郵便番号: '', 住所: '', 電話番号: '',
+  振込先: '', 登録番号: '',
+};
+const 発行者の欄 = Object.keys(発行者の既定);
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -23,14 +33,19 @@ export default async (req, res) => {
     if (method === 'GET') {
       // 並びは登録した順。名前順にすると、あとから足した会社が先頭に来て
       // 「逆に入っている」ように見えるため。
-      const rows = await sql(
-        `SELECT c.id, c.name, c.note,
-                (SELECT count(*)::int FROM customer x
-                  WHERE (x.assignor_id = c.id OR x.assignee_id = c.id) AND x.archived=false) AS 使用数
-           FROM company c ORDER BY c.id`);
+      const [rows, 発行] = await Promise.all([
+        sql(`SELECT c.id, c.name, c.note,
+                    (SELECT count(*)::int FROM customer x
+                      WHERE (x.assignor_id = c.id OR x.assignee_id = c.id) AND x.archived=false) AS 使用数
+               FROM company c ORDER BY c.id`),
+        sql(`SELECT value FROM setting WHERE key='請求書の発行者'`),
+      ]);
 
-      return ok(res, { 会社: rows.map((r) => ({
-        id: r.id, 名前: r.name, メモ: r.note || '', 使用数: r.使用数 })) });
+      return ok(res, {
+        会社: rows.map((r) => ({
+          id: r.id, 名前: r.name, メモ: r.note || '', 使用数: r.使用数 })),
+        請求書の発行者: { ...発行者の既定, ...((発行[0] && 発行[0].value) || {}) },
+      });
     }
 
     const b = await readBody(req);
@@ -48,6 +63,23 @@ export default async (req, res) => {
                  VALUES (NULL,$1,'設定',$2,$3)`,
         [who, `債権会社「${name}」を追加した`, String(b.メモ || '').trim() || null]);
       return ok(res, { done: true, id: r[0].id, 名前: name });
+    }
+
+    // 請求書の発行者を変える（会社の行ではなく、台帳に1つだけの設定）
+    if (method === 'PATCH' && b.請求書の発行者 !== undefined) {
+      const 入 = b.請求書の発行者 || {};
+      const 値 = {};
+      for (const k of 発行者の欄) 値[k] = String(入[k] == null ? '' : 入[k]).trim();
+      if (!値.名称) return bad(res, '請求書に刷る会社名を入れてください。');
+      await sql(`INSERT INTO setting (key, value, updated_at, updated_by)
+                 VALUES ('請求書の発行者', $1::jsonb, now(), $2)
+                 ON CONFLICT (key) DO UPDATE
+                   SET value=EXCLUDED.value, updated_at=now(), updated_by=EXCLUDED.updated_by`,
+        [JSON.stringify(値), who]);
+      await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                 VALUES (NULL,$1,'設定',$2,NULL)`,
+        [who, `請求書の発行者を「${値.名称}」にした`]);
+      return ok(res, { done: true, 請求書の発行者: 値 });
     }
 
     if (method === 'PATCH') {

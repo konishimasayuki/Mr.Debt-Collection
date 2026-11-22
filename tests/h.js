@@ -71,4 +71,7 @@ export async function reset() {
   if (await ある('import_file')) {
     await client.query('TRUNCATE import_file RESTART IDENTITY CASCADE');
   }
+  if (await ある('setting')) {
+    await client.query('TRUNCATE setting');
+  }
 }

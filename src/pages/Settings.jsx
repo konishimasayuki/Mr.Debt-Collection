@@ -67,6 +67,8 @@ export default function Settings({ onOpen, onChanged }) {
         </div>
       </div>
 
+      <Issuer />
+
       <ImportFiles />
 
       <BankAccounts />
@@ -518,5 +520,67 @@ function CompanyForm({ c, onClose, onDone }) {
       <Text label="メモ" value={v.メモ} onChange={set('メモ')} placeholder="担当者、連絡先など（任意）" />
       <Err>{err}</Err>
     </Modal>
+  );
+}
+
+// ── 請求書の発行者 ────────────────────────────
+//
+// 計算タブで作る請求書の、右上に刷る会社。既定は MIAMIホールディングス。
+// テナント（この台帳を使う会社）ごとに変えられるよう、台帳に1つだけ持つ。
+// 振込先もここ。請求書を作るたびに打たなくて済むようにする。
+function Issuer() {
+  const [v, setV] = useState(null);
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.companies()
+      .then((d) => setV(d.請求書の発行者))
+      .catch((e) => setErr(e.message));
+  }, []);
+
+  const set = (k) => (x) => { setMsg(''); setV((o) => ({ ...o, [k]: x })); };
+  const save = async () => {
+    setBusy(true); setErr(''); setMsg('');
+    try {
+      const d = await api.patchCompany({ 請求書の発行者: v });
+      setV(d.請求書の発行者);
+      setMsg('保存しました。次に作る請求書から、この内容で刷ります。');
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+
+  return (
+    <div className="sec issuer">
+      <h3>請求書の発行者</h3>
+      <Note>
+        計算タブで作る請求書の右上に刷る会社です。宛先はお客様になります。
+        振込先もここで入れておくと、請求書に毎回刷られます。
+      </Note>
+      <Err>{err}</Err>
+      {!v ? <Loading 件数={1} 行={2} /> : (
+        <div className="card issuer-f">
+          <div className="grid2">
+            <Text label="会社名（必須）" value={v.名称} onChange={set('名称')} />
+            <Text label="電話番号" value={v.電話番号} onChange={set('電話番号')} />
+          </div>
+          <div className="grid-zip">
+            <Text label="郵便番号" value={v.郵便番号} onChange={set('郵便番号')} placeholder="123-4567" />
+            <Text label="住所" value={v.住所} onChange={set('住所')} />
+          </div>
+          <Text label="振込先" value={v.振込先} onChange={set('振込先')}
+                placeholder="◯◯銀行 ◯◯支店 普通 0000000 ﾐｱﾐﾎｰﾙﾃﾞｨﾝｸﾞｽ" />
+          <Text label="登録番号（インボイス・あれば）" value={v.登録番号} onChange={set('登録番号')}
+                placeholder="T0000000000000" />
+          <div className="issuer-b">
+            {msg && <span className="ok-msg">{msg}</span>}
+            <button className="btn btn-main" disabled={busy} onClick={save}>
+              {busy ? '保存しています…' : '保存する'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

@@ -13,6 +13,16 @@ const STATEMENTS = [
      created_at timestamptz NOT NULL DEFAULT now()
    )`,
 
+  // ── 設定(台帳ごとに1つずつ持つ値)──────────────────
+  // 請求書の発行者のように、テナント（この台帳を使う会社）ごとに変える値を置く。
+  // 1つの鍵に1つの値。値の形は鍵ごとに決める（jsonb）
+  `CREATE TABLE IF NOT EXISTS setting (
+     key        text PRIMARY KEY,
+     value      jsonb NOT NULL,
+     updated_at timestamptz NOT NULL DEFAULT now(),
+     updated_by text
+   )`,
+
   // ── 顧客(契約)────────────────────────────
   `CREATE TABLE IF NOT EXISTS customer (
      id              serial PRIMARY KEY,
