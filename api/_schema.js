@@ -13,6 +13,12 @@ const STATEMENTS = [
      created_at timestamptz NOT NULL DEFAULT now()
    )`,
 
+  // 債権会社の連絡先。請求書の宛先（左上）に刷るため
+  `ALTER TABLE company ADD COLUMN IF NOT EXISTS zip text`,
+  `ALTER TABLE company ADD COLUMN IF NOT EXISTS address text`,
+  `ALTER TABLE company ADD COLUMN IF NOT EXISTS tel text`,
+  `ALTER TABLE company ADD COLUMN IF NOT EXISTS contact text`,
+
   // ── 設定(台帳ごとに1つずつ持つ値)──────────────────
   // 請求書の発行者のように、テナント（この台帳を使う会社）ごとに変える値を置く。
   // 1つの鍵に1つの値。値の形は鍵ごとに決める（jsonb）
