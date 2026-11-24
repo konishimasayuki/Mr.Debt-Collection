@@ -53,11 +53,18 @@ await p.waitForSelector('.inv-page');
 await p.waitForTimeout(500);
 const 紙 = p.locator('.inv-page');
 const 文 = async () => 紙.innerText();
-check('宛名はお客様', (await p.locator('[data-k="宛名"]').innerText()) === 'カワダ 二郎 様');
-check('お客様の住所と〒', (await 文()).includes('〒100-0001 東京都千代田区千代田1-1'), await 文());
+check('宛先は請求先の会社（はじめは債権譲渡会社）',
+  (await p.locator('[data-k="宛名"]').innerText()) === '株式会社エンジン 御中',
+  await p.locator('[data-k="宛名"]').innerText());
+const 先 = async () => p.locator('[data-k="請求先"]').innerText();
+check('請求先の住所と〒', (await 先()).includes('〒830-0032 福岡県久留米市東町1-1'), await 先());
+check('請求先のご担当者と電話', (await 先()).includes('経理部 山田 様') && (await 先()).includes('0942-00-1111'));
+check('お客様の住所は刷らない', !(await 文()).includes('東京都千代田区千代田1-1'), await 文());
 check('発行者は MIAMIホールディングス',
   (await p.locator('[data-k="発行者"]').innerText()).includes('MIAMIホールディングス'));
-check('2か月分と刷る', (await 文()).includes('2か月分'), await 文());
+check('お支払いの遅れの行は無い', !(await 文()).includes('お支払いの遅れ'), await 文());
+check('遅れの月数も刷らない', !(await 文()).includes('か月分'), await 文());
+check('表のお客様名', (await p.locator('[data-k="お客様名"]').innerText()) === 'カワダ 二郎 様');
 for (const [名, 値] of [
   ['契約金額', '1,200,000円'], ['買取金額', '900,000円'], ['お客様が支払った金額', '50,000円'],
   ['残債', '1,150,000円'], ['買戻し金額', '862,500円'],
@@ -71,10 +78,24 @@ check('契約日', /年.*月15日/.test(await 紙.locator('tr', { hasText: '契�
 check('車体番号は空欄（手書き用）',
   (await p.locator('[data-k="車体番号"]').innerText()).trim() === '');
 
+console.log('■ 刷るお客様名を直せる（保存はしない）');
+await p.locator('[data-k="お客様名を直す"]').fill('河田 二郎');
+check('表のお客様名が変わる', (await p.locator('[data-k="お客様名"]').innerText()) === '河田 二郎 様');
+
+console.log('■ 請求先を選び直せる');
+await p.locator('[data-k="請求先を選ぶ"]').selectOption({ label: '株式会社Three Eight' });
+check('別の会社になる', (await p.locator('[data-k="宛名"]').innerText()) === '株式会社Three Eight 御中');
+check('住所が無い会社は住所を刷らない', !(await 先()).includes('〒'), await 先());
+await p.locator('[data-k="請求先を選ぶ"]').selectOption('');
+check('選ばなければ空けて刷る（御中だけ）',
+  (await p.locator('[data-k="宛名"]').innerText()).trim() === '御中',
+  await p.locator('[data-k="宛名"]').innerText());
+await p.locator('[data-k="請求先を選ぶ"]').selectOption({ label: '株式会社エンジン' });
+
 console.log('■ 車体番号を手で打てる（保存はしない）');
 await p.locator('.inv-grid input[placeholder*="手書き"]').fill('LA650S-0123456');
 check('紙に刷られる', (await p.locator('[data-k="車体番号"]').innerText()) === 'LA650S-0123456');
-check('発行者の住所が無いと知らせる', (await p.locator('.inv-warn').count()) === 1);
+check('自社の住所が無いと知らせる', (await p.locator('.inv-warn').count()) === 1);
 await p.screenshot({ path: '/tmp/arr-inv.png', fullPage: true });
 
 console.log('■ 印刷すると紙だけが出る');
@@ -92,6 +113,22 @@ console.log('■ 閉じると計算に戻る');
 await p.click('.inv-edit button:has-text("閉じる")');
 await p.waitForSelector('.calc-a');
 check('計算の画面', (await p.locator('.calc-name').innerText()) === 'カワダ 二郎');
+
+console.log('■ 設定の債権会社で、請求先の住所を直せる');
+await p.click('.tab:has-text("設定")');
+await p.waitForSelector('.issuer-f');
+await p.waitForTimeout(400);
+await p.locator('tr', { hasText: '株式会社Three Eight' }).locator('button:has-text("編集")').click();
+await p.waitForSelector('.modal-box');
+const 会欄 = (名) => p.locator('.modal-box .f', { has: p.locator(`label:text-is("${名}")`) }).locator('input');
+await 会欄('郵便番号').fill('１０００００１');
+await 会欄('住所').fill('東京都千代田区千代田1-1');
+await p.click('.modal-box button:has-text("保存する")');
+await p.waitForTimeout(800);
+check('一覧に住所が出る', (await p.locator('tr', { hasText: '株式会社Three Eight' }).innerText())
+  .includes('〒100-0001 東京都千代田区千代田1-1'),
+  await p.locator('tr', { hasText: '株式会社Three Eight' }).innerText());
+check('自社の欄の見出し', (await p.locator('.issuer h3').innerText()) === '自社（請求書の発行者）');
 
 console.log('■ 設定で発行者を変えると、請求書も変わる');
 await p.click('.tab:has-text("設定")');

@@ -62,6 +62,22 @@ const 前月 = (n) => {
   check('期日が来ていない人は出さない', !(await 人('まだ')));
   check('引き上げた人は出さない', !(await 人('引き上げ')));
 
+  console.log('■ 債権会社に連絡先を持てる（請求書の宛先に刷る）');
+  const 会 = await call('companies', { method: 'POST', body: {
+    名前: '株式会社エンジン', 郵便番号: '８３０００３２', 住所: '福岡県久留米市東町1-1',
+    電話番号: '0942-00-1111', 担当者: '山田 様' } });
+  check('追加できる', 会.code === 200, 会.body);
+  let 社 = (await call('companies')).body.会社.find((x) => x.名前 === '株式会社エンジン');
+  check('郵便番号は 123-4567 にそろう', 社.郵便番号 === '830-0032', 社);
+  check('住所・電話・担当者も持つ', 社.住所 === '福岡県久留米市東町1-1'
+    && 社.電話番号 === '0942-00-1111' && 社.担当者 === '山田 様', 社);
+  const 直 = await call('companies', { method: 'PATCH', body: { id: 社.id, 住所: '佐賀県鳥栖市1-1' } });
+  check('住所だけ直せる', 直.code === 200, 直.body);
+  社 = (await call('companies')).body.会社.find((x) => x.名前 === '株式会社エンジン');
+  check('直った', 社.住所 === '佐賀県鳥栖市1-1' && 社.郵便番号 === '830-0032', 社);
+  const 悪 = await call('companies', { method: 'PATCH', body: { id: 社.id, 郵便番号: '123' } });
+  check('7桁でない郵便番号は断る', 悪.code === 400, 悪.code);
+
   console.log('■ 請求書の発行者。はじめは MIAMIホールディングス');
   let c = (await call('companies')).body;
   check('既定の名称', c.請求書の発行者 && c.請求書の発行者.名称 === 'MIAMIホールディングス',

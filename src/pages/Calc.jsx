@@ -19,8 +19,8 @@ export default function Calc() {
   const [選んだ, set選んだ] = useState(null);   // 一覧の行
   const [中身, set中身] = useState(null);       // /api/customer の顧客
   const [読み込み中, set読み込み中] = useState(false);
-  const [詳しく, set詳しく] = useState(null);   // 支払予定と入金（請求書で使う）
   const [発行者, set発行者] = useState(null);
+  const [会社, set会社] = useState([]);       // 請求先に選べる会社（設定タブの債権会社）
   const [請求書, set請求書] = useState(false);
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export default function Calc() {
       .then((d) => setRows(d.顧客))
       .catch((e) => { setRows([]); setErr(e.message); });
     api.companies()
-      .then((d) => set発行者(d.請求書の発行者 || null))
+      .then((d) => { set発行者(d.請求書の発行者 || null); set会社(d.会社 || []); })
       .catch(() => set発行者(null));
   }, []);
 
@@ -39,13 +39,8 @@ export default function Calc() {
     let 生きている = true;
     set読み込み中(true);
     set中身(null);
-    set詳しく(null);
     api.customer(選んだ.id)
-      .then((d) => {
-        if (!生きている) return;
-        set中身(d.顧客);
-        set詳しく({ 支払予定: d.支払予定 || [], 入金: d.入金 || [] });
-      })
+      .then((d) => { if (生きている) set中身(d.顧客); })
       .catch((e) => { if (生きている) setErr(e.message); })
       .finally(() => { if (生きている) set読み込み中(false); });
     return () => { 生きている = false; };
@@ -55,10 +50,9 @@ export default function Calc() {
   const 候補 = (rows || []).filter((r) => !k
     || norm(r.氏名).includes(k) || norm(r.よみ).includes(k) || norm(r.車種).includes(k));
 
-  if (請求書 && 中身 && 詳しく) {
+  if (請求書 && 中身) {
     return (
-      <Invoice c={中身} 支払予定={詳しく.支払予定} 入金={詳しく.入金}
-               発行者={発行者} onClose={() => set請求書(false)} />
+      <Invoice c={中身} 会社={会社} 発行者={発行者} onClose={() => set請求書(false)} />
     );
   }
 
@@ -160,7 +154,7 @@ function 結果({ c, 請求書を作る }) {
 
       <div className="calc-inv">
         <button className="btn btn-main" onClick={請求書を作る}>この方の請求書を作る</button>
-        <span>宛先はお客様。発行者は設定タブの「請求書の発行者」です</span>
+        <span>請求先は設定タブの「債権会社」から選べます。発行者は「自社（請求書の発行者）」です</span>
       </div>
     </>
   );

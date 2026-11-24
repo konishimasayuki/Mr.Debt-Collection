@@ -34,7 +34,8 @@ export default function Settings({ onOpen, onChanged }) {
       <div className="sec">
         <h3>債権会社</h3>
         <Note>
-          ここで登録した会社が、新規顧客登録の「債権譲渡会社」「債権譲渡先」の選択肢になります。
+          ここで登録した会社が、新規顧客登録の「債権譲渡会社」「債権譲渡先」の選択肢と、
+          計算タブで作る<b>請求書の請求先</b>になります。「編集」で住所なども入れられます。
           顧客に使われている会社は削除できません。
         </Note>
         <Err>{err}</Err>
@@ -53,7 +54,12 @@ export default function Settings({ onOpen, onChanged }) {
               )}
               {rows && rows.map((c) => (
                 <tr key={c.id}>
-                  <td className="nm"><b>{c.名前}</b></td>
+                  <td className="nm">
+                    <b>{c.名前}</b>
+                    {(c.郵便番号 || c.住所) && (
+                      <span className="co-addr">{c.郵便番号 && `〒${c.郵便番号} `}{c.住所}</span>
+                    )}
+                  </td>
                   <td data-label="メモ" style={{ whiteSpace: 'normal', fontSize: 13 }}>{c.メモ || ''}</td>
                   <td className="num" data-label="使用中の顧客">{c.使用数}件</td>
                   <td style={{ display: 'flex', gap: 6 }}>
@@ -487,7 +493,11 @@ function BankAccountForm({ a, 差し込み口, onClose, onDone }) {
 }
 
 function CompanyForm({ c, onClose, onDone }) {
-  const [v, setV] = useState({ 名前: c ? c.名前 : '', メモ: c ? c.メモ : '' });
+  const [v, setV] = useState({
+    名前: c ? c.名前 : '', メモ: c ? c.メモ : '',
+    郵便番号: c ? c.郵便番号 : '', 住所: c ? c.住所 : '',
+    電話番号: c ? c.電話番号 : '', 担当者: c ? c.担当者 : '',
+  });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k) => (val) => setV((o) => ({ ...o, [k]: val }));
@@ -517,7 +527,17 @@ function CompanyForm({ c, onClose, onDone }) {
       }
     >
       <Text label="会社名" value={v.名前} onChange={set('名前')} placeholder="◯◯債権回収株式会社" />
-      <Text label="メモ" value={v.メモ} onChange={set('メモ')} placeholder="担当者、連絡先など（任意）" />
+      {/* 請求書の宛先（左上）に刷る。空でもよい */}
+      <div className="grid-zip">
+        <Text label="郵便番号" value={v.郵便番号} onChange={set('郵便番号')} placeholder="123-4567" />
+        <Text label="住所" value={v.住所} onChange={set('住所')} />
+      </div>
+      <div className="grid2">
+        <Text label="電話番号" value={v.電話番号} onChange={set('電話番号')} />
+        <Text label="ご担当者" value={v.担当者} onChange={set('担当者')} placeholder="山田 様（任意）" />
+      </div>
+      <Text label="メモ" value={v.メモ} onChange={set('メモ')} placeholder="社内向けのメモ（請求書には刷りません）" />
+      <Note>郵便番号・住所・電話番号・ご担当者は、計算タブで作る請求書の宛先（左上）に刷ります。</Note>
       <Err>{err}</Err>
     </Modal>
   );
@@ -525,7 +545,7 @@ function CompanyForm({ c, onClose, onDone }) {
 
 // ── 請求書の発行者 ────────────────────────────
 //
-// 計算タブで作る請求書の、右上に刷る会社。既定は MIAMIホールディングス。
+// 自社。計算タブで作る請求書の、右上に刷る会社。既定は MIAMIホールディングス。
 // テナント（この台帳を使う会社）ごとに変えられるよう、台帳に1つだけ持つ。
 // 振込先もここ。請求書を作るたびに打たなくて済むようにする。
 function Issuer() {
@@ -553,9 +573,9 @@ function Issuer() {
 
   return (
     <div className="sec issuer">
-      <h3>請求書の発行者</h3>
+      <h3>自社（請求書の発行者）</h3>
       <Note>
-        計算タブで作る請求書の右上に刷る会社です。宛先はお客様になります。
+        計算タブで作る請求書の右上に刷る、<b>自社</b>の名前と住所です。
         振込先もここで入れておくと、請求書に毎回刷られます。
       </Note>
       <Err>{err}</Err>
