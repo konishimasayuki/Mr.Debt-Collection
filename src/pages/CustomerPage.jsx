@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, yen, jpDate, md, ymd, 本日 } from '../api';
 import { Modal, Text, Money, Select, Err, Note, Empty, Loading,
          ContactFields } from '../components/ui';
+import KimariFields, { 決まりにする } from '../components/KimariFields';
+import { 決まりの文, 変わり種か } from '../../api/_kimari.js';
 
 const p2 = (n) => String(n).padStart(2, '0');
 const isoOf = (y, m, d) => `${y}-${p2(m)}-${p2(d)}`;
@@ -222,7 +224,13 @@ export default function CustomerPage({ id, onChanged }) {
 
       {/* 大事な数字。スマホでも折り返して全部見えるようにする（横に流さない） */}
       <div className="strip">
-        <div className="s"><b>{yen(c.月々の金額)}円</b><i>月々の金額</i></div>
+        <div className="s"><b>{yen(c.月々の金額)}円</b>
+          <i>月々の金額</i>
+          {/* 偶数月・奇数月・初回・最終回の決まりがある方は、その中身も出す */}
+          {変わり種か(c.金額の決まり) && (
+            <i className="kimari-s" data-k="決まりの中身">{決まりの文(c.金額の決まり).replace(/^毎月 [^・]+・?/, '')}</i>
+          )}
+        </div>
         <div className="s"><b>{c.次の期日 ? jpDate(c.次の期日) : '—'}</b><i>次の支払期日</i></div>
         {/* 回次と残り回数は同じことを言っているので1つにまとめた。
             いま追いかけているのがボーナスの回なら、そう分かるように出す。
@@ -1075,6 +1083,13 @@ function EditCustomer({ c, 支払予定, onClose, onDone }) {
     開始月: (c.開始日 || '').slice(0, 7), 支払日: c.支払日 || 27,
     // 入金月の変更。はじめはいまの先頭の月を入れておく（変えなければ何も起きない）
     入金月: 基準 ? 基準.期日.slice(0, 7) : '', 入金月の理由: '',
+    // 支払い金額の決まり。いまの決まりを入れておく（変えなければ何も起きない）
+    決まり基本: (c.金額の決まり && c.金額の決まり.基本) || c.月々の金額 || '',
+    偶数月: (c.金額の決まり && c.金額の決まり.偶数月) || '',
+    奇数月: (c.金額の決まり && c.金額の決まり.奇数月) || '',
+    初回: (c.金額の決まり && c.金額の決まり.初回) || '',
+    最終回: (c.金額の決まり && c.金額の決まり.最終回) || '',
+    決まりの理由: '',
   });
   const [companies, setCompanies] = useState([]);
   const [err, setErr] = useState('');
@@ -1108,6 +1123,18 @@ function EditCustomer({ c, 支払予定, onClose, onDone }) {
   useEffect(() => { api.companies().then((d) => setCompanies(d.会社)).catch(() => {}); }, []);
   const opts = companies.map((x) => ({ value: String(x.id), label: x.名前 }));
 
+  // 支払い金額の決まりが変わったか。変わったなら、未払いの回だけを書き換える
+  const 今の決まり = c.金額の決まり || { 基本: c.月々の金額 };
+  const 新しい決まり = 決まりにする(v.決まり基本, v);
+  const 決まりが変わった = ['基本', '偶数月', '奇数月', '初回', '最終回']
+    .some((k) => (今の決まり[k] || null) !== (新しい決まり[k] || null));
+  const 通常の回 = (支払予定 || []).filter((s) => s.種類 === '通常');
+  // 入金のある回は変わらないので、いまの額のまま見せる
+  const 払った回 = {};
+  通常の回.forEach((s) => { if (s.入金 > 0) 払った回[s.回次] = s.請求; });
+  const 開始を動かす = v.開始月 !== (c.開始日 || '').slice(0, 7)
+    || Number(v.支払日) !== Number(c.支払日);
+
   const save = async () => {
     // 入金月を動かすなら、理由は必ず書いてもらう。
     // なぜ動かしたのかが分からないと、電話口でお客様と話が食い違う
@@ -1115,15 +1142,29 @@ function EditCustomer({ c, 支払予定, onClose, onDone }) {
       setErr('入金月を変えるときは、変更の理由を書いてください。');
       return;
     }
+    if (決まりが変わった && !v.決まりの理由.trim()) {
+      setErr('金額の決まりを変えるときは、変更の理由を書いてください。');
+      return;
+    }
+    if (決まりが変わった && !(Number(v.決まり基本) > 0)) {
+      setErr('毎月の金額を入れてください。');
+      return;
+    }
     setBusy(true); setErr('');
     try {
-      const { 入金月, 入金月の理由, ...顧客 } = v;
+      const { 入金月, 入金月の理由, 決まり基本, 偶数月, 奇数月, 初回, 最終回, 決まりの理由,
+              ...顧客 } = v;
       await api.patchCustomer({ id: c.id, ...顧客 });
       // 顧客情報を先に直してから、未払いの回をずらす。
       // 開始月も一緒に変えたときは、直したあとの期日から数える
       if (ずれ) {
         await api.postCustomer({ id: c.id, 種類: '入金月変更',
           新しい月: 入金月, メモ: 入金月の理由 });
+      }
+      // 金額の決まりは最後に当てる。期日を動かしたあとの月で、偶数・奇数を数えるため
+      if (決まりが変わった) {
+        await api.postCustomer({ id: c.id, 種類: '金額の決まり', 基本: 決まり基本,
+          偶数月, 奇数月, 初回, 最終回, メモ: 決まりの理由 });
       }
       onDone();
     } catch (e) { setErr(e.message); setBusy(false); }
@@ -1278,8 +1319,39 @@ function EditCustomer({ c, 支払予定, onClose, onDone }) {
           {v.開始月 && <> 1回目は <b>{v.開始月}-{String(v.支払日).padStart(2, '0')}</b> になります。</>}
           <br />
           <b>入金は動きません。</b>どの回にいくら入っているかはそのままで、
-          期日だけを直します。金額・回数・残債も変わりません。
+          期日だけを直します。
+          {(今の決まり.偶数月 || 今の決まり.奇数月)
+            ? <> 偶数月・奇数月の決まりがあるので、<b>まだ入金の無い回の金額は、新しい月に合わせて直します。</b></>
+            : <> 金額・回数・残債も変わりません。</>}
         </Note>
+      )}
+
+      {/* 支払い金額の決まり。偶数月はA・奇数月はB・最終回はC のように決め直す。
+          まだ入金の無い月額の回だけを書き換える */}
+      {!c.完済 && (
+        <div className="sect" data-k="金額の決まりの欄">
+          <h4>支払い金額の決まり</h4>
+          <p className="sect-note">
+            変えると、<b>まだ入金の無い月額の回だけ</b>を新しい決まりで書き換えます。
+            払い終えた回と、一部入っている回は動きません。
+          </p>
+          <div className="grid2">
+            <Money label="毎月の金額" value={v.決まり基本} onChange={set('決まり基本')} />
+            <Text label="変更の理由（変えるなら必ず）" value={v.決まりの理由}
+                  onChange={set('決まりの理由')}
+                  placeholder="例：偶数月は賞与の都合で多めに払うと本人と合意"
+                  hint="支払いの記録にも残ります" />
+          </div>
+          <KimariFields v={v} set={set} 基本={Number(v.決まり基本) || 0} 回数={c.回数}
+                        開始月={v.開始月} 支払日={v.支払日} 払った={払った回}
+                        期日ら={開始を動かす ? null : 通常の回.map((s) => s.期日)} />
+          {決まりが変わった && (
+            <Note kind="warn">
+              <b>{決まりの文(今の決まり)}</b> → <b>{決まりの文(新しい決まり)}</b> に変えます。
+              入金のある{Object.keys(払った回).length}回は動きません。
+            </Note>
+          )}
+        </div>
       )}
 
       <div className="grid2">

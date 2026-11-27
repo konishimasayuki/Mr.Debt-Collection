@@ -5,7 +5,8 @@
 import { requireSession, recordedBy } from './_auth.js';
 import { db, fail, ok } from './_db.js';
 import { readBody, query, isoOf, today, yen, norm, remakeBonus, dueOf,
-         詰め直す, 入金種類, 充てる順 } from './_lib.js';
+         詰め直す, 入金種類, 充てる順, 決まりを取り出す, 決まりを当てる } from './_lib.js';
+import { 決まりを読む, 決まりの文, 月で変わるか } from './_kimari.js';
 import { 郵便番号を整える, 住所から郵便番号 } from './_zip.js';
 
 const bad = (res, msg, why) => {
@@ -279,6 +280,8 @@ export default async (req, res) => {
           債権譲渡会社: c.assignor_name || '', 債権譲渡先: c.assignee_name || '',
           債権譲渡会社id: c.assignor_id, 債権譲渡先id: c.assignee_id,
           月々の金額: c.monthly_amount, 回数: c.term_count, 支払日: c.pay_day,
+          // 支払い金額の決まり（偶数月・奇数月・初回・最終回）。空は null
+          金額の決まり: 決まりを取り出す(c),
           開始日: isoOf(c.start_date), 支払総額: c.total_amount, メモ: c.memo || '',
           残債: Math.max(0, c.total_amount - 入金合計), 入金合計,
           残り回数: c.term_count - 通常.filter((s) => s.state === '入金済み').length,
@@ -437,6 +440,11 @@ export default async (req, res) => {
             `UPDATE schedule s SET due_date = u.d::date
                FROM unnest($2::int[], $3::text[]) AS u(n, d)
               WHERE s.customer_id=$1 AND s.kind='通常' AND s.no = u.n`, [id, no, due]);
+          // 偶数月・奇数月で額が変わる方は、月が動いたら額も合わせ直す。
+          // 入金の入っている回は触らない（決まりを当てる のきまり）
+          if (月で変わるか(決まりを取り出す(c))) {
+            await 決まりを当てる(sql, id, 決まりを取り出す(c), c.term_count);
+          }
           // ボーナスの回も契約の期間に合わせて置き直す。
           // 入金が充てられている回は触らない（remakeBonus のきまり）
           if (c.bonus_months && c.bonus_months.length && c.bonus_amount) {
@@ -511,7 +519,12 @@ export default async (req, res) => {
         const ボ合計 = (await sql(
           `SELECT COALESCE(sum(planned_amount),0)::int AS n FROM schedule
             WHERE customer_id=$1 AND kind='ボーナス'`, [id]))[0].n;
-        put('total_amount', c.monthly_amount * c.term_count + ボ合計);
+        // 通常の回は、月々×回数ではなく実際の予定を足す。
+        // 偶数月・奇数月・最終回の決まりや、途中の金額変更があると、掛け算ではずれる
+        const 通常合計 = (await sql(
+          `SELECT COALESCE(sum(planned_amount),0)::int AS n FROM schedule
+            WHERE customer_id=$1 AND kind='通常'`, [id]))[0].n;
+        put('total_amount', 通常合計 + ボ合計);
       }
 
       // 会社の指定があれば実在を確かめる
@@ -832,6 +845,11 @@ export default async (req, res) => {
              FROM unnest($1::int[], $2::text[]) AS u(i, d)
             WHERE s.id = u.i`, [ids, dues]);
 
+        // 偶数月・奇数月で額が変わる方は、月が動いたら額も合わせ直す
+        if (月で変わるか(決まりを取り出す(c))) {
+          await 決まりを当てる(sql, id, 決まりを取り出す(c), c.term_count);
+        }
+
         // 期日が動くと、古い順の並びが変わる。まるごと詰め直して、
         // 「1回目は未入金なのに3回目は入金済み」という並びを作らない
         await 詰め直す(sql, id);
@@ -856,6 +874,38 @@ export default async (req, res) => {
       // まるごと作り直すことになり、すでに充てた入金の行き先が消えるため。
       // ここは作り直さない。**まだ入金の入っていない回の金額だけ**を書き換える。
       // 払い終えた回は1円も動かない。
+      // ── 支払い金額の決まりを変える ──────────────────
+      //
+      // 「偶数月はA・奇数月はB・最終回はC」のような決まりを、あとから決め直す。
+      // **まだ入金の無い月額の回だけ**を、新しい決まりで書き換える。
+      // 払い終えた回・一部入っている回は1円も動かさない。
+      if (b.種類 === '金額の決まり') {
+        const 読 = 決まりを読む(b, '基本');
+        if (読.エラー) return bad(res, 読.エラー);
+        const 新 = 読.決まり;
+        const メモ = String(b.メモ || '').trim();
+        // なぜ金額が変わったのかが分からないと、電話口で話が食い違う
+        if (!メモ) return bad(res, '変更の理由をメモに書いてください。');
+        const 前 = 決まりを取り出す(c);
+        const 同じ = ['基本', '偶数月', '奇数月', '初回', '最終回']
+          .every((k) => (前[k] || null) === (新[k] || null));
+        if (同じ) return bad(res, '決まりが変わっていません。');
+
+        await sql(`UPDATE customer SET monthly_amount=$1, amount_even=$2, amount_odd=$3,
+                     amount_first=$4, amount_last=$5 WHERE id=$6`,
+          [新.基本, 新.偶数月, 新.奇数月, 新.初回, 新.最終回, id]);
+        const r = await 決まりを当てる(sql, id, 新, c.term_count);
+        await 詰め直す(sql, id);
+
+        const 文 = `支払い金額の決まりを変更：${決まりの文(前)} → ${決まりの文(新)}`
+          + `（${r.変えた}回を書き換え${r.飛ばした ? `。入金のある${r.飛ばした}回は触らず` : ''}）`;
+        // 支払いの記録にも出す。書き換えた最初の回に1行残す
+        if (r.最初の回) await 回メモを足す(sql, id, r.最初の回, `${文}。${メモ}`, who, true, null, '通常');
+        await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
+                   VALUES ($1,$2,'記録',$3,$4)`, [id, who, 文, メモ]);
+        return ok(res, { done: true, ...r });
+      }
+
       if (b.種類 === '金額変更') {
         const no = Number(b.回次) || 0;
         const kind = b.回の種類 === 'ボーナス' ? 'ボーナス' : '通常';
@@ -902,6 +952,13 @@ export default async (req, res) => {
           `UPDATE customer SET total_amount=$1,
              ${kind === 'ボーナス' ? 'bonus_amount' : 'monthly_amount'}=$2
            WHERE id=$3`, [総, 額, id]);
+        // 月額の回をそろえたなら、偶数月・奇数月・初回・最終回の決まりは外す。
+        // 残しておくと、あとで開始月を動かしたときに決まりが当て直され、
+        // ここでそろえた額が勝手に戻ってしまう
+        if (kind === '通常') {
+          await sql(`UPDATE customer SET amount_even=NULL, amount_odd=NULL,
+                       amount_first=NULL, amount_last=NULL WHERE id=$1`, [id]);
+        }
 
         // 金額が変わると、どの回まで埋まるかが変わる。まるごと詰め直す
         await 詰め直す(sql, id);

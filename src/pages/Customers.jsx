@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { api, yen, ymd, norm } from '../api';
 import { Modal, Text, Money, Select, Err, Empty, Note, Loading,
          ContactFields } from '../components/ui';
+import KimariFields, { 決まりにする } from '../components/KimariFields';
+import { 回の金額, 期日の並び, 変わり種か } from '../../api/_kimari.js';
 import KanaBulk from './KanaBulk';
 
 // 電話帳と同じ並び。索引はサーバーが「あ」「か」…で返す
@@ -382,6 +384,7 @@ const 空 = {
   緊急連絡先名前: '', 緊急連絡先住所: '', 緊急連絡先電話番号: '', 緊急連絡先間柄: '',
   勤務先名前: '', 勤務先住所: '', 勤務先電話番号: '',
   月々の金額: '', 回数: 48, 支払日: 27, 開始月: '', メモ: '',
+  偶数月: '', 奇数月: '', 初回: '', 最終回: '',
 };
 
 function NewCustomer({ onClose, onDone }) {
@@ -406,6 +409,15 @@ function NewCustomer({ onClose, onDone }) {
     if (isNaN(base)) return '';
     const t = base.getFullYear() * 12 + base.getMonth() + 1;
     return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+  })();
+
+  // 支払総額の見込み（決まりがあれば回ごとに足す）
+  const 登録の決まり = 決まりにする(v.月々の金額, v);
+  const 登録の総額 = (() => {
+    const [y0, m0] = String(既定開始 || '').split('-').map(Number);
+    if (!y0 || !m0 || !(v.回数 > 0)) return (Number(v.月々の金額) || 0) * (Number(v.回数) || 0);
+    return 期日の並び(y0, m0, Number(v.支払日) || 1, v.回数)
+      .reduce((a, d, i) => a + 回の金額(登録の決まり, i + 1, v.回数, d), 0);
   })();
 
   const submit = async () => {
@@ -479,6 +491,9 @@ function NewCustomer({ onClose, onDone }) {
       </div>
       <Text label="支払い開始月" type="month" value={既定開始} onChange={set('開始月')}
             hint="空のままなら契約日の翌月から始めます" />
+      {/* 偶数月はA・奇数月はB・最終回はC のような決まり。空なら毎月同じ額 */}
+      <KimariFields v={v} set={set} 基本={v.月々の金額} 回数={v.回数}
+                    開始月={既定開始} 支払日={v.支払日} />
       <Text label="メモ" value={v.メモ} onChange={set('メモ')} />
 
       <ContactFields 見出し="連帯保証人" 印="保証人" v={v} set={set}
@@ -492,7 +507,9 @@ function NewCustomer({ onClose, onDone }) {
 
       {v.月々の金額 > 0 && v.回数 > 0 && (
         <Note kind="ok">
-          支払総額 <b>{yen(v.月々の金額 * v.回数)}円</b>（月々 {yen(v.月々の金額)}円 × {v.回数}回）
+          支払総額 <b>{yen(登録の総額)}円</b>
+          {変わり種か(登録の決まり) ? `（金額の決まりどおり・${v.回数}回）`
+            : `（月々 ${yen(v.月々の金額)}円 × ${v.回数}回）`}
           {既定開始 && ` ／ ${ymd(既定開始)} から`}
         </Note>
       )}

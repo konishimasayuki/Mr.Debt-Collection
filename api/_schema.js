@@ -125,6 +125,11 @@ const STATEMENTS = [
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_name text`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_address text`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS work_tel text`,
+  // 支払い金額の決まり（api/_kimari.js）。空なら毎月の金額（monthly_amount）と同じ
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS amount_even integer`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS amount_odd integer`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS amount_first integer`,
+  `ALTER TABLE customer ADD COLUMN IF NOT EXISTS amount_last integer`,
   // 郵便番号。空のままでもよい（空なら住所から逆に引いて画面に出す）
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS zip text`,
   `ALTER TABLE customer ADD COLUMN IF NOT EXISTS pinned boolean NOT NULL DEFAULT false`,
