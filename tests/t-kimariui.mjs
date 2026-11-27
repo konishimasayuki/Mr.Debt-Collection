@@ -16,7 +16,7 @@ const 予定 = async (名) => p.evaluate(async (名) => {
 }, 名);
 const 欄 = (scope, 名) => scope.locator('.f', { has: p.locator(`label:text-is("${名}")`) }).first().locator('input');
 
-console.log('■ 新規登録で、偶数月・奇数月・最終回の額を決められる');
+console.log('■ 新規登録で、偶数回・奇数回・最終回の額を決められる（回の番号で数える）');
 await p.click('.tab:has-text("顧客一覧")');
 await p.waitForSelector('tbody tr.clickable');
 await p.click('button:has-text("新規顧客登録")');
@@ -26,13 +26,14 @@ await 欄(m, '名前').fill('カワダ 二郎');
 await 欄(m, '月々の金額').fill('30000');
 await 欄(m, '支払回数').fill('6');
 await 欄(m, '毎月の支払日').fill('10');
-await 欄(m, '支払い開始月').fill('2027-01');
-await 欄(m, '偶数月の金額').fill('40000');
+await 欄(m, '支払い開始月').fill('2027-02');   // 2月始まり：1回目は2月でも奇数回
+await 欄(m, '偶数回の金額').fill('40000');
 await 欄(m, '最終回の金額').fill('10000');
 await p.waitForTimeout(300);
 const 見込み = await m.locator('[data-k="金額の見込み"]').innerText();
-check('見込みに回ごとの額が出る（2回目は2月で40,000）', /2回\s*2月\s*40,000/.test(見込み), 見込み);
-check('最終回は10,000', /6回\s*6月\s*10,000/.test(見込み), 見込み);
+check('見込みに回ごとの額が出る（2回目は3月でも偶数回で40,000）', /2回\s*3月\s*40,000/.test(見込み), 見込み);
+check('1回目は2月でも奇数回（決まりが無いので30,000）', /1回\s*2月\s*30,000/.test(見込み), 見込み);
+check('最終回は10,000', /6回\s*7月\s*10,000/.test(見込み), 見込み);
 check('月額の回の合計 180,000円', (await m.locator('[data-k="予定の合計"]').innerText()) === '180,000円',
   await m.locator('[data-k="予定の合計"]').innerText());
 check('支払総額の見込みも決まりどおり', (await m.locator('.note, [class*="note"]').last().innerText()).includes('180,000円'),
@@ -52,21 +53,21 @@ await p.locator('tbody tr.clickable', { hasText: 'アオキ 一郎' }).locator('
 await p.waitForSelector('.rec-top');
 await p.waitForTimeout(600);
 const 中身 = await p.locator('[data-k="決まりの中身"]').innerText();
-check('偶数月と最終回の額を添える', 中身.includes('偶数月 40,000円') && 中身.includes('最終回 10,000円'), 中身);
+check('偶数回と最終回の額を添える', 中身.includes('偶数回 40,000円') && 中身.includes('最終回 10,000円'), 中身);
 
 console.log('■ 顧客編集で決め直せる（払った回は動かない）');
 await p.click('button:has-text("顧客情報を編集")');
 await p.waitForSelector('.modal-box [data-k="金額の決まりの欄"]');
 const e = p.locator('.modal-box [data-k="金額の決まりの欄"]');
-check('いまの決まりが入っている', (await 欄(e, '偶数月の金額').inputValue()) === '40,000',
-  await 欄(e, '偶数月の金額').inputValue());
-await 欄(e, '奇数月の金額').fill('25000');
+check('いまの決まりが入っている', (await 欄(e, '偶数回の金額').inputValue()) === '40,000',
+  await 欄(e, '偶数回の金額').inputValue());
+await 欄(e, '奇数回の金額').fill('25000');
 await p.waitForTimeout(300);
 const 見2 = await e.locator('[data-k="金額の見込み"]').innerText();
 check('払った1回目はいまの額のまま（30,000）', /1回\s*1月\s*30,000/.test(見2), 見2);
 check('3回目（3月）は25,000になる見込み', /3回\s*3月\s*25,000/.test(見2), 見2);
 check('払った回は色を変える', (await e.locator('.kimari-p span.paid').count()) === 1);
-check('何から何へ変えるかを出す', (await e.innerText()).includes('奇数月 25,000円'), await e.innerText());
+check('何から何へ変えるかを出す', (await e.innerText()).includes('奇数回 25,000円'), await e.innerText());
 await e.screenshot({ path: '/tmp/kimari-2.png' });
 
 console.log('■ 理由が無いと保存しない');
@@ -75,7 +76,7 @@ await p.waitForTimeout(600);
 check('モーダルは開いたまま', (await p.locator('.modal-box').count()) === 1);
 check('理由を求める', (await p.locator('.modal-box').innerText()).includes('変更の理由を書いてください'));
 
-await 欄(e, '変更の理由（変えるなら必ず）').fill('奇数月は少なめにすると本人と合意');
+await 欄(e, '変更の理由（変えるなら必ず）').fill('奇数回は少なめにすると本人と合意');
 await p.click('.modal-box button:has-text("保存する")');
 await p.waitForTimeout(1800);
 check('保存できる', (await p.locator('.modal-box').count()) === 0);
@@ -84,7 +85,7 @@ check('1回目（払った）は30,000のまま／3・5回目が25,000',
   JSON.stringify(実.額) === '[30000,40000,25000,40000,25000,10000]', 実.額);
 check('支払総額も変わる', 実.総額 === 170000, 実.総額);
 check('顧客ページの添え書きも変わる',
-  (await p.locator('[data-k="決まりの中身"]').innerText()).includes('奇数月 25,000円'),
+  (await p.locator('[data-k="決まりの中身"]').innerText()).includes('奇数回 25,000円'),
   await p.locator('[data-k="決まりの中身"]').innerText());
 check('支払いの記録にメモが残る', (await p.locator('main').innerText()).includes('支払い金額の決まりを変更'));
 

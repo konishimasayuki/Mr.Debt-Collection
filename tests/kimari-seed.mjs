@@ -5,7 +5,7 @@ await reset();
 await call('setup', { method: 'POST', body: {} });
 const r = await call('customers', { method: 'POST', body: {
   名前: 'アオキ 一郎', よみ: 'アオキ イチロウ', 月々の金額: 30000, 回数: 6, 支払日: 10,
-  開始月: '2027-01', 偶数月: 40000, 奇数月: 30000, 最終回: 10000 } });
+  開始月: '2027-01', 偶数回: 40000, 奇数回: 30000, 最終回: 10000 } });
 await call('payments', { method: 'POST', body: {
   顧客id: r.body.id, 日付: '2026-11-01', 金額: 30000, メモ: '1回目' } });
 const d = (await call('customer', { q: { id: r.body.id } })).body;

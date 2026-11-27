@@ -4,18 +4,19 @@ import { 回の金額, 期日の並び, 変わり種か } from '../../api/_kimar
 
 // 支払い金額の決まりの欄（新規登録と顧客編集で使う）。
 //
-//   偶数月の金額 ／ 奇数月の金額 ／ 初回の金額 ／ 最終回の金額
+//   偶数回の金額 ／ 奇数回の金額 ／ 初回の金額 ／ 最終回の金額
 //
+// 偶数・奇数は回の番号で数える（期日の月ではない）。
 // どれも空でよい（空なら毎月の金額）。下に、実際にどの回がいくらになるかの見込みを出す。
 // 決まりの中身は api/_kimari.js（台帳の裏側と同じものを読む）。
 //
-// v       … { 偶数月, 奇数月, 初回, 最終回 }（'' か数）
+// v       … { 偶数回, 奇数回, 初回, 最終回 }（'' か数）
 // 基本    … 毎月の金額
 // 回数 / 開始月('YYYY-MM') / 支払日 … 見込みを出すため
 // 払った  … 回次 → いまの額（顧客編集で、入金のある回は変わらないので、いまの額のまま見せる）
 export function 決まりにする(基本, v) {
   const n = (x) => (x === '' || x == null ? null : Number(x) || null);
-  return { 基本: Number(基本) || 0, 偶数月: n(v.偶数月), 奇数月: n(v.奇数月),
+  return { 基本: Number(基本) || 0, 偶数回: n(v.偶数回), 奇数回: n(v.奇数回),
     初回: n(v.初回), 最終回: n(v.最終回) };
 }
 
@@ -39,13 +40,13 @@ export default function KimariFields({ v, set, 基本, 回数, 開始月, 支払
     <div className="kimari">
       <div className="kimari-h">
         <b>金額の決まり（任意）</b>
-        <span>空なら毎月の金額。重なったときは 最終回 ＞ 初回 ＞ 偶数月・奇数月 の順に強い</span>
+        <span>空なら毎月の金額。重なったときは 最終回 ＞ 初回 ＞ 偶数回・奇数回 の順に強い</span>
       </div>
       <div className="grid4">
-        <Money label="偶数月の金額" value={v.偶数月} onChange={set('偶数月')}
-               placeholder={基本 ? yen(基本) : ''} hint="2・4・6・8・10・12月" />
-        <Money label="奇数月の金額" value={v.奇数月} onChange={set('奇数月')}
-               placeholder={基本 ? yen(基本) : ''} hint="1・3・5・7・9・11月" />
+        <Money label="偶数回の金額" value={v.偶数回} onChange={set('偶数回')}
+               placeholder={基本 ? yen(基本) : ''} hint="2・4・6回目…" />
+        <Money label="奇数回の金額" value={v.奇数回} onChange={set('奇数回')}
+               placeholder={基本 ? yen(基本) : ''} hint="1・3・5回目…" />
         <Money label="初回の金額" value={v.初回} onChange={set('初回')}
                placeholder={基本 ? yen(基本) : ''} />
         <Money label="最終回の金額" value={v.最終回} onChange={set('最終回')}

@@ -99,7 +99,7 @@ export default async (req, res) => {
       const monthly = Math.round(Number(b.月々の金額) || 0);
       if (!name) return bad(res, 'お名前を入れてください。');
       if (!monthly || monthly <= 0) return bad(res, '月々の金額を入れてください。');
-      // 支払い金額の決まり。偶数月・奇数月・初回・最終回は空でよい（空なら月々の金額）
+      // 支払い金額の決まり。偶数回・奇数回・初回・最終回は空でよい（空なら月々の金額）
       const 読 = 決まりを読む({ ...b, 基本: monthly }, '基本');
       if (読.エラー) return bad(res, 読.エラー);
       const 決まり = 読.決まり;
@@ -178,7 +178,7 @@ export default async (req, res) => {
              '緊急連絡先名前', '緊急連絡先住所', '緊急連絡先電話番号', '緊急連絡先間柄',
              '勤務先名前', '勤務先住所', '勤務先電話番号']
            .map((k) => String(b[k] || '').trim() || null),
-         決まり.偶数月, 決まり.奇数月, 決まり.初回, 決まり.最終回]);
+         決まり.偶数回, 決まり.奇数回, 決まり.初回, 決まり.最終回]);
       const id = ins[0].id;
 
       await makeSchedule(sql, id, y0, m0, payDay, term, monthly, 決まり);
