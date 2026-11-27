@@ -59,7 +59,7 @@ const yen = (n) => Number(n || 0).toLocaleString('ja-JP');
 // 支払予定を回数ぶん、1回のINSERTで作る。
 // 1件ずつ入れると回数ぶん往復するので、ネットワーク越しでは目に見えて遅くなる。
 //
-// 決まり（api/_kimari.js）を渡すと、偶数月・奇数月・初回・最終回の額で作る。
+// 決まり（api/_kimari.js）を渡すと、偶数回・奇数回・初回・最終回の額で作る。
 // 渡さなければ、毎月同じ額（monthly）。
 async function makeSchedule(sql, customerId, y0, m0, payDay, term, monthly, 決まり) {
   const vals = [], args = [];
@@ -79,7 +79,7 @@ async function makeSchedule(sql, customerId, y0, m0, payDay, term, monthly, 決�
 // 顧客の行から、支払い金額の決まりを取り出す
 function 決まりを取り出す(c) {
   return {
-    基本: c.monthly_amount, 偶数月: c.amount_even || null, 奇数月: c.amount_odd || null,
+    基本: c.monthly_amount, 偶数回: c.amount_even || null, 奇数回: c.amount_odd || null,
     初回: c.amount_first || null, 最終回: c.amount_last || null,
   };
 }
