@@ -9,7 +9,7 @@ import Invoice from './Invoice';
 //   買戻し金額 ＝（契約金額 − 支払済金額）× 75%   … 未払い残債に75%をかける
 //   将来利益   ＝ 契約金額 − 契約金額の75%
 //
-// 75% は決まった割合（kaimodoshi.js）。画面にも書いて、何をかけたかが見えるようにする。
+// 75% は手数料（kaimodoshi.js）。買戻し率ではない。画面にも書いて、何をかけたかが見えるようにする。
 //
 // 選んだ顧客の請求書もここから作る（Invoice.jsx）。**請求書を出す場所はここだけ。**
 export default function Calc() {
@@ -124,13 +124,13 @@ function 結果({ c, 請求書を作る }) {
 
       <div className="calc-r">
         <h4>買戻し金額</h4>
-        <div className="calc-f">（契約金額 − 支払済金額）× 買戻し率</div>
+        <div className="calc-f">（契約金額 − 支払済金額）× 手数料</div>
         <table className="calc-t">
           <tbody>
             <tr><th>契約金額</th><td>{yen(契約金額)}円</td></tr>
             <tr><th>お客様の支払済金額</th><td>{yen(支払済)}円</td></tr>
             <tr><th>未払い残債</th><td>{yen(残債)}円</td></tr>
-            <tr><th>買戻し率</th><td>{割合}%</td></tr>
+            <tr><th>手数料</th><td>{割合}%</td></tr>
           </tbody>
         </table>
         <i>{先}買戻し金額</i>
