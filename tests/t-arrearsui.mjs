@@ -73,6 +73,9 @@ for (const [名, 値] of [
   check(`${名} ${値}`, (await 行.innerText()).includes(値), await 行.innerText());
 }
 check('ご請求金額は買戻し金額', (await p.locator('[data-k="ご請求金額"]').innerText()) === '¥862,500');
+check('75%は手数料と刷る（買戻し率ではない）',
+  (await 文()).includes('④ × 手数料75%') && (await 文()).includes('① × 手数料75%')
+  && !(await 文()).includes('買戻し率'), await 文());
 check('車種名', (await 文()).includes('タントカスタム'));
 check('契約日', /年.*月15日/.test(await 紙.locator('tr', { hasText: '契約日' }).innerText()));
 check('車体番号は空欄（手書き用）',

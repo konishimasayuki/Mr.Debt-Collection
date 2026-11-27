@@ -33,10 +33,11 @@ const 外 = async () => p.locator('.calc-out').innerText();
 check('契約金額', (await 表()).includes('1,700,000円'), await 表());
 check('お客様の支払済金額', (await 表()).includes('300,000円'), await 表());
 check('未払い残債 1,400,000円', (await 表()).includes('1,400,000円'), await 表());
-check('買戻し率 75%', (await 表()).includes('75%'), await 表());
+check('手数料 75%（買戻し率ではない）', (await 表()).includes('手数料') && (await 表()).includes('75%')
+  && !(await 外()).includes('買戻し率'), await 表());
 check('買戻し金額 1,050,000円', (await 値('買戻し金額')) === '1,050,000円', await 値('買戻し金額'));
 check('MIAMIへの買戻し金額と出る', (await 外()).includes('MIAMIへの買戻し金額'), await 外());
-check('式が見える', (await 外()).includes('（契約金額 − 支払済金額）× 買戻し率'), await 外());
+check('式が見える', (await 外()).includes('（契約金額 − 支払済金額）× 手数料'), await 外());
 check('掛け算も見える', (await 外()).includes('1,400,000円 × 75% ＝ 1,050,000円'), await 外());
 check('将来利益 425,000円', (await 値('将来利益')) === '425,000円', await 値('将来利益'));
 await p.screenshot({ path: '/tmp/calc-1.png' });

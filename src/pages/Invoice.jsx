@@ -136,10 +136,10 @@ export default function Invoice({ c, 会社, 発行者, onClose }) {
         <h2>ご請求金額の計算</h2>
         <table className="inv-k"><tbody>
           <tr><th>① 契約金額</th><td className="n">{yen(契約金額)}円</td></tr>
-          <tr><th>② 買取金額（① × {割合}%）</th><td className="n">{yen(買取金額)}円</td></tr>
+          <tr><th>② 買取金額（① × 手数料{割合}%）</th><td className="n">{yen(買取金額)}円</td></tr>
           <tr><th>③ お客様が支払った金額</th><td className="n">{yen(支払済)}円</td></tr>
           <tr><th>④ 残債（① − ③）</th><td className="n">{yen(残債)}円</td></tr>
-          <tr className="sum"><th>⑤ 買戻し金額（④ × {割合}%）</th>
+          <tr className="sum"><th>⑤ 買戻し金額（④ × 手数料{割合}%）</th>
             <td className="n">{yen(買戻し)}円</td></tr>
         </tbody></table>
         <div className="inv-f">円未満は切り捨てています。</div>
