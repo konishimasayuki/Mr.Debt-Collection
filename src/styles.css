@@ -1088,3 +1088,19 @@ table.inv-k td.inv-blank{height:30px}
 
 /* 設定：債権会社の一覧で、名前の下に住所を小さく出す */
 .co-addr{display:block;font-size:11.5px;color:var(--ink-3);font-weight:normal;margin-top:2px}
+
+/* ── 金額の決まり（新規登録・顧客編集） ──────────────── */
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0 12px}
+@media (max-width:640px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kimari{border:1px dashed var(--rule-strong);padding:10px 12px 2px;margin:4px 0 12px;background:var(--paper)}
+.kimari-h{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;margin-bottom:8px}
+.kimari-h b{font-size:13px}
+.kimari-h span{font-size:11.5px;color:var(--ink-3)}
+.kimari-p{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px;font-size:12px}
+.kimari-p span{border:1px solid var(--rule);background:#fff;padding:2px 7px;white-space:nowrap}
+.kimari-p span i{font-style:normal;color:var(--ink-3)}
+.kimari-p span b{font-family:var(--mono)}
+.kimari-p span.paid{background:var(--paper-2);color:var(--ink-3)}
+.kimari-p span.gap{border:0;background:none;color:var(--ink-3)}
+.kimari-p em{font-style:normal;margin-left:auto;color:var(--ink-2)}
+.strip .s i.kimari-s{color:var(--indigo);font-size:11px}

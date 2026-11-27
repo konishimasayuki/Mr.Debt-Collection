@@ -9,6 +9,7 @@ import { readBody, query, dueOf, yen, norm, makeSchedule, remakeBonus,
 import { 顧客一覧 } from './_list.js';
 import { guess, あいうえお順 } from './_yomi_dict.js';
 import { 郵便番号を整える } from './_zip.js';
+import { 決まりを読む, 変わり種か, 決まりの文 } from './_kimari.js';
 
 const bad = (res, msg, why) => {
   res.statusCode = 400;
@@ -98,6 +99,10 @@ export default async (req, res) => {
       const monthly = Math.round(Number(b.月々の金額) || 0);
       if (!name) return bad(res, 'お名前を入れてください。');
       if (!monthly || monthly <= 0) return bad(res, '月々の金額を入れてください。');
+      // 支払い金額の決まり。偶数月・奇数月・初回・最終回は空でよい（空なら月々の金額）
+      const 読 = 決まりを読む({ ...b, 基本: monthly }, '基本');
+      if (読.エラー) return bad(res, 読.エラー);
+      const 決まり = 読.決まり;
       // 郵便番号。入れなくてよい。入れたなら7桁にそろえる
       //（空のままなら、顧客ページで住所から逆に引いて出す）
       const zipに入れる = String(b.郵便番号 || '').trim();
@@ -141,6 +146,8 @@ export default async (req, res) => {
       }
       const same = await sql('SELECT id FROM customer WHERE name=$1 AND archived=false', [name]);
 
+      // 支払総額は、予定を作ったあとで足し直して入れる（決まりで回ごとに額が違うため）。
+      // ここでは仮に毎月の額×回数を入れておく
       const total = monthly * term;
       const ins = await sql(
         `INSERT INTO customer
@@ -149,9 +156,11 @@ export default async (req, res) => {
             start_date, total_amount, memo,
             guarantor_name, guarantor_address, guarantor_tel, guarantor_relation,
             emergency_name, emergency_address, emergency_tel, emergency_relation,
-            work_name, work_address, work_tel)
+            work_name, work_address, work_tel,
+            amount_even, amount_odd, amount_first, amount_last)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-                 $17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28) RETURNING id`,
+                 $17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,
+                 $29,$30,$31,$32) RETURNING id`,
         [name, String(b.よみ || '').trim() || null,
          String(b.性別 || '').trim() || null,
          b.生年月日 || null,
@@ -168,10 +177,11 @@ export default async (req, res) => {
          ...['保証人名前', '保証人住所', '保証人電話番号', '保証人間柄',
              '緊急連絡先名前', '緊急連絡先住所', '緊急連絡先電話番号', '緊急連絡先間柄',
              '勤務先名前', '勤務先住所', '勤務先電話番号']
-           .map((k) => String(b[k] || '').trim() || null)]);
+           .map((k) => String(b[k] || '').trim() || null),
+         決まり.偶数月, 決まり.奇数月, 決まり.初回, 決まり.最終回]);
       const id = ins[0].id;
 
-      await makeSchedule(sql, id, y0, m0, payDay, term, monthly);
+      await makeSchedule(sql, id, y0, m0, payDay, term, monthly, 決まり);
 
       // ボーナス払いの指定があれば、その予定も作って支払総額に足す
       const ボ月 = [...new Set((b.ボーナス月 || []).map(Number)
@@ -182,13 +192,14 @@ export default async (req, res) => {
         if (!ボ日 || ボ日 < 1 || ボ日 > 31) return bad(res, 'ボーナスの支払日を1〜31で入れてください。');
         if (!ボ額 || ボ額 <= 0) return bad(res, 'ボーナスの金額を入れてください。');
         await remakeBonus(sql, id, y0, m0, payDay, term, ボ月, ボ日, ボ額);
-        const ボ合計 = (await sql(
-          `SELECT COALESCE(sum(planned_amount),0)::int AS n FROM schedule
-            WHERE customer_id=$1 AND kind='ボーナス'`, [id]))[0].n;
-        await sql(`UPDATE customer SET bonus_months=$1, bonus_day=$2, bonus_amount=$3,
-                     total_amount=$4 WHERE id=$5`,
-          [ボ月, ボ日, ボ額, total + ボ合計, id]);
+        await sql(`UPDATE customer SET bonus_months=$1, bonus_day=$2, bonus_amount=$3
+                    WHERE id=$4`, [ボ月, ボ日, ボ額, id]);
       }
+      // 支払総額は予定を足し直して入れる（決まりの額・ボーナスを含めて）
+      await sql(`UPDATE customer SET total_amount =
+                   (SELECT COALESCE(sum(planned_amount),0)::int FROM schedule WHERE customer_id=$1)
+                 WHERE id=$1`, [id]);
+      const 支払総額 = (await sql('SELECT total_amount FROM customer WHERE id=$1', [id]))[0].total_amount;
       if (b.よみ) {
         await sql(`INSERT INTO payer_alias (normalized_name, customer_id, created_by)
                    VALUES ($1,$2,$3) ON CONFLICT (normalized_name) DO NOTHING`,
@@ -197,11 +208,12 @@ export default async (req, res) => {
       await sql(`INSERT INTO event (customer_id, recorded_by, kind, text, memo)
                  VALUES ($1,$2,'登録',$3,$4)`,
         [id, who,
-         `新規登録：月々 ${yen(monthly)}円 × ${term}回、${start} から ${dueOf(y0, m0, payDay, term)} まで`,
+         `新規登録：月々 ${yen(monthly)}円 × ${term}回、${start} から ${dueOf(y0, m0, payDay, term)} まで`
+           + (変わり種か(決まり) ? `（金額の決まり：${決まりの文(決まり)}）` : ''),
          String(b.メモ || '').trim() || null]);
 
       return ok(res, { done: true, id, 氏名: name, 初回: start,
-        最終回: dueOf(y0, m0, payDay, term), 支払総額: total,
+        最終回: dueOf(y0, m0, payDay, term), 支払総額,
         同姓同名: same.length ? same.length + 1 : 0 });
     }
 

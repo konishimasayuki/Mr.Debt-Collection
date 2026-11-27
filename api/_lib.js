@@ -5,6 +5,8 @@
 // 同じ人に当たるようにする。
 //   NFKC で 半角カナ→全角カナ、全角英数→半角英数 が揃う。
 //   そのうえで ひらがな→カタカナ、英字は小文字へ、空白と記号を落とす。
+import { 回の金額 } from './_kimari.js';
+
 function norm(s) {
   return String(s == null ? '' : s)
     .normalize('NFKC')
@@ -56,10 +58,15 @@ const yen = (n) => Number(n || 0).toLocaleString('ja-JP');
 
 // 支払予定を回数ぶん、1回のINSERTで作る。
 // 1件ずつ入れると回数ぶん往復するので、ネットワーク越しでは目に見えて遅くなる。
-async function makeSchedule(sql, customerId, y0, m0, payDay, term, monthly) {
+//
+// 決まり（api/_kimari.js）を渡すと、偶数月・奇数月・初回・最終回の額で作る。
+// 渡さなければ、毎月同じ額（monthly）。
+async function makeSchedule(sql, customerId, y0, m0, payDay, term, monthly, 決まり) {
   const vals = [], args = [];
+  const d = 決まり || { 基本: monthly };
   for (let k = 1; k <= term; k++) {
-    args.push(customerId, k, dueOf(y0, m0, payDay, k), monthly);
+    const 期日 = dueOf(y0, m0, payDay, k);
+    args.push(customerId, k, 期日, 回の金額(d, k, term, 期日));
     const i = args.length;
     vals.push(`($${i - 3},$${i - 2},'通常',$${i - 1},$${i})`);
   }
@@ -67,6 +74,45 @@ async function makeSchedule(sql, customerId, y0, m0, payDay, term, monthly) {
     `INSERT INTO schedule (customer_id, no, kind, due_date, planned_amount)
      VALUES ${vals.join(',')} ON CONFLICT (customer_id, kind, no) DO NOTHING`, args);
   return term;
+}
+
+// 顧客の行から、支払い金額の決まりを取り出す
+function 決まりを取り出す(c) {
+  return {
+    基本: c.monthly_amount, 偶数月: c.amount_even || null, 奇数月: c.amount_odd || null,
+    初回: c.amount_first || null, 最終回: c.amount_last || null,
+  };
+}
+
+// 決まりを、**まだ入金の無い通常の回**に当て直す。
+// 入金が1円でも入っている回は触らない（払った額の跡を動かさない）。
+// 金額が変わればどの回まで埋まるかも変わるので、呼ぶ側で詰め直すこと。
+// 支払総額も、予定を足し直して書き換える。
+// 返すのは { 変えた, 飛ばした, 支払総額, 最初の回（書き換えた最初の回次） }
+async function 決まりを当てる(sql, customerId, 決まり, term) {
+  const 回 = await sql(
+    `SELECT s.id, s.no, s.planned_amount, to_char(s.due_date,'YYYY-MM-DD') AS due,
+            COALESCE((SELECT sum(a.amount) FROM allocation a WHERE a.schedule_id = s.id),0)::int AS paid
+       FROM schedule s WHERE s.customer_id=$1 AND s.kind='通常' ORDER BY s.no`, [customerId]);
+  const ids = [], 額 = [];
+  let 飛ばした = 0, 最初の回 = null;
+  for (const s of 回) {
+    const 新 = 回の金額(決まり, s.no, term, s.due);
+    if (新 === s.planned_amount) continue;
+    if (s.paid > 0) { 飛ばした++; continue; }
+    ids.push(s.id); 額.push(新);
+    if (最初の回 === null) 最初の回 = s.no;
+  }
+  if (ids.length) {
+    await sql(
+      `UPDATE schedule s SET planned_amount = u.a
+         FROM unnest($1::int[], $2::int[]) AS u(i, a) WHERE s.id = u.i`, [ids, 額]);
+  }
+  const 総 = (await sql(
+    `SELECT COALESCE(sum(planned_amount),0)::int AS n FROM schedule WHERE customer_id=$1`,
+    [customerId]))[0].n;
+  await sql('UPDATE customer SET total_amount=$1 WHERE id=$2', [総, customerId]);
+  return { 変えた: ids.length, 飛ばした, 支払総額: 総, 最初の回 };
 }
 
 // ── ボーナス払い ────────────────────────────
@@ -411,6 +457,7 @@ function summarize(cust, rows, paidBy) {
 export {
   norm, normPayer, カナにそろえる, よみか, pad, iso, isoOf, today, lastDay, dueOf, yen,
   readBody, query, restateMany, allocate, unallocate, 詰め直す, summarize, makeSchedule,
+  決まりを取り出す, 決まりを当てる,
   督促の様子, 充てる順,
   bonusDues, remakeBonus, 入金種類,
 };
